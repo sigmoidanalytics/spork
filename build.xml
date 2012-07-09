@@ -287,7 +287,7 @@
     <!-- ====================================================== -->
     <!-- setup the classpath -->
     <path id="classpath">
-        <fileset dir="${lib.dir}" includes="*.jar"/>
+        <fileset dir="${lib.dir}" includes="**/*.jar"/>
         <fileset file="${ivy.lib.dir}/${zookeeper.jarfile}"/>
         <fileset dir="${ivy.lib.dir}" includes="*.jar"/>
     </path>
@@ -688,6 +688,18 @@
                 <include name="log4j*.jar" />
                 <include name="jsp-api*.jar" />
                 <include name="zookeeper*.jar" />
+                <include name="spark-core*.jar" />
+                <include name="scala-library*.jar" />
+                <include name="jetty*.jar" />
+                <include name="fastutil*.jar" />
+                <include name="protobuf*.jar" />
+                <include name="asm*.jar" />
+                <include name="slf4j*.jar" />
+                <include name="servlet-api*.jar" />
+                <include name="compress-lzf*.jar" />
+            </zipgroupfileset>
+            <zipgroupfileset dir="lib/spark">
+                <include name="mesos*.jar" />
             </zipgroupfileset>
             <fileset file="${basedir}/src/pig-default.properties" />
             <fileset file="${basedir}/src/main/jruby/pigudf.rb" />

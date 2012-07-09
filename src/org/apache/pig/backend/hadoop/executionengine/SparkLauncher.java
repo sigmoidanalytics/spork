@@ -11,6 +11,9 @@ import org.apache.pig.impl.plan.PlanException;
 import org.apache.pig.impl.plan.VisitorException;
 import org.apache.pig.tools.pigstats.PigStats;
 
+import spark.RDD;
+import spark.SparkContext;
+
 import java.io.IOException;
 import java.io.PrintStream;
 
@@ -25,7 +28,12 @@ public class SparkLauncher extends Launcher {
             throws PlanException, VisitorException, IOException, ExecException, JobCreationException, Exception {
         LOG.info("!!!!!!!!!!  Launching Spark (woot) !!!!!!!!!!!!");
 
-        // TODO: launch Spark
+        // Example of how to launch Spark
+        //SparkContext sc = new SparkContext("local", "Spork", null, null);
+        //RDD<String> textFile = sc.textFile("README.txt", 2);
+        //System.out.println("First line of file: " + textFile.first());
+        
+        // TODO: run physical plan on Spark
 
         return PigStats.get();
     }
