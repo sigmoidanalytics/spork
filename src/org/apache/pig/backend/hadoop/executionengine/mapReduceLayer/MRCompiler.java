@@ -193,10 +193,6 @@ public class MRCompiler extends PhyPlanVisitor {
     private int fileConcatenationThreshold = 100;
     private boolean optimisticFileConcatenation = false;
     
-    public MRCompiler(PhysicalPlan plan) throws MRCompilerException {
-        this(plan,null);
-    }
-    
     public MRCompiler(PhysicalPlan plan,
             PigContext pigContext) throws MRCompilerException {
         super(plan, new DepthFirstWalker<PhysicalOperator, PhysicalPlan>(plan));
