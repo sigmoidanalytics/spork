@@ -203,6 +203,7 @@ public class PigContext implements Serializable {
 
         switch (execType) {
             case LOCAL:
+            case SPARK:
             case MAPREDUCE:
             {
                 executionEngine = new HExecutionEngine (this);
@@ -649,7 +650,8 @@ public class PigContext implements Serializable {
 
         switch (execType) {
             case LOCAL:
-            case MAPREDUCE: 
+            case SPARK:
+            case MAPREDUCE:
             {
                 executableManager = new HadoopExecutableManager();
             }
