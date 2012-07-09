@@ -55,6 +55,8 @@ import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.executionengine.ExecJob;
 import org.apache.pig.backend.executionengine.ExecJob.JOB_STATUS;
 import org.apache.pig.backend.hadoop.executionengine.HJob;
+import org.apache.pig.backend.hadoop.executionengine.SparkLauncher;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.Launcher;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MapReduceLauncher;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
@@ -1254,7 +1256,10 @@ public class PigServer {
      * @throws FrontendException
      */
     protected PigStats launchPlan(PhysicalPlan pp, String jobName) throws ExecException, FrontendException {
-        MapReduceLauncher launcher = new MapReduceLauncher();
+
+        Launcher launcher = getPigContext().getExecType() == ExecType.SPARK ?
+                new SparkLauncher() : new MapReduceLauncher();
+
         PigStats stats = null;
         try {
             stats = launcher.launchPig(pp, jobName, pigContext);
