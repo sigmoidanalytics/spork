@@ -53,7 +53,6 @@
     </filesystem>
     <chain name="default" dual="true">
       <resolver ref="local"/>
-      <resolver ref="fs"/>
       <resolver ref="maven2"/>
       <resolver ref="jboss-maven2"/>
       <resolver ref="apache-snapshots"/>
