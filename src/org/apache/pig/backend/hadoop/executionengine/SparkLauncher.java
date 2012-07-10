@@ -24,20 +24,17 @@ import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigOutputFor
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.POStatus;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.Result;
-import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhyPlanVisitor;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POFilter;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POForEach;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POGlobalRearrange;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLoad;
-import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLocalRearrange;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.util.PlanHelper;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.io.FileSpec;
 import org.apache.pig.impl.plan.OperatorKey;
-import org.apache.pig.impl.plan.VisitorException;
 import org.apache.pig.impl.util.ObjectSerializer;
 import org.apache.pig.impl.util.UDFContext;
 import org.apache.pig.tools.pigstats.PigStats;
@@ -99,6 +96,7 @@ public class SparkLauncher extends Launcher {
         RDD<Tuple> nextRDD = null;
 
         if (physicalOperator instanceof POStore) {
+
             // convert back to KV pairs
             RDD<Tuple2> rddPairs = rdd.map(FROM_TUPLE_FUNCTION, getManifest(Tuple2.class));
             PairRDDFunctions<Text, Tuple> pairRDDFunctions = new PairRDDFunctions<Text, Tuple>(
@@ -112,8 +110,12 @@ public class SparkLauncher extends Launcher {
                         Text.class, Tuple.class, PigOutputFormat.class, storeJobConf);
             return;
         } else if (physicalOperator instanceof POForEach) {
-            nextRDD = rdd;
+
+            Function1 forEachFunction = new ForEachFunction((POForEach)physicalOperator);
+            nextRDD = rdd.map(forEachFunction, getManifest(Tuple.class));
+
         } else if (physicalOperator instanceof POFilter) {
+
             Function1 filterFunction = new FilterFunction((POFilter)physicalOperator);
             nextRDD = rdd.filter(filterFunction);
         } else if (physicalOperator instanceof POLocalRearrange) {
@@ -263,45 +265,35 @@ public class SparkLauncher extends Launcher {
         }
     }
 
-    private static class POContainer extends PhysicalOperator {
-        private Tuple tuple;
-        boolean returned = false;
+    private static class ForEachFunction extends AbstractFunction1<Tuple, Tuple>
+            implements Function1<Tuple, Tuple>, Serializable {
 
-        private POContainer(OperatorKey k, Tuple tuple) {
-            super(k);
-            this.tuple = tuple;
+        private POForEach poForEach;
+
+        private ForEachFunction(POForEach poForEach) {
+            this.poForEach = poForEach;
         }
 
-        @Override
-        public Result getNext(Tuple t) throws ExecException {
-            Result result = new Result();
-            result.result = tuple;
-            result.returnStatus = returned ? POStatus.STATUS_EOP : POStatus.STATUS_OK;
-            returned = true;
-            return result;
-        }
+        public Tuple apply(Tuple v1) {
+            Result result;
+            try {
+                poForEach.setInputs(null);
+                poForEach.attachInput(v1);
+                result = poForEach.getNext(v1);
+            } catch (ExecException e) {
+                throw new RuntimeException("Couldn't do forEach on tuple: " + v1, e);
+            }
 
-        @Override
-        public void visit(PhyPlanVisitor v) throws VisitorException {
-        }
+            if (result == null) {
+                throw new RuntimeException("Null response found for forEach on tuple: " + v1);
+            }
 
-        public Tuple illustratorMarkup(Object in, Object out, int eqClassIndex) {
-            return null;
-        }
-
-        @Override
-        public boolean supportsMultipleInputs() {
-            return false;
-        }
-
-        @Override
-        public boolean supportsMultipleOutputs() {
-            return false;
-        }
-
-        @Override
-        public String name() {
-            return null;
+            switch (result.returnStatus) {
+                case POStatus.STATUS_OK:
+                    return (Tuple)result.result;
+                default:
+                    throw new RuntimeException("Unexpected response code from filter: " + result);
+            }
         }
     }
 
