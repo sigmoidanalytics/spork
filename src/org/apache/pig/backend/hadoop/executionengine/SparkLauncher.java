@@ -1,14 +1,25 @@
 package org.apache.pig.backend.hadoop.executionengine;
 
+import java.io.IOException;
+import java.io.PrintStream;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.pig.LoadFunc;
+import org.apache.pig.StoreFuncInterface;
 import org.apache.pig.backend.executionengine.ExecException;
+import org.apache.pig.backend.hadoop.datastorage.ConfigurationUtil;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.JobControlCompiler;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.Launcher;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigInputFormat;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigOutputFormat;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.POStatus;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.Result;
@@ -27,19 +38,17 @@ import org.apache.pig.impl.plan.VisitorException;
 import org.apache.pig.impl.util.ObjectSerializer;
 import org.apache.pig.impl.util.UDFContext;
 import org.apache.pig.tools.pigstats.PigStats;
+import org.python.google.common.collect.Lists;
 
-import scala.reflect.ClassManifest$;
 import scala.Function1;
 import scala.Tuple2;
+import scala.Tuple2$;
 import scala.reflect.ClassManifest;
+import scala.reflect.ClassManifest$;
 import scala.runtime.AbstractFunction1;
+import spark.PairRDDFunctions;
 import spark.RDD;
 import spark.SparkContext;
-
-import java.io.IOException;
-import java.io.PrintStream;
-import java.io.Serializable;
-import java.util.*;
 
 /**
  * @author billg
@@ -47,96 +56,142 @@ import java.util.*;
 public class SparkLauncher extends Launcher {
     private static final Log LOG = LogFactory.getLog(SparkLauncher.class);
 
-    private static final ToTupleFunction toTupleFunction = new ToTupleFunction();
+    private static final ToTupleFunction TO_TUPLE_FUNCTION = new ToTupleFunction();
+    private static final FromTupleFunction FROM_TUPLE_FUNCTION = new FromTupleFunction();
 
     @Override
-    public PigStats launchPig(PhysicalPlan php, String grpName, PigContext pc) throws Exception {
+    public PigStats launchPig(PhysicalPlan physicalPlan, String grpName, PigContext pigContext) throws Exception {
         LOG.info("!!!!!!!!!!  Launching Spark (woot) !!!!!!!!!!!!");
 
         // Example of how to launch Spark
         SparkContext sc = new SparkContext("local", "Spork", null, null);
-        LinkedList<POLoad> loads = PlanHelper.getLoads(php);
-        for (POLoad poLoad : loads) {
 
-            JobConf conf = new JobConf();
-            Properties properties = pc.getProperties();
-            Set<Map.Entry<Object, Object>> entries = properties.entrySet();
-            for (Map.Entry<Object, Object> entry : entries) {
-                String key = (String)entry.getKey();
-                String value = (String)entry.getValue();
-                conf.set(key, value);
-            }
-            Job job = new Job(conf);
-            LoadFunc lf = poLoad.getLoadFunc();
+        LinkedList<POLoad> poLoads = PlanHelper.getLoads(physicalPlan);
+        for (POLoad poLoad : poLoads) {
+            JobConf loadJobConf = newJobConf(pigContext);
+            configureLoader(physicalPlan, poLoad, loadJobConf);
 
-            lf.setLocation(poLoad.getLFile().getFileName(), job);
-
-            // stolen from JobControlCompiler
-            ArrayList<FileSpec> inp = new ArrayList<FileSpec>();
-            //Store the inp filespecs
-            inp.add(poLoad.getLFile());
-
-            ArrayList<List<OperatorKey>> inpTargets = new ArrayList<List<OperatorKey>>();
-            ArrayList<String> inpSignatureLists = new ArrayList<String>();
-            ArrayList<Long> inpLimits = new ArrayList<Long>();
-            //Store the target operators for tuples read
-            //from this input
-            List<PhysicalOperator> ldSucs = php.getSuccessors(poLoad);
-            List<OperatorKey> ldSucKeys = new ArrayList<OperatorKey>();
-            if(ldSucs!=null){
-                for (PhysicalOperator operator2 : ldSucs) {
-                    ldSucKeys.add(operator2.getOperatorKey());
-                }
-            }
-            inpTargets.add(ldSucKeys);
-            inpSignatureLists.add(poLoad.getSignature());
-            inpLimits.add(poLoad.getLimit());
-
-            conf.set("pig.inputs", ObjectSerializer.serialize(inp));
-            conf.set("pig.inpTargets", ObjectSerializer.serialize(inpTargets));
-            conf.set("pig.inpSignatures", ObjectSerializer.serialize(inpSignatureLists));
-            conf.set("pig.inpLimits", ObjectSerializer.serialize(inpLimits));
-            conf.set("pig.pigContext", ObjectSerializer.serialize(pc));
-            conf.set("udf.import.list", ObjectSerializer.serialize(PigContext.getPackageImportList()));
-
-            UDFContext.getUDFContext().serialize(conf);
             // don't know why but just doing this cast for now
             RDD<Tuple2<Text, Tuple>> hadoopRDD = sc.newAPIHadoopFile(
-                    poLoad.getLFile().getFileName(), PigInputFormat.class, Text.class, Tuple.class, conf);
+                    poLoad.getLFile().getFileName(), PigInputFormat.class,
+                    Text.class, Tuple.class, loadJobConf);
 
-            //TODO: map to get just RDD<Tuple>
-            RDD<Tuple> pigTupleRDD = hadoopRDD.map(toTupleFunction,
+            // map to get just RDD<Tuple>
+            RDD<Tuple> pigTupleRDD = hadoopRDD.map(TO_TUPLE_FUNCTION,
                     ClassManifest$.MODULE$.fromClass(Tuple.class));
 
-            for (PhysicalOperator successor : php.getSuccessors(poLoad)) {
-                physicalToRDD(pigTupleRDD, php, successor);
+            for (PhysicalOperator successor : physicalPlan.getSuccessors(poLoad)) {
+                physicalToRDD(pigContext, physicalPlan, successor, pigTupleRDD);
             }
+
         }
 
         return PigStats.get();
     }
 
-    private void physicalToRDD(RDD<Tuple> rdd, PhysicalPlan plan, PhysicalOperator po) {
+    private void physicalToRDD(PigContext pigContext, PhysicalPlan plan,
+                               PhysicalOperator physicalOperator, RDD<Tuple> rdd) throws IOException {
         RDD<Tuple> nextRDD = null;
 
-        if (po instanceof POStore) {
-            //TODO: this should use the OutputFormat
-            rdd.saveAsTextFile(((POStore)po).getSFile().getFileName());
+        if (physicalOperator instanceof POStore) {
+            // convert back to KV pairs
+            RDD<Tuple2> rddPairs = rdd.map(FROM_TUPLE_FUNCTION, getManifest(Tuple2.class));
+            PairRDDFunctions<Text, Tuple> pairRDDFunctions = new PairRDDFunctions<Text, Tuple>(
+                    (RDD<Tuple2<Text, Tuple>>) ((Object) rddPairs),
+                    getManifest(Text.class), getManifest(Tuple.class));
+
+            JobConf storeJobConf = newJobConf(pigContext);
+            POStore poStore = configureStorer(storeJobConf, physicalOperator);
+
+            pairRDDFunctions.saveAsNewAPIHadoopFile(poStore.getSFile().getFileName(),
+                        Text.class, Tuple.class, PigOutputFormat.class, storeJobConf);
             return;
-        } else if (po instanceof POForEach) {
+        } else if (physicalOperator instanceof POForEach) {
             nextRDD = rdd;
-        } else if (po instanceof POFilter) {
-            Function1 filterFunction = new FilterFunction((POFilter)po);
+        } else if (physicalOperator instanceof POFilter) {
+            Function1 filterFunction = new FilterFunction((POFilter)physicalOperator);
             nextRDD = rdd.filter(filterFunction);
         }
 
         if (nextRDD == null) {
-            throw new IllegalArgumentException("Spork unsupported PhysicalOperator: " + po);
+            throw new IllegalArgumentException("Spork unsupported PhysicalOperator: " + physicalOperator);
         }
 
-        for (PhysicalOperator succcessor : plan.getSuccessors(po)) {
-            physicalToRDD(nextRDD, plan, succcessor);
+        for (PhysicalOperator succcessor : plan.getSuccessors(physicalOperator)) {
+            physicalToRDD(pigContext, plan, succcessor, nextRDD);
         }
+    }
+
+    private JobConf newJobConf(PigContext pigContext) throws IOException {
+        JobConf jobConf = new JobConf(ConfigurationUtil.toConfiguration(pigContext.getProperties()));
+        jobConf.set("pig.pigContext", ObjectSerializer.serialize(pigContext));
+        UDFContext.getUDFContext().serialize(jobConf);
+        jobConf.set("udf.import.list", ObjectSerializer.serialize(PigContext.getPackageImportList()));
+        return jobConf;
+    }
+
+    private POStore configureStorer(JobConf jobConf,
+            PhysicalOperator physicalOperator) throws IOException {
+        ArrayList<POStore> storeLocations = Lists.newArrayList();
+        POStore poStore = (POStore)physicalOperator;
+        storeLocations.add(poStore);
+        StoreFuncInterface sFunc = poStore.getStoreFunc();
+        sFunc.setStoreLocation(poStore.getSFile().getFileName(), new org.apache.hadoop.mapreduce.Job(jobConf));
+        poStore.setInputs(null); 
+        poStore.setParentPlan(null);
+        
+        jobConf.set(JobControlCompiler.PIG_MAP_STORES, ObjectSerializer.serialize(Lists.newArrayList()));
+        jobConf.set(JobControlCompiler.PIG_REDUCE_STORES, ObjectSerializer.serialize(storeLocations));
+        return poStore;
+    }
+
+    private <T> ClassManifest<T> getManifest(Class<T> clazz) {
+        return ClassManifest$.MODULE$.fromClass(clazz);
+    }
+
+    /**
+     * stolen from JobControlCompiler
+     * TODO: refactor it to share this
+     * @param physicalPlan
+     * @param poLoad
+     * @param jobConf 
+     * @return
+     * @throws IOException
+     */
+    private JobConf configureLoader(PhysicalPlan physicalPlan, POLoad poLoad, JobConf jobConf) throws IOException {
+        
+        Job job = new Job(jobConf);
+        LoadFunc loadFunc = poLoad.getLoadFunc();
+
+        loadFunc.setLocation(poLoad.getLFile().getFileName(), job);
+
+        // stolen from JobControlCompiler
+        ArrayList<FileSpec> pigInputs = new ArrayList<FileSpec>();
+        //Store the inp filespecs
+        pigInputs.add(poLoad.getLFile());
+
+        ArrayList<List<OperatorKey>> inpTargets = Lists.newArrayList();
+        ArrayList<String> inpSignatures = Lists.newArrayList();
+        ArrayList<Long> inpLimits = Lists.newArrayList();
+        //Store the target operators for tuples read
+        //from this input
+        List<PhysicalOperator> loadSuccessors = physicalPlan.getSuccessors(poLoad);
+        List<OperatorKey> loadSuccessorsKeys = Lists.newArrayList();
+        if(loadSuccessors!=null){
+            for (PhysicalOperator loadSuccessor : loadSuccessors) {
+                loadSuccessorsKeys.add(loadSuccessor.getOperatorKey());
+            }
+        }
+        inpTargets.add(loadSuccessorsKeys);
+        inpSignatures.add(poLoad.getSignature());
+        inpLimits.add(poLoad.getLimit());
+
+        jobConf.set("pig.inputs", ObjectSerializer.serialize(pigInputs));
+        jobConf.set("pig.inpTargets", ObjectSerializer.serialize(inpTargets));
+        jobConf.set("pig.inpSignatures", ObjectSerializer.serialize(inpSignatures));
+        jobConf.set("pig.inpLimits", ObjectSerializer.serialize(inpLimits));
+
+        return jobConf;
     }
 
     @Override
@@ -149,6 +204,16 @@ public class SparkLauncher extends Launcher {
 
         public Tuple apply(Tuple2<Text, Tuple> v1) {
             return v1._2();
+        }
+    }
+
+    private static class FromTupleFunction extends AbstractFunction1<Tuple, Tuple2>
+            implements Function1<Tuple, Tuple2>, Serializable {
+
+        private static Text EMPTY_TEXT = new Text();
+
+        public Tuple2 apply(Tuple v1) {
+            return new Tuple2(EMPTY_TEXT, v1);
         }
     }
 

@@ -90,6 +90,7 @@ import org.apache.pig.impl.io.NullableTuple;
 import org.apache.pig.impl.io.PigNullableWritable;
 import org.apache.pig.impl.plan.DepthFirstWalker;
 import org.apache.pig.impl.plan.OperatorKey;
+import org.apache.pig.impl.plan.OperatorPlan;
 import org.apache.pig.impl.plan.VisitorException;
 import org.apache.pig.impl.util.JarManager;
 import org.apache.pig.impl.util.ObjectSerializer;
@@ -355,11 +356,6 @@ public class JobControlCompiler{
 
         Configuration conf = nwJob.getConfiguration();
 
-        ArrayList<FileSpec> inp = new ArrayList<FileSpec>();
-        ArrayList<List<OperatorKey>> inpTargets = new ArrayList<List<OperatorKey>>();
-        ArrayList<String> inpSignatureLists = new ArrayList<String>();
-        ArrayList<Long> inpLimits = new ArrayList<Long>();
-        ArrayList<POStore> storeLocations = new ArrayList<POStore>();
         Path tmpLocation = null;
 
         // add settings for pig statistics
@@ -368,7 +364,6 @@ public class JobControlCompiler{
             ScriptState ss = ScriptState.get();
             ss.addSettingsToConf(mro, conf);
         }
-
 
         conf.set("mapred.mapper.new-api", "true");
         conf.set("mapred.reducer.new-api", "true");
@@ -393,40 +388,22 @@ public class JobControlCompiler{
         }
 
         try{
-
             //Process the POLoads
             List<POLoad> lds = PlanHelper.getLoads(mro.mapPlan);
+            setLoadFuncLocation(lds, nwJob);
+            ArrayList<FileSpec> inp = getPigInputs(lds, nwJob);
 
-            if(lds!=null && lds.size()>0){
-                for (POLoad ld : lds) {
-                    LoadFunc lf = ld.getLoadFunc();
-                    lf.setLocation(ld.getLFile().getFileName(), nwJob);
-
-                    //Store the inp filespecs
-                    inp.add(ld.getLFile());
-                }
-            }
-
+            // warning: this call should be moved with caution.
+            // order is important
             adjustNumReducers(plan, mro, conf, nwJob);
 
-            if(lds!=null && lds.size()>0){
-              for (POLoad ld : lds) {
-                    //Store the target operators for tuples read
-                    //from this input
-                    List<PhysicalOperator> ldSucs = mro.mapPlan.getSuccessors(ld);
-                    List<OperatorKey> ldSucKeys = new ArrayList<OperatorKey>();
-                    if(ldSucs!=null){
-                        for (PhysicalOperator operator2 : ldSucs) {
-                            ldSucKeys.add(operator2.getOperatorKey());
-                        }
-                    }
-                    inpTargets.add(ldSucKeys);
-                    inpSignatureLists.add(ld.getSignature());
-                    inpLimits.add(ld.getLimit());
-                    //Remove the POLoad from the plan
-                    if (!pigContext.inIllustrator)
-                        mro.mapPlan.remove(ld);
-                }
+            ArrayList<List<OperatorKey>> inpTargets = getInpTargets(mro, lds);
+            ArrayList<String> inpSignatureLists = getInpSignatures(lds);
+            ArrayList<Long> inpLimits = getinpLimits(lds);
+            ArrayList<POStore> storeLocations = new ArrayList<POStore>();
+            if (!pigContext.inIllustrator) {
+                //Remove the POLoad from the plan
+                removePOLoads(mro, lds);
             }
 
             if (!pigContext.inIllustrator && pigContext.getExecType() != ExecType.LOCAL)
@@ -755,6 +732,73 @@ public class JobControlCompiler{
             String msg = "Internal error creating job configuration.";
             throw new JobCreationException(msg, errCode, PigException.BUG, e);
         }
+    }
+
+    private static ArrayList<Long> getinpLimits(List<POLoad> lds) {
+        ArrayList<Long> inpLimits = new ArrayList<Long>();
+        if(lds!=null && lds.size()>0){
+            for (POLoad ld : lds) {
+                  inpLimits.add(ld.getLimit());
+              }
+          }
+        return inpLimits;
+    }
+
+    private static ArrayList<String> getInpSignatures(List<POLoad> lds) {
+        ArrayList<String> inpSignatureLists = new ArrayList<String>();
+        if(lds!=null && lds.size()>0){
+            for (POLoad ld : lds) {
+                  inpSignatureLists.add(ld.getSignature());
+              }
+          }
+        return inpSignatureLists;
+    }
+
+    private static ArrayList<List<OperatorKey>> getInpTargets(MapReduceOper mro, List<POLoad> lds) {
+        ArrayList<List<OperatorKey>> inpTargets = new ArrayList<List<OperatorKey>>();
+        if(lds!=null && lds.size()>0){
+            for (POLoad ld : lds) {
+                  //Store the target operators for tuples read
+                  //from this input
+                  List<PhysicalOperator> ldSucs = mro.mapPlan.getSuccessors(ld);
+                  List<OperatorKey> ldSucKeys = new ArrayList<OperatorKey>();
+                  if(ldSucs!=null){
+                      for (PhysicalOperator operator2 : ldSucs) {
+                          ldSucKeys.add(operator2.getOperatorKey());
+                      }
+                  }
+                  inpTargets.add(ldSucKeys);
+              }
+          }
+        return inpTargets;
+    }
+
+    private static void removePOLoads(MapReduceOper mro, List<POLoad> lds) {
+        if(lds!=null && lds.size()>0){
+            for (POLoad ld : lds) {
+                mro.mapPlan.remove(ld);
+            }
+        }
+    }
+
+    private static void setLoadFuncLocation(List<POLoad> lds, org.apache.hadoop.mapreduce.Job nwJob) throws IOException {
+        if(lds!=null && lds.size()>0){
+            for (POLoad ld : lds) {
+                LoadFunc lf = ld.getLoadFunc();
+                lf.setLocation(ld.getLFile().getFileName(), nwJob);
+            }
+        }
+    }
+
+    private static ArrayList<FileSpec> getPigInputs(List<POLoad> lds, org.apache.hadoop.mapreduce.Job nwJob) {
+        ArrayList<FileSpec> inp = new ArrayList<FileSpec>();
+        if(lds!=null && lds.size()>0){
+            for (POLoad ld : lds) {
+                //Store the inp filespecs
+                inp.add(ld.getLFile());
+            }
+        }
+        return inp;
     }
 
     public void adjustNumReducers(MROperPlan plan, MapReduceOper mro, Configuration conf,
