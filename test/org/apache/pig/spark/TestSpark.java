@@ -1,8 +1,8 @@
 package org.apache.pig.spark;
 
-import static org.apache.pig.builtin.mock.Storage.*;
+import static org.apache.pig.builtin.mock.Storage.bag;
+import static org.apache.pig.builtin.mock.Storage.tuple;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 import java.util.Arrays;
 import java.util.List;
@@ -11,7 +11,6 @@ import org.apache.pig.ExecType;
 import org.apache.pig.backend.executionengine.ExecJob;
 import org.apache.pig.builtin.mock.Storage;
 import org.apache.pig.builtin.mock.Storage.Data;
-import org.apache.pig.data.Tuple;
 import org.apache.pig.pigunit.pig.PigServer;
 import org.junit.Test;
 
@@ -32,10 +31,9 @@ public class TestSpark {
         //		assertEquals(1, executeBatch.size());
         //		assertTrue(executeBatch.get(0).hasCompleted());
 
-        List<Tuple> output = data.get("output");
         assertEquals(
                 Arrays.asList(tuple("test1"), tuple("test2")),
-                output);
+                data.get("output"));
     }
 
     @Test
@@ -51,8 +49,7 @@ public class TestSpark {
         pigServer.registerQuery("B = GROUP A BY $0;");
         pigServer.registerQuery("STORE B INTO 'output' using mock.Storage;");
 
-        List<Tuple> output = data.get("output");
-        assertEquals(2, output.size());
+        assertEquals(2, data.get("output").size());
     }
     
     @Test
@@ -69,10 +66,9 @@ public class TestSpark {
         pigServer.registerQuery("C = FOREACH B GENERATE FLATTEN(A);");
         pigServer.registerQuery("STORE C INTO 'output' using mock.Storage;");
 
-        List<Tuple> output = data.get("output");
         assertEquals(
                 Arrays.asList(tuple("test1"), tuple("test2"), tuple("test3")),
-                output);
+                data.get("output"));
     }
 
     @Test
@@ -89,10 +85,9 @@ public class TestSpark {
         pigServer.registerQuery("C = FOREACH B GENERATE COUNT(A);");
         pigServer.registerQuery("STORE B INTO 'output' using mock.Storage;");
 
-        List<Tuple> output = data.get("output");
         assertEquals(
                 Arrays.asList(tuple(2), tuple(1)),
-                output);
+                data.get("output"));
     }
 
     @Test
@@ -108,10 +103,9 @@ public class TestSpark {
         pigServer.registerQuery("B = FOREACH A GENERATE StringSize($0);");
         pigServer.registerQuery("STORE B INTO 'output' using mock.Storage;");
 
-        List<Tuple> output = data.get("output");
         assertEquals(
                 Arrays.asList(tuple(1), tuple(2), tuple(3)),
-                output);
+                data.get("output"));
     }
 
     
@@ -127,10 +121,9 @@ public class TestSpark {
         pigServer.registerQuery("B = FOREACH A GENERATE FLATTEN($0);");
         pigServer.registerQuery("STORE B INTO 'output' using mock.Storage;");
 
-        List<Tuple> output = data.get("output");
         assertEquals(
                 Arrays.asList(tuple("1"), tuple("2"), tuple("3"), tuple("4"), tuple("5"), tuple("6")),
-                output);
+                data.get("output"));
     }
     
     @Test
@@ -145,13 +138,10 @@ public class TestSpark {
 
         pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
         pigServer.registerQuery("B = FILTER A BY $0 == '1';");
-
-        
         pigServer.registerQuery("STORE B INTO 'output' using mock.Storage;");
 
-        List<Tuple> output = data.get("output");
         assertEquals(
                 Arrays.asList(tuple("1"), tuple("1")),
-                output);
+                data.get("output"));
     }
 }
