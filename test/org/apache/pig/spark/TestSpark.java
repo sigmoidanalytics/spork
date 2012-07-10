@@ -1,6 +1,6 @@
 package org.apache.pig.spark;
 
-import static org.apache.pig.builtin.mock.Storage.tuple;
+import static org.apache.pig.builtin.mock.Storage.*;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -54,6 +54,26 @@ public class TestSpark {
         List<Tuple> output = data.get("output");
         assertEquals(2, output.size());
     }
+    
+    @Test
+    public void testGroupByFlatten() throws Exception {
+        PigServer pigServer = new PigServer(ExecType.SPARK);
+        Data data = Storage.resetData(pigServer);
+        data.set("input", 
+                tuple("test1"),
+                tuple("test1"), 
+                tuple("test2"));
+
+        pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
+        pigServer.registerQuery("B = GROUP A BY $0;");
+        pigServer.registerQuery("C = FOREACH B GENERATE FLATTEN(A);");
+        pigServer.registerQuery("STORE C INTO 'output' using mock.Storage;");
+
+        List<Tuple> output = data.get("output");
+        assertEquals(
+                Arrays.asList(tuple("test1"), tuple("test2"), tuple("test3")),
+                output);
+    }
 
     @Test
     public void testCount() throws Exception {
@@ -91,6 +111,24 @@ public class TestSpark {
         List<Tuple> output = data.get("output");
         assertEquals(
                 Arrays.asList(tuple(1), tuple(2), tuple(3)),
+                output);
+    }
+    
+    @Test
+    public void testForEachFlatten() throws Exception {
+        PigServer pigServer = new PigServer(ExecType.SPARK);
+        Data data = Storage.resetData(pigServer);
+        data.set("input", 
+                tuple(bag(tuple("1"), tuple("2"), tuple("3"))),
+                tuple(bag(tuple("4"), tuple("5"), tuple("6"))));
+
+        pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
+        pigServer.registerQuery("B = FOREACH A GENERATE FLATTEN($0);");
+        pigServer.registerQuery("STORE B INTO 'output' using mock.Storage;");
+
+        List<Tuple> output = data.get("output");
+        assertEquals(
+                Arrays.asList(tuple("1"), tuple("2"), tuple("3"), tuple("4"), tuple("5"), tuple("6")),
                 output);
     }
 }

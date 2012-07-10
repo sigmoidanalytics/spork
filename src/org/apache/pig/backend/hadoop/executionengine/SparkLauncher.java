@@ -27,6 +27,7 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhyPlan
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POFilter;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POForEach;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POGlobalRearrange;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLoad;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLocalRearrange;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
@@ -112,10 +113,16 @@ public class SparkLauncher extends Launcher {
         } else if (physicalOperator instanceof POFilter) {
             Function1 filterFunction = new FilterFunction((POFilter)physicalOperator);
             nextRDD = rdd.filter(filterFunction);
+        } else if (physicalOperator instanceof POLocalRearrange) {
+            // TODO implement
+            nextRDD = rdd;
+        } else if (physicalOperator instanceof POGlobalRearrange) {
+            // TODO implement
+            nextRDD = rdd;
         }
 
         if (nextRDD == null) {
-            throw new IllegalArgumentException("Spork unsupported PhysicalOperator: " + physicalOperator);
+            throw new IllegalArgumentException("Spork unsupported PhysicalOperator: " + physicalOperator.getClass().getSimpleName() + " "+physicalOperator);
         }
 
         for (PhysicalOperator succcessor : plan.getSuccessors(physicalOperator)) {
