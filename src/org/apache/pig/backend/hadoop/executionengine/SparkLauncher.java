@@ -238,11 +238,8 @@ public class SparkLauncher extends Launcher {
         public Boolean apply(Tuple v1) {
             Result result;
             try {
-                POContainer container = new POContainer(null, v1);
-                List<PhysicalOperator> pos = new ArrayList<PhysicalOperator>();
-                pos.add(container);
-
-                poFilter.setInputs(pos);
+                poFilter.setInputs(null);
+                poFilter.attachInput(v1);
                 result = poFilter.getNext(v1);
             } catch (ExecException e) {
                 throw new RuntimeException("Couldn't filter tuple", e);
@@ -252,7 +249,9 @@ public class SparkLauncher extends Launcher {
 
             switch (result.returnStatus) {
                 case POStatus.STATUS_OK:
-                    return Boolean.TRUE.equals(result.result);
+                    return true;
+                case POStatus.STATUS_EOP: // TODO: probably also ok for EOS, END_OF_BATCH
+                    return false;
                 default:
                     throw new RuntimeException("Unexpected response code from filter: " + result);
             }
