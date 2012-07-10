@@ -693,7 +693,7 @@
                 <include name="zookeeper*.jar" />
                 <include name="spark-core*.jar" />
                 <include name="scala-library*.jar" />
-                <include name="jetty*.jar" />
+                <include name="jetty*7.5.3*.jar" />
                 <include name="fastutil*.jar" />
                 <include name="protobuf*.jar" />
                 <include name="asm*.jar" />
