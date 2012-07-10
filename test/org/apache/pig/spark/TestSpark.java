@@ -85,7 +85,7 @@ public class TestSpark {
                 tuple("123"));
 
         pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
-        pigServer.registerQuery("B = FOREACH A GENERATE LENGTH($0);");
+        pigServer.registerQuery("B = FOREACH A GENERATE StringSize($0);");
         pigServer.registerQuery("STORE B INTO 'output' using mock.Storage;");
 
         List<Tuple> output = data.get("output");
