@@ -23,6 +23,7 @@ import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigOutputFor
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLoad;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLocalRearrange;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.util.PlanHelper;
 import org.apache.pig.data.Tuple;
@@ -72,7 +73,7 @@ public class SparkLauncher extends Launcher {
                     POStore poStore = configureStorer(storeJobConf, physicalOperator);
                     pairRDDFunctions.saveAsNewAPIHadoopFile(poStore.getSFile().getFileName(), Text.class, Tuple.class, PigOutputFormat.class, storeJobConf);
                 } else {
-                    LOG.warn("UNKNOWN PO: "+physicalOperator);
+                    LOG.warn("UNKNOWN PO: "+physicalOperator.getClass().getSimpleName()+" "+physicalOperator);
                 }
             }
         }
