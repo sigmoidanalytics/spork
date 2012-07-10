@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -48,6 +49,7 @@ import scala.Tuple2$;
 import scala.reflect.ClassManifest;
 import scala.reflect.ClassManifest$;
 import scala.runtime.AbstractFunction1;
+import scala.runtime.BoxedUnit;
 import spark.PairRDDFunctions;
 import spark.RDD;
 import spark.SparkContext;
@@ -56,6 +58,7 @@ import spark.SparkContext;
  * @author billg
  */
 public class SparkLauncher extends Launcher {
+
     private static final Log LOG = LogFactory.getLog(SparkLauncher.class);
 
     private static final ToTupleFunction TO_TUPLE_FUNCTION = new ToTupleFunction();
@@ -114,6 +117,8 @@ public class SparkLauncher extends Launcher {
             Function1 filterFunction = new FilterFunction((POFilter)physicalOperator);
             nextRDD = rdd.filter(filterFunction);
         } else if (physicalOperator instanceof POLocalRearrange) {
+            Function1<Iterator<Tuple>, Iterator<Tuple>> localRearangeFunction = new LocalRearangeFunction((POLocalRearrange)physicalOperator);
+            nextRDD = rdd.mapPartitions(localRearangeFunction, getManifest(Tuple.class));
             // TODO implement
             nextRDD = rdd;
         } else if (physicalOperator instanceof POGlobalRearrange) {
@@ -298,5 +303,19 @@ public class SparkLauncher extends Launcher {
         public String name() {
             return null;
         }
+    }
+
+    public static class LocalRearangeFunction extends AbstractFunction1<Iterator<Tuple>, Iterator<Tuple>> {
+
+        public LocalRearangeFunction(POLocalRearrange physicalOperator) {
+            // TODO Auto-generated constructor stub
+        }
+
+        @Override
+        public Iterator<Tuple> apply(Iterator<Tuple> arg0) {
+            // TODO Auto-generated method stub
+            return null;
+        }
+
     }
 }
