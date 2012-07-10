@@ -93,4 +93,24 @@ public class TestSpark {
                 Arrays.asList(tuple(1), tuple(2), tuple(3)),
                 output);
     }
+
+    @Test
+    public void testFilter() throws Exception {
+        PigServer pigServer = new PigServer(ExecType.SPARK);
+        Data data = Storage.resetData(pigServer);
+        data.set("input", 
+                tuple("1"),
+                tuple("2"), 
+                tuple("3"), 
+                tuple("1"));
+
+        pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
+        pigServer.registerQuery("B = FILTER A BY $0 == '1';");
+        pigServer.registerQuery("STORE B INTO 'output' using mock.Storage;");
+
+        List<Tuple> output = data.get("output");
+        assertEquals(
+                Arrays.asList(tuple("1"), tuple("1")),
+                output);
+    }
 }
