@@ -156,6 +156,7 @@ statement : SEMI_COLON!
           | inline_statement        
           | import_statement
           | realias_statement
+          | rel_cache_statement
 ;
 
 import_statement : import_clause SEMI_COLON!
@@ -176,6 +177,13 @@ realias_statement : realias_clause SEMI_COLON!
 
 realias_clause : alias EQUAL identifier 
     -> ^(REALIAS alias identifier)
+;
+
+rel_cache_statement : rel_cache_clause SEMI_COLON!
+;
+
+rel_cache_clause : CACHE alias
+    -> ^(CACHE alias)
 ;
 
 parallel_clause : PARALLEL^ INTEGER

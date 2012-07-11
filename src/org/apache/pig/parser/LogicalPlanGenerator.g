@@ -77,6 +77,7 @@ import org.apache.pig.newplan.logical.expression.RegexExpression;
 import org.apache.pig.newplan.logical.expression.ScalarExpression;
 import org.apache.pig.newplan.logical.expression.SubtractExpression;
 import org.apache.pig.newplan.logical.expression.UserFuncExpression;
+import org.apache.pig.newplan.logical.relational.LOCache;
 import org.apache.pig.newplan.logical.relational.LOCogroup;
 import org.apache.pig.newplan.logical.relational.LOCube;
 import org.apache.pig.newplan.logical.relational.LOFilter;
@@ -165,12 +166,16 @@ scope {
  : general_statement
  | split_statement
  | realias_statement
+ | rel_cache_statement
 ;
 
 split_statement : split_clause
 ;
 
 realias_statement : realias_clause
+;
+
+rel_cache_statement : rel_cache_clause
 ;
 
 general_statement 
@@ -190,6 +195,14 @@ realias_clause
 	            new SourceLocation( (PigParserNode)$IDENTIFIER ), $IDENTIFIER.text);
 	    }
 	    builder.putOperator( $alias.name, (LogicalRelationalOperator)op );
+    }
+;
+
+rel_cache_clause
+: ^( CACHE IDENTIFIER )
+    {
+        builder.buildCacheOp(new SourceLocation( (PigParserNode) $rel_cache_clause.start ),
+            $IDENTIFIER.text);
     }
 ;
 
