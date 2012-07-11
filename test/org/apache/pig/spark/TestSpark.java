@@ -110,10 +110,10 @@ public class TestSpark {
         pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
         pigServer.registerQuery("B = GROUP A BY $0;");
         pigServer.registerQuery("C = FOREACH B GENERATE COUNT(A);");
-        pigServer.registerQuery("STORE B INTO 'output' using mock.Storage;");
+        pigServer.registerQuery("STORE C INTO 'output' using mock.Storage;");
 
         assertEquals(
-                Arrays.asList(tuple(2), tuple(1)),
+                Arrays.asList(tuple(2l), tuple(1l)),
                 data.get("output"));
     }
 
