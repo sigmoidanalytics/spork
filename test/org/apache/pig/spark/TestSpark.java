@@ -94,7 +94,7 @@ public class TestSpark {
         pigServer.registerQuery("STORE C INTO 'output' using mock.Storage;");
 
         assertEquals(
-                Arrays.asList(tuple("test1"), tuple("test2"), tuple("test3")),
+                Arrays.asList(tuple("test1"), tuple("test1"), tuple("test2")),
                 data.get("output"));
     }
 
