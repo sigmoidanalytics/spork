@@ -18,9 +18,13 @@ import org.apache.pig.StoreFuncInterface;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.datastorage.ConfigurationUtil;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.JobControlCompiler;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.KeyTypeDiscoveryVisitor;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.Launcher;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRCompiler;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigInputFormat;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigOutputFormat;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.MROperPlan;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.POPackageAnnotator;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.POStatus;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.Result;
@@ -29,11 +33,18 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOpe
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POForEach;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POGlobalRearrange;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLoad;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLocalRearrange;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPackage;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.util.PlanHelper;
+import org.apache.pig.data.BagFactory;
+import org.apache.pig.data.DataBag;
 import org.apache.pig.data.Tuple;
+import org.apache.pig.data.TupleFactory;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.io.FileSpec;
+import org.apache.pig.impl.io.NullableTuple;
+import org.apache.pig.impl.io.PigNullableWritable;
 import org.apache.pig.impl.plan.OperatorKey;
 import org.apache.pig.impl.util.ObjectSerializer;
 import org.apache.pig.impl.util.UDFContext;
@@ -42,11 +53,11 @@ import org.python.google.common.collect.Lists;
 
 import scala.Function1;
 import scala.Tuple2;
-import scala.Tuple2$;
+import scala.collection.JavaConversions;
+import scala.collection.Seq;
 import scala.reflect.ClassManifest;
 import scala.reflect.ClassManifest$;
 import scala.runtime.AbstractFunction1;
-import scala.runtime.BoxedUnit;
 import spark.PairRDDFunctions;
 import spark.RDD;
 import spark.SparkContext;
@@ -65,6 +76,20 @@ public class SparkLauncher extends Launcher {
     public PigStats launchPig(PhysicalPlan physicalPlan, String grpName, PigContext pigContext) throws Exception {
         LOG.info("!!!!!!!!!!  Launching Spark (woot) !!!!!!!!!!!!");
 
+/////////
+// stolen from MapReduceLauncher
+        MRCompiler mrCompiler = new MRCompiler(physicalPlan, pigContext);
+        mrCompiler.compile();
+        MROperPlan plan = mrCompiler.getMRPlan();
+        POPackageAnnotator pkgAnnotator = new POPackageAnnotator(plan);
+        pkgAnnotator.visit();
+//        // this one: not sure
+//        KeyTypeDiscoveryVisitor kdv = new KeyTypeDiscoveryVisitor(plan);
+//        kdv.visit();
+
+        
+/////////
+        
         // Example of how to launch Spark
         SparkContext sc = new SparkContext("local", "Spork", null, null);
 
@@ -115,19 +140,27 @@ public class SparkLauncher extends Launcher {
             nextRDD = rdd.map(forEachFunction, getManifest(Tuple.class));
 
         } else if (physicalOperator instanceof POFilter) {
-
+            
             Function1 filterFunction = new FilterFunction((POFilter)physicalOperator);
             nextRDD = rdd.filter(filterFunction);
+            
         } else if (physicalOperator instanceof POLocalRearrange) {
-            Function1<Iterator<Tuple>, Iterator<Tuple>> localRearangeFunction = new LocalRearangeFunction((POLocalRearrange)physicalOperator);
-            nextRDD = rdd.mapPartitions(localRearangeFunction, getManifest(Tuple.class));
-            // TODO implement
-            nextRDD = rdd;
+            nextRDD = rdd
+                    // call local rearrange to get key and value
+                    .map(new LocalRearangeFunction((POLocalRearrange)physicalOperator), getManifest(Tuple.class))
+                    // group by key
+                    .groupBy(new GetKeyFunction(), getManifest(Object.class))
+                    // convert result to a tuple (key, { values })
+                    .map(new GroupTupleFunction(), getManifest(Tuple.class));
         } else if (physicalOperator instanceof POGlobalRearrange) {
-            // TODO implement
-            nextRDD = rdd;
+            // just a marker that a shuffle is needed
+            nextRDD = rdd; // maybe put the groupBy here
+        } else if (physicalOperator instanceof POPackage) {
+            Function1<Tuple, Tuple> packageFunction = new PackageFunction((POPackage)physicalOperator);
+            // package will generate the group from the result of the local rearange
+            nextRDD = rdd.map(packageFunction, getManifest(Tuple.class));
         }
-
+        
         if (nextRDD == null) {
             throw new IllegalArgumentException("Spork unsupported PhysicalOperator: " + physicalOperator.getClass().getSimpleName() + " "+physicalOperator);
         }
@@ -297,17 +330,137 @@ public class SparkLauncher extends Launcher {
         }
     }
 
-    public static class LocalRearangeFunction extends AbstractFunction1<Iterator<Tuple>, Iterator<Tuple>> {
+    private static class LocalRearangeFunction extends AbstractFunction1<Tuple, Tuple> implements Serializable {
+        
+        private static TupleFactory tf = TupleFactory.getInstance();
+        private final POLocalRearrange physicalOperator;
 
         public LocalRearangeFunction(POLocalRearrange physicalOperator) {
-            // TODO Auto-generated constructor stub
+            this.physicalOperator = physicalOperator;
         }
 
         @Override
-        public Iterator<Tuple> apply(Iterator<Tuple> arg0) {
-            // TODO Auto-generated method stub
-            return null;
+        public Tuple apply(Tuple t) {
+            Result result;
+            try {
+                physicalOperator.setInputs(null);
+                physicalOperator.attachInput(t);
+                result = physicalOperator.getNext((Tuple)null);
+
+                if (result == null) {
+                    throw new RuntimeException("Null response found for LocalRearange on tuple: " + t);
+                }
+
+                switch (result.returnStatus) {
+                case POStatus.STATUS_OK:
+                    // we don't need the index used for namespacing in Pig
+                    Tuple resultTuple = (Tuple)result.result;
+                    Tuple newTuple = tf.newTuple(2);
+                    newTuple.set(0, resultTuple.get(1)); // key
+                    newTuple.set(1, resultTuple.get(2)); // value (stripped of the key, reconstructed in package)
+                    return newTuple;
+                default:
+                    throw new RuntimeException("Unexpected response code from operator "+physicalOperator+" : " + result);
+                }
+            } catch (ExecException e) {
+                throw new RuntimeException("Couldn't do LocalRearange on tuple: " + t, e);
+            }
         }
 
+    }
+
+    private static class PackageFunction extends AbstractFunction1<Tuple, Tuple> implements Serializable {
+
+        private static TupleFactory tf = TupleFactory.getInstance();
+        private final POPackage physicalOperator;
+
+        public PackageFunction(POPackage physicalOperator) {
+            this.physicalOperator = physicalOperator;
+        }
+
+        @Override
+        public Tuple apply(final Tuple t) {
+            Result result;
+            try {
+                PigNullableWritable key = new PigNullableWritable() {
+                    public Object getValueAsPigType() {
+                        try {
+                            Object keyTuple = t.get(0);
+                            return keyTuple;
+                        } catch (ExecException e) {
+                           throw new RuntimeException(e);
+                        }
+                    }
+                };
+                final Iterator<Tuple> bagIterator = ((DataBag)t.get(1)).iterator();
+                Iterator<NullableTuple> iterator = new Iterator<NullableTuple>() {
+                    public boolean hasNext() {
+                        return bagIterator.hasNext();
+                    }
+                    public NullableTuple next() {
+                        Tuple next = bagIterator.next();
+                        
+                        return new NullableTuple(next);
+                    }
+                    public void remove() {
+                        throw new UnsupportedOperationException();
+                    }
+                };
+                physicalOperator.setInputs(null);
+                physicalOperator.attachInput(key, iterator);
+                result = physicalOperator.getNext((Tuple)null);
+            } catch (ExecException e) {
+                throw new RuntimeException("Couldn't do Package on tuple: " + t, e);
+            }
+
+            if (result == null) {
+                throw new RuntimeException("Null response found for Package on tuple: " + t);
+            }
+
+            switch (result.returnStatus) {
+                case POStatus.STATUS_OK:
+                    // (key, {(value)...})
+                return (Tuple)result.result;
+                default:
+                    throw new RuntimeException("Unexpected response code from operator "+physicalOperator+" : " + result);
+            }
+        }
+
+    }
+    private static class GetKeyFunction extends AbstractFunction1<Tuple, Object> implements Serializable {
+
+        public Object apply(Tuple t) {
+            try {
+                // see PigGenericMapReduce For the key
+                Object key = t.get(0);
+                return key;
+            } catch (ExecException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+    
+    private static class GroupTupleFunction extends AbstractFunction1<Tuple2<Object, Seq<Tuple>>, Tuple> implements Serializable {
+
+        private static BagFactory bf = BagFactory.getInstance();
+        private static TupleFactory tf = TupleFactory.getInstance();        
+
+        public Tuple apply(Tuple2<Object, Seq<Tuple>> v1) {
+            try {
+                DataBag bag = bf.newDefaultBag();
+                Seq<Tuple> gp = v1._2();
+                Iterable<Tuple> asJavaIterable = JavaConversions.asJavaIterable(gp);
+                for (Tuple tuple : asJavaIterable) {
+                    // keeping only the value
+                    bag.add((Tuple)tuple.get(1));
+                }
+                Tuple tuple = tf.newTuple(2);
+                tuple.set(0, v1._1()); // the key
+                tuple.set(1, bag);
+                return tuple;
+            } catch (ExecException e) {
+                throw new RuntimeException(e);
+            }
+        }
     }
 }
