@@ -79,32 +79,32 @@ public class SparkLauncher extends Launcher {
     }
     
     private static void startSparkIfNeeded() throws PigException {
-      if (sparkContext == null) {
-        String master = System.getenv("SPARK_MASTER");
-        if (master == null) {
-          LOG.info("SPARK_MASTER not specified, using \"local\"");
-          master = "local";
+        if (sparkContext == null) {
+            String master = System.getenv("SPARK_MASTER");
+            if (master == null) {
+                LOG.info("SPARK_MASTER not specified, using \"local\"");
+                master = "local";
+            }
+
+            String sparkHome = System.getenv("SPARK_HOME"); // It's okay if this is null for local mode
+
+            // TODO: Don't hardcode this JAR
+            List<String> jars = Collections.singletonList("build/pig-0.11.0-SNAPSHOT-withdependencies.jar");
+
+            if (!master.startsWith("local")) {
+                // Check that we have the Mesos native library and Spark home are set
+                if (sparkHome == null) {
+                    System.err.println("You need to set SPARK_HOME to run on a Mesos cluster!");
+                    throw new PigException("SPARK_HOME is not set");
+                }
+                if (System.getenv("MESOS_NATIVE_LIBRARY") == null) {
+                    System.err.println("You need to set MESOS_NATIVE_LIBRARY to run on a Mesos cluster!");
+                    throw new PigException("MESOS_NATIVE_LIBRARY is not set");
+                }
+            }
+
+            sparkContext = new SparkContext(master, "Spork", sparkHome, SparkUtil.toScalaSeq(jars));
         }
-        
-        String sparkHome = System.getenv("SPARK_HOME"); // It's okay if this is null for local mode
-        
-        // TODO: Don't hardcode this JAR
-        List<String> jars = Collections.singletonList("build/pig-0.11.0-SNAPSHOT-withdependencies.jar");
-        
-        if (!master.startsWith("local")) {
-          // Check that we have the Mesos native library and Spark home are set
-          if (sparkHome == null) {
-            System.err.println("You need to set SPARK_HOME to run on a Mesos cluster!");
-            throw new PigException("SPARK_HOME is not set");
-          }
-          if (System.getenv("MESOS_NATIVE_LIBRARY") == null) {
-            System.err.println("You need to set MESOS_NATIVE_LIBRARY to run on a Mesos cluster!");
-            throw new PigException("MESOS_NATIVE_LIBRARY is not set");
-          }
-        }
-        
-        sparkContext = new SparkContext(master, "Spork", sparkHome, SparkUtil.toScalaSeq(jars));
-      }
     }
 
     private void physicalToRDD(PigContext pigContext, PhysicalPlan plan,
