@@ -107,6 +107,14 @@ public class SparkLauncher extends Launcher {
         }
     }
 
+    // You can use this in unit tests to stop the SparkContext between tests.
+    static void stopSpark() {
+        if (sparkContext != null) {
+            sparkContext.stop();
+            sparkContext = null;
+        }
+    }
+
     private void physicalToRDD(PigContext pigContext, PhysicalPlan plan,
                                PhysicalOperator physicalOperator, RDD<Tuple> rdd) throws IOException {
         RDD<Tuple> nextRDD = null;
