@@ -265,7 +265,7 @@ public class POPackage extends PhysicalOperator {
                 while (tupIter.hasNext()) {
                     NullableTuple ntup = tupIter.next();
                     int index = ntup.getIndex();
-                    Tuple copy = getValueTuple(ntup, index);  // <-----
+                    Tuple copy = getValueTuple(ntup, index);
                     
                     if (numInputs == 1) {
                         
