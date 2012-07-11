@@ -21,6 +21,7 @@ import spark.RDD;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Converter that takes a POStore and stores it's content.
@@ -38,7 +39,11 @@ public class StoreConverter implements POConverter<Tuple, Tuple2<Text, Tuple>, P
     }
 
     @Override
-    public RDD<Tuple2<Text, Tuple>> convert(RDD<Tuple> rdd, POStore physicalOperator) throws IOException {
+    public RDD<Tuple2<Text, Tuple>> convert(List<RDD<Tuple>> predecessors, POStore physicalOperator) throws IOException {
+        if (predecessors.size()!=1) {
+            throw new RuntimeException("Should not have 1 predecessors for Store. Got : "+predecessors);
+        }
+        RDD<Tuple> rdd = predecessors.get(0);
         // convert back to KV pairs
         RDD<Tuple2<Text, Tuple>> rddPairs =
                 (RDD<Tuple2<Text, Tuple>>)((Object)rdd.map(FROM_TUPLE_FUNCTION, SparkUtil.getManifest(Tuple2.class)));

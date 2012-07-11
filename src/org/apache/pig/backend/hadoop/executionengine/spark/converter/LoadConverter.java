@@ -33,7 +33,7 @@ import java.util.List;
  *
  * @author billg
  */
-public class LoadConverter implements POConverter<Tuple2<Text, Tuple>, Tuple, POLoad> {
+public class LoadConverter implements POConverter<Tuple, Tuple, POLoad> {
 
     private static final ToTupleFunction TO_TUPLE_FUNCTION = new ToTupleFunction();
 
@@ -48,7 +48,11 @@ public class LoadConverter implements POConverter<Tuple2<Text, Tuple>, Tuple, PO
     }
 
     @Override
-    public RDD<Tuple> convert(RDD<Tuple2<Text, Tuple>> rdd, POLoad poLoad) throws IOException {
+    public RDD<Tuple> convert(List<RDD<Tuple>> predecessorRdds, POLoad poLoad) throws IOException {
+//        if (predecessors.size()!=0) {
+//            throw new RuntimeException("Should not have predecessors for Load. Got : "+predecessors);
+//        }
+
         JobConf loadJobConf = SparkUtil.newJobConf(pigContext);
         configureLoader(physicalPlan, poLoad, loadJobConf);
 

@@ -132,60 +132,41 @@ public class SparkLauncher extends Launcher {
         LOG.info("Converting operator " + physicalOperator.getClass().getSimpleName()+" "+physicalOperator);
         // TODO: put these converters in a Map and look up which one to invoke
         if (physicalOperator instanceof POLoad) {
-            if (predecessorRdds.size()>0) {
-                throw new RuntimeException("Should not have predecessors for Load. Got : "+predecessors);
-            }
+            
             LoadConverter loadConverter = new LoadConverter(pigContext, plan, sc);
-            nextRDD = loadConverter.convert(null, (POLoad)physicalOperator);
+            nextRDD = loadConverter.convert(predecessorRdds, (POLoad)physicalOperator);
             
         } else if (physicalOperator instanceof POStore) {
-            if (predecessors.size()!=1) {
-                throw new RuntimeException("Should not have 1 predecessors for Store. Got : "+predecessors);
-            }
-            RDD<Tuple> rdd = predecessorRdds.get(0);
+            
             StoreConverter storeConverter = new StoreConverter(pigContext);
-            storeConverter.convert(rdd, (POStore)physicalOperator);
+            storeConverter.convert(predecessorRdds, (POStore)physicalOperator);
             return;
-
+            
         } else if (physicalOperator instanceof POForEach) {
-            if (predecessors.size()!=1) {
-                throw new RuntimeException("Should not have 1 predecessors for ForEach. Got : "+predecessors);
-            }
-            RDD<Tuple> rdd = predecessorRdds.get(0);
+
             ForEachConverter filterConverter = new ForEachConverter();
-            nextRDD = filterConverter.convert(rdd, (POForEach)physicalOperator);
+            nextRDD = filterConverter.convert(predecessorRdds, (POForEach)physicalOperator);
 
         } else if (physicalOperator instanceof POFilter) {
-            if (predecessors.size()!=1) {
-                throw new RuntimeException("Should not have 1 predecessors for Filter. Got : "+predecessors);
-            }
-            RDD<Tuple> rdd = predecessorRdds.get(0);
+            
             FilterConverter filterConverter = new FilterConverter();
-            nextRDD = filterConverter.convert(rdd, (POFilter)physicalOperator);
+            nextRDD = filterConverter.convert(predecessorRdds, (POFilter)physicalOperator);
 
         } else if (physicalOperator instanceof POLocalRearrange) {
-            if (predecessors.size()!=1) {
-                throw new RuntimeException("Should not have 1 predecessors for LocalRearrange. Got : "+predecessors);
-            }
-            RDD<Tuple> rdd = predecessorRdds.get(0);
+           
             LocalRearrangeConverter localRearrangeConverter = new LocalRearrangeConverter();
-            nextRDD = localRearrangeConverter.convert(rdd, (POLocalRearrange)physicalOperator);
+            nextRDD = localRearrangeConverter.convert(predecessorRdds, (POLocalRearrange)physicalOperator);
 
         } else if (physicalOperator instanceof POGlobalRearrange) {
-            if (predecessors.size()<1) {
-                throw new RuntimeException("Should not have at least 1 predecessor for GlobalRearrange. Got : "+predecessors);
-            }
-            // just a marker that a shuffle is needed
-            nextRDD = predecessorRdds.get(0); // maybe put the groupBy here
-            
+           
+            GlobalRearrangeConverter globalRearrangeConverter = new GlobalRearrangeConverter();
+            nextRDD = globalRearrangeConverter.convert(predecessorRdds, (POGlobalRearrange)physicalOperator);
 
         } else if (physicalOperator instanceof POPackage) {
-            if (predecessors.size()!=1) {
-                throw new RuntimeException("Should not have 1 predecessors for LocalRearrange. Got : "+predecessors);
-            }
-            RDD<Tuple> rdd = predecessorRdds.get(0);
+            
             PackageConverter packageConverter = new PackageConverter();
-            nextRDD = packageConverter.convert(rdd, (POPackage)physicalOperator);
+            nextRDD = packageConverter.convert(predecessorRdds, (POPackage)physicalOperator);
+            
         }
 
         if (nextRDD == null) {

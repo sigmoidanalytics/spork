@@ -1,6 +1,7 @@
 package org.apache.pig.backend.hadoop.executionengine.spark.converter;
 
 import java.io.Serializable;
+import java.util.List;
 
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.POStatus;
@@ -21,7 +22,11 @@ import spark.RDD;
 public class ForEachConverter implements POConverter<Tuple, Tuple, POForEach> {
 
     @Override
-    public RDD<Tuple> convert(RDD<Tuple> rdd, POForEach physicalOperator) {
+    public RDD<Tuple> convert(List<RDD<Tuple>> predecessors, POForEach physicalOperator) {
+        if (predecessors.size()!=1) {
+            throw new RuntimeException("Should not have 1 predecessors for ForEach. Got : "+predecessors);
+        }
+        RDD<Tuple> rdd = predecessors.get(0);
         ForEachFunction forEachFunction = new ForEachFunction(physicalOperator);
         return rdd.mapPartitions(forEachFunction, SparkUtil.getManifest(Tuple.class));
     }
