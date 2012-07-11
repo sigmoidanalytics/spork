@@ -98,9 +98,6 @@ import org.apache.pig.impl.util.Pair;
 import org.apache.pig.impl.util.UDFContext;
 import org.apache.pig.impl.util.Utils;
 import org.apache.pig.tools.pigstats.ScriptState;
-import org.python.google.common.collect.Lists;
-
-import scala.actors.threadpool.Arrays;
 
 /**
  * This is compiler class that takes an MROperPlan and converts
@@ -349,7 +346,7 @@ public class JobControlCompiler{
      */
     @SuppressWarnings({ "unchecked", "deprecation" })
     private Job getJob(MROperPlan plan, MapReduceOper mro, Configuration config, PigContext pigContext) throws JobCreationException{
-        org.apache.hadoop.mapreduce.Job nwJob;
+        org.apache.hadoop.mapreduce.Job nwJob = null;
 
         try{
             nwJob = new org.apache.hadoop.mapreduce.Job(config);
@@ -375,15 +372,15 @@ public class JobControlCompiler{
         if (buffPercent == null || Double.parseDouble(buffPercent) <= 0) {
             log.info("mapred.job.reduce.markreset.buffer.percent is not set, set to default 0.3");
             conf.set("mapred.job.reduce.markreset.buffer.percent", "0.3");
-        } else {
+        }else{
             log.info("mapred.job.reduce.markreset.buffer.percent is set to " + conf.get("mapred.job.reduce.markreset.buffer.percent"));
         }
 
         // Convert mapred.output.* to output.compression.*, See PIG-1791
-        if ("true".equals(conf.get("mapred.output.compress"))) {
-            conf.set("output.compression.enabled", "true");
-            String codec = conf.get("mapred.output.compression.codec");
-            if(codec == null) {
+        if( "true".equals( conf.get( "mapred.output.compress" ) ) ) {
+            conf.set( "output.compression.enabled",  "true" );
+            String codec = conf.get( "mapred.output.compression.codec" );
+            if( codec == null ) {
                 throw new JobCreationException("'mapred.output.compress' is set but no value is specified for 'mapred.output.compression.codec'." );
             } else {
                 conf.set( "output.compression.codec", codec );
@@ -393,9 +390,6 @@ public class JobControlCompiler{
         try{
             //Process the POLoads
             List<POLoad> lds = PlanHelper.getLoads(mro.mapPlan);
-            if (lds == null || lds.size() == 0) {
-                throw new IllegalArgumentException("The plan must contain at least one Load: " + mro.mapPlan);
-            }
             setLoadFuncLocation(lds, nwJob);
             ArrayList<FileSpec> inp = getPigInputs(lds, nwJob);
 
@@ -412,7 +406,8 @@ public class JobControlCompiler{
                 removePOLoads(mro, lds);
             }
 
-            if (!pigContext.inIllustrator && pigContext.getExecType() != ExecType.LOCAL) {
+            if (!pigContext.inIllustrator && pigContext.getExecType() != ExecType.LOCAL)
+            {
 
                 // Setup the DistributedCache for this job
                 for (URL extraJar : pigContext.extraJars) {
@@ -450,10 +445,18 @@ public class JobControlCompiler{
                 // and set the hadoop job priority.
                 String jobPriority = pigContext.getProperties().getProperty(PigContext.JOB_PRIORITY).toUpperCase();
                 try {
-                    // Allow arbitrary case; the Hadoop job priorities are all upper case.
-                    conf.set("mapred.job.priority", JobPriority.valueOf(jobPriority).toString());
+                  // Allow arbitrary case; the Hadoop job priorities are all upper case.
+                  conf.set("mapred.job.priority", JobPriority.valueOf(jobPriority).toString());
+
                 } catch (IllegalArgumentException e) {
-                    throw new JobCreationException("The job priority must be one of ["+Arrays.toString(JobPriority.values()) +"].  You specified [" + jobPriority + "]", e);
+                  StringBuffer sb = new StringBuffer("The job priority must be one of [");
+                  JobPriority[] priorities = JobPriority.values();
+                  for (int i = 0; i < priorities.length; ++i) {
+                    if (i > 0)  sb.append(", ");
+                    sb.append(priorities[i]);
+                  }
+                  sb.append("].  You specified [" + jobPriority + "]");
+                  throw new JobCreationException(sb.toString());
                 }
             }
 
@@ -468,11 +471,13 @@ public class JobControlCompiler{
             LinkedList<POStore> mapStores = PlanHelper.getStores(mro.mapPlan);
             LinkedList<POStore> reduceStores = PlanHelper.getStores(mro.reducePlan);
 
-            List<POStore> allStores = Lists.newArrayList();
-            allStores.addAll(mapStores);
-            allStores.addAll(reduceStores);
-            
-            for (POStore st: allStores) {
+            for (POStore st: mapStores) {
+                storeLocations.add(st);
+                StoreFuncInterface sFunc = st.getStoreFunc();
+                sFunc.setStoreLocation(st.getSFile().getFileName(), new org.apache.hadoop.mapreduce.Job(nwJob.getConfiguration()));
+            }
+
+            for (POStore st: reduceStores) {
                 storeLocations.add(st);
                 StoreFuncInterface sFunc = st.getStoreFunc();
                 sFunc.setStoreLocation(st.getSFile().getFileName(), new org.apache.hadoop.mapreduce.Job(nwJob.getConfiguration()));
@@ -481,28 +486,40 @@ public class JobControlCompiler{
             // the OutputFormat we report to Hadoop is always PigOutputFormat
             nwJob.setOutputFormatClass(PigOutputFormat.class);
 
-            Path streamingLogDir;
-            String streamingTaskOutputDir;
-            if (allStores.size() == 1) { // single store case
+            if (mapStores.size() + reduceStores.size() == 1) { // single store case
                 log.info("Setting up single store job");
-                POStore st = allStores.get(0);
 
-                if(!pigContext.inIllustrator) {
-                    mro.mapPlan.remove(st);
+                POStore st;
+                if (reduceStores.isEmpty()) {
+                    st = mapStores.get(0);
+                    if(!pigContext.inIllustrator)
+                        mro.mapPlan.remove(st);
+                }
+                else {
+                    st = reduceStores.get(0);
+                    if(!pigContext.inIllustrator)
+                        mro.reducePlan.remove(st);
                 }
 
                 // set out filespecs
                 String outputPathString = st.getSFile().getFileName();
                 if (!outputPathString.contains("://") || outputPathString.startsWith("hdfs://")) {
-                    streamingLogDir = new Path(outputPathString, LOG_DIR);
+                    conf.set("pig.streaming.log.dir",
+                            new Path(outputPathString, LOG_DIR).toString());
                 } else {
-                    tmpLocation = new Path(FileLocalizer.getTemporaryPath(pigContext).toString());
-                    streamingLogDir = new Path(tmpLocation, LOG_DIR);
+                    String tmpLocationStr =  FileLocalizer
+                    .getTemporaryPath(pigContext).toString();
+                    tmpLocation = new Path(tmpLocationStr);
+                    conf.set("pig.streaming.log.dir",
+                            new Path(tmpLocation, LOG_DIR).toString());
                 }
-                streamingTaskOutputDir = outputPathString;
-            } else if (allStores.size() > 1) { // multi store case
+                conf.set("pig.streaming.task.output.dir", outputPathString);
+            }
+           else if (mapStores.size() + reduceStores.size() > 0) { // multi store case
                 log.info("Setting up multi store job");
-                tmpLocation = FileLocalizer.getTemporaryPath(pigContext);
+                String tmpLocationStr =  FileLocalizer
+                .getTemporaryPath(pigContext).toString();
+                tmpLocation = new Path(tmpLocationStr);
 
                 nwJob.setOutputFormatClass(PigOutputFormat.class);
 
@@ -517,13 +534,10 @@ public class JobControlCompiler{
                     sto.setIndex(idx++);
                 }
 
-                streamingLogDir = new Path(tmpLocation, LOG_DIR);
-                streamingTaskOutputDir = tmpLocation.toString();
-           } else {
-               throw new IllegalArgumentException("there should be at least one store in the plan. Found 0: "+mro);
+                conf.set("pig.streaming.log.dir",
+                            new Path(tmpLocation, LOG_DIR).toString());
+                conf.set("pig.streaming.task.output.dir", tmpLocation.toString());
            }
-            conf.set("pig.streaming.log.dir", streamingLogDir.toString());
-            conf.set("pig.streaming.task.output.dir", streamingTaskOutputDir);
 
             // store map key type
             // this is needed when the key is null to create
@@ -547,23 +561,23 @@ public class JobControlCompiler{
             SchemaTupleFrontend.copyAllGeneratedToDistributedCache(pigContext, conf);
 
             POPackage pack = null;
-            if (mro.reducePlan.isEmpty()) {
+            if(mro.reducePlan.isEmpty()){
                 //MapOnly Job
                 nwJob.setMapperClass(PigMapOnly.Map.class);
                 nwJob.setNumReduceTasks(0);
-                if (!pigContext.inIllustrator) {
+                if(!pigContext.inIllustrator)
                     conf.set("pig.mapPlan", ObjectSerializer.serialize(mro.mapPlan));
-                }
-                if (mro.isEndOfAllInputSetInMap()) {
+                if(mro.isEndOfAllInputSetInMap()) {
                     // this is used in Map.close() to decide whether the
                     // pipeline needs to be rerun one more time in the close()
                     // The pipeline is rerun if there either was a stream or POMergeJoin
                     conf.set(END_OF_INP_IN_MAP, "true");
                 }
-            } else {
+            }
+            else{
                 //Map Reduce Job
                 //Process the POPackage operator and remove it from the reduce plan
-                if (!mro.combinePlan.isEmpty()) {
+                if(!mro.combinePlan.isEmpty()){
                     POPackage combPack = (POPackage)mro.combinePlan.getRoots().get(0);
                     mro.combinePlan.remove(combPack);
                     nwJob.setCombinerClass(PigCombiner.Combine.class);
@@ -579,31 +593,27 @@ public class JobControlCompiler{
                 nwJob.setMapperClass(PigMapReduce.Map.class);
                 nwJob.setReducerClass(PigMapReduce.Reduce.class);
 
-                if (mro.customPartitioner != null) {
-                    nwJob.setPartitionerClass(PigContext.resolveClassName(mro.customPartitioner));
-                }
+                if (mro.customPartitioner != null)
+                	nwJob.setPartitionerClass(PigContext.resolveClassName(mro.customPartitioner));
 
-                if (!pigContext.inIllustrator) {
+                if(!pigContext.inIllustrator)
                     conf.set("pig.mapPlan", ObjectSerializer.serialize(mro.mapPlan));
-                }
-                if (mro.isEndOfAllInputSetInMap()) {
+                if(mro.isEndOfAllInputSetInMap()) {
                     // this is used in Map.close() to decide whether the
                     // pipeline needs to be rerun one more time in the close()
                     // The pipeline is rerun only if there was a stream or merge-join.
                     conf.set(END_OF_INP_IN_MAP, "true");
                 }
-                if (!pigContext.inIllustrator) {
+                if(!pigContext.inIllustrator)
                     conf.set("pig.reducePlan", ObjectSerializer.serialize(mro.reducePlan));
-                }
-                if (mro.isEndOfAllInputSetInReduce()) {
+                if(mro.isEndOfAllInputSetInReduce()) {
                     // this is used in Map.close() to decide whether the
                     // pipeline needs to be rerun one more time in the close()
                     // The pipeline is rerun only if there was a stream
                     conf.set("pig.stream.in.reduce", "true");
                 }
-                if (!pigContext.inIllustrator) {
+                if (!pigContext.inIllustrator)
                     conf.set("pig.reduce.package", ObjectSerializer.serialize(pack));
-                }
                 conf.set("pig.reduce.key.type", Byte.toString(pack.getKeyType()));
 
                 if (mro.getUseSecondaryKey()) {
@@ -613,7 +623,10 @@ public class JobControlCompiler{
                     nwJob.setOutputKeyClass(NullableTuple.class);
                     conf.set("pig.secondarySortOrder",
                             ObjectSerializer.serialize(mro.getSecondarySortOrder()));
-                } else {
+
+                }
+                else
+                {
                     Class<? extends WritableComparable> keyClass = HDataType.getWritableComparableTypes(pack.getKeyType()).getClass();
                     nwJob.setOutputKeyClass(keyClass);
                     selectComparator(mro, pack.getKeyType(), nwJob);
@@ -667,12 +680,11 @@ public class JobControlCompiler{
                 nwJob.setGroupingComparatorClass(PigGroupingPartitionWritableComparator.class);
             }
 
-            if (!pigContext.inIllustrator) {
+            if (!pigContext.inIllustrator)
+            {
                 // unset inputs for POStore, otherwise, map/reduce plan will be unnecessarily deserialized
-                for (POStore st: allStores) { 
-                    st.setInputs(null); 
-                    st.setParentPlan(null);
-                }
+                for (POStore st: mapStores) { st.setInputs(null); st.setParentPlan(null);}
+                for (POStore st: reduceStores) { st.setInputs(null); st.setParentPlan(null);}
                 conf.set(PIG_MAP_STORES, ObjectSerializer.serialize(mapStores));
                 conf.set(PIG_REDUCE_STORES, ObjectSerializer.serialize(reduceStores));
             }
@@ -685,18 +697,17 @@ public class JobControlCompiler{
 
             String tmp;
             long maxCombinedSplitSize = 0;
-            if (!mro.combineSmallSplits() || pigContext.getProperties().getProperty("pig.splitCombination", "true").equals("false")) {
+            if (!mro.combineSmallSplits() || pigContext.getProperties().getProperty("pig.splitCombination", "true").equals("false"))
                 conf.setBoolean("pig.noSplitCombination", true);
-            } else if ((tmp = pigContext.getProperties().getProperty("pig.maxCombinedSplitSize", null)) != null) {
+            else if ((tmp = pigContext.getProperties().getProperty("pig.maxCombinedSplitSize", null)) != null) {
                 try {
                     maxCombinedSplitSize = Long.parseLong(tmp);
                 } catch (NumberFormatException e) {
-                    log.warn("Invalid numeric format for pig.maxCombinedSplitSize; use the default maximum combined split size: " + tmp, e);
+                    log.warn("Invalid numeric format for pig.maxCombinedSplitSize; use the default maximum combined split size");
                 }
             }
-            if (maxCombinedSplitSize > 0) {
+            if (maxCombinedSplitSize > 0)
                 conf.setLong("pig.maxCombinedSplitSize", maxCombinedSplitSize);
-            }
 
             // It's a hack to set distributed cache file for hadoop 23. Once MiniMRCluster do not require local
             // jar on fixed location, this can be removed
@@ -725,54 +736,67 @@ public class JobControlCompiler{
 
     private static ArrayList<Long> getinpLimits(List<POLoad> lds) {
         ArrayList<Long> inpLimits = new ArrayList<Long>();
-        for (POLoad ld : lds) {
-            inpLimits.add(ld.getLimit());
-        }
+        if(lds!=null && lds.size()>0){
+            for (POLoad ld : lds) {
+                  inpLimits.add(ld.getLimit());
+              }
+          }
         return inpLimits;
     }
 
     private static ArrayList<String> getInpSignatures(List<POLoad> lds) {
         ArrayList<String> inpSignatureLists = new ArrayList<String>();
-        for (POLoad ld : lds) {
-            inpSignatureLists.add(ld.getSignature());
-        }
+        if(lds!=null && lds.size()>0){
+            for (POLoad ld : lds) {
+                  inpSignatureLists.add(ld.getSignature());
+              }
+          }
         return inpSignatureLists;
     }
 
     private static ArrayList<List<OperatorKey>> getInpTargets(MapReduceOper mro, List<POLoad> lds) {
         ArrayList<List<OperatorKey>> inpTargets = new ArrayList<List<OperatorKey>>();
-        for (POLoad ld : lds) {
-            //Store the target operators for tuples read
-            //from this input
-            List<PhysicalOperator> ldSucs = mro.mapPlan.getSuccessors(ld);
-            List<OperatorKey> ldSucKeys = new ArrayList<OperatorKey>();
-            if(ldSucs!=null){
-                for (PhysicalOperator operator : ldSucs) {
-                    ldSucKeys.add(operator.getOperatorKey());
-                }
-            }
-            inpTargets.add(ldSucKeys);
-        }
+        if(lds!=null && lds.size()>0){
+            for (POLoad ld : lds) {
+                  //Store the target operators for tuples read
+                  //from this input
+                  List<PhysicalOperator> ldSucs = mro.mapPlan.getSuccessors(ld);
+                  List<OperatorKey> ldSucKeys = new ArrayList<OperatorKey>();
+                  if(ldSucs!=null){
+                      for (PhysicalOperator operator2 : ldSucs) {
+                          ldSucKeys.add(operator2.getOperatorKey());
+                      }
+                  }
+                  inpTargets.add(ldSucKeys);
+              }
+          }
         return inpTargets;
     }
 
     private static void removePOLoads(MapReduceOper mro, List<POLoad> lds) {
-        for (POLoad ld : lds) {
-            mro.mapPlan.remove(ld);
+        if(lds!=null && lds.size()>0){
+            for (POLoad ld : lds) {
+                mro.mapPlan.remove(ld);
+            }
         }
     }
 
     private static void setLoadFuncLocation(List<POLoad> lds, org.apache.hadoop.mapreduce.Job nwJob) throws IOException {
-        for (POLoad ld : lds) {
-            LoadFunc lf = ld.getLoadFunc();
-            lf.setLocation(ld.getLFile().getFileName(), nwJob);
+        if(lds!=null && lds.size()>0){
+            for (POLoad ld : lds) {
+                LoadFunc lf = ld.getLoadFunc();
+                lf.setLocation(ld.getLFile().getFileName(), nwJob);
+            }
         }
     }
 
     private static ArrayList<FileSpec> getPigInputs(List<POLoad> lds, org.apache.hadoop.mapreduce.Job nwJob) {
         ArrayList<FileSpec> inp = new ArrayList<FileSpec>();
-        for (POLoad ld : lds) {
-            inp.add(ld.getLFile());
+        if(lds!=null && lds.size()>0){
+            for (POLoad ld : lds) {
+                //Store the inp filespecs
+                inp.add(ld.getLFile());
+            }
         }
         return inp;
     }
@@ -836,66 +860,53 @@ public class JobControlCompiler{
         }
 
         @SuppressWarnings("unchecked")
-        @Override
-        public int compare(WritableComparable a, WritableComparable b) {
-            try {
-                PigNullableWritable wa = (PigNullableWritable)a;
-                PigNullableWritable wb = (PigNullableWritable)b;
-                int waIndex = getIndex(wa.getIndex());
-                int wbIndex = getIndex(wb.getIndex());
-                if ((wa.getIndex() & PigNullableWritable.mqFlag) != 0) { // this is a multi-query index
-                    if (waIndex < wbIndex) {
-                        return -1;
-                    } else if (waIndex > wbIndex) {
-                        return 1;
-                    }
-                    // If equal, we fall through
-                }
+		@Override
+        public int compare(WritableComparable a, WritableComparable b)
+        {
+            PigNullableWritable wa = (PigNullableWritable)a;
+            PigNullableWritable wb = (PigNullableWritable)b;
+            if ((wa.getIndex() & PigNullableWritable.mqFlag) != 0) { // this is a multi-query index
+                if ((wa.getIndex() & PigNullableWritable.idxSpace) < (wb.getIndex() & PigNullableWritable.idxSpace)) return -1;
+                else if ((wa.getIndex() & PigNullableWritable.idxSpace) > (wb.getIndex() & PigNullableWritable.idxSpace)) return 1;
+                // If equal, we fall through
+            }
 
-                // wa and wb are guaranteed to be not null, POLocalRearrange will create a tuple anyway even if main key and secondary key
-                // are both null; however, main key can be null, we need to check for that using the same logic we have in PigNullableWritable
+            // wa and wb are guaranteed to be not null, POLocalRearrange will create a tuple anyway even if main key and secondary key
+            // are both null; however, main key can be null, we need to check for that using the same logic we have in PigNullableWritable
+            Object valuea = null;
+            Object valueb = null;
+            try {
                 // Get the main key from compound key
-                Object valuea = ((Tuple)wa.getValueAsPigType()).get(0);
-                Object valueb = ((Tuple)wb.getValueAsPigType()).get(0);
-                if (!wa.isNull() && !wb.isNull()) {
-                    int result = DataType.compare(valuea, valueb);
-                    // If any of the field inside tuple is null, then we do not merge keys
-                    // See PIG-927
-                    if (result == 0 && valuea instanceof Tuple && valueb instanceof Tuple) {
-                        Tuple tuplea = (Tuple)valuea;
-                        Tuple tupleb = (Tuple)valueb;
-                        try {
-                            for (int i = 0; i < tuplea.size(); i++) {
-                                if (tupleb.get(i) == null) {
-                                    return waIndex - wbIndex;
-                                }
-                            }
-                        } catch (ExecException e) {
-                            throw new RuntimeException("Unable to access tuple field " + valuea + " " + valueb, e);
-                        }
-                    }
-                    return result;
-                } else if (valuea==null && valueb==null) {
-                    // If they're both null, compare the indices
-                    if (waIndex < wbIndex) {
-                        return -1;
-                    } else if (waIndex > wbIndex) {
-                        return 1;
-                    } else {
-                        return 0;
-                    }
-                } else if (valuea == null) {
-                    return -1;
-                } else {
-                    return 1;
-                }
+                valuea = ((Tuple)wa.getValueAsPigType()).get(0);
+                valueb = ((Tuple)wb.getValueAsPigType()).get(0);
             } catch (ExecException e) {
                 throw new RuntimeException("Unable to access tuple field", e);
             }
-        }
+            if (!wa.isNull() && !wb.isNull()) {
 
-        private int getIndex(byte waIndex) {
-            return waIndex & PigNullableWritable.idxSpace;
+                int result = DataType.compare(valuea, valueb);
+
+                // If any of the field inside tuple is null, then we do not merge keys
+                // See PIG-927
+                if (result == 0 && valuea instanceof Tuple && valueb instanceof Tuple)
+                {
+                    try {
+                        for (int i=0;i<((Tuple)valuea).size();i++)
+                            if (((Tuple)valueb).get(i)==null)
+                                return (wa.getIndex()&PigNullableWritable.idxSpace) - (wb.getIndex()&PigNullableWritable.idxSpace);
+                    } catch (ExecException e) {
+                        throw new RuntimeException("Unable to access tuple field", e);
+                    }
+                }
+                return result;
+            } else if (valuea==null && valueb==null) {
+                // If they're both null, compare the indicies
+                if ((wa.getIndex() & PigNullableWritable.idxSpace) < (wb.getIndex() & PigNullableWritable.idxSpace)) return -1;
+                else if ((wa.getIndex() & PigNullableWritable.idxSpace) > (wb.getIndex() & PigNullableWritable.idxSpace)) return 1;
+                else return 0;
+            }
+            else if (valuea==null) return -1;
+            else return 1;
         }
     }
 

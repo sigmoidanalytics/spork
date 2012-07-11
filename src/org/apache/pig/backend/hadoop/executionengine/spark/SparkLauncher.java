@@ -7,11 +7,17 @@ import java.util.LinkedList;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.Launcher;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRCompiler;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.MROperPlan;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.POPackageAnnotator;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POFilter;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POForEach;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POGlobalRearrange;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLoad;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLocalRearrange;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPackage;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.util.PlanHelper;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.FilterConverter;
@@ -21,6 +27,8 @@ import org.apache.pig.backend.hadoop.executionengine.spark.converter.StoreConver
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.tools.pigstats.PigStats;
+
+import scala.Function1;
 import spark.RDD;
 import spark.SparkContext;
 
@@ -34,6 +42,20 @@ public class SparkLauncher extends Launcher {
     public PigStats launchPig(PhysicalPlan physicalPlan, String grpName, PigContext pigContext) throws Exception {
         LOG.info("!!!!!!!!!!  Launching Spark (woot) !!!!!!!!!!!!");
 
+/////////
+// stolen from MapReduceLauncher
+        MRCompiler mrCompiler = new MRCompiler(physicalPlan, pigContext);
+        mrCompiler.compile();
+        MROperPlan plan = mrCompiler.getMRPlan();
+        POPackageAnnotator pkgAnnotator = new POPackageAnnotator(plan);
+        pkgAnnotator.visit();
+//        // this one: not sure
+//        KeyTypeDiscoveryVisitor kdv = new KeyTypeDiscoveryVisitor(plan);
+//        kdv.visit();
+
+        
+/////////
+        
         // Example of how to launch Spark
         SparkContext sc = new SparkContext("local", "Spork", null, null);
 
@@ -70,6 +92,20 @@ public class SparkLauncher extends Launcher {
 
             FilterConverter filterConverter = new FilterConverter();
             nextRDD = filterConverter.convert(rdd, (POFilter)physicalOperator);
+
+        } else if (physicalOperator instanceof POLocalRearrange) {
+
+            LocalRearrangeConverter localRearrangeConverter = new LocalRearrangeConverter();
+            nextRDD = localRearrangeConverter.convert(rdd, (POLocalRearrange)physicalOperator);
+
+        } else if (physicalOperator instanceof POGlobalRearrange) {
+
+            // just a marker that a shuffle is needed
+            nextRDD = rdd; // maybe put the groupBy here
+
+        } else if (physicalOperator instanceof POPackage) {
+            PackageConverter packageConverter = new PackageConverter();
+            nextRDD = packageConverter.convert(rdd, (POPackage)physicalOperator);
         }
 
         if (nextRDD == null) {
