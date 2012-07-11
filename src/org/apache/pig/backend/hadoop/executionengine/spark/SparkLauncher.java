@@ -2,6 +2,7 @@ package org.apache.pig.backend.hadoop.executionengine.spark;
 
 import java.io.IOException;
 import java.io.PrintStream;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -9,6 +10,7 @@ import java.util.Map;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.pig.PigException;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.Launcher;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRCompiler;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.MROperPlan;
@@ -43,6 +45,10 @@ public class SparkLauncher extends Launcher {
 
     private static final Log LOG = LogFactory.getLog(SparkLauncher.class);
 
+    // Our connection to Spark. It needs to be static so that it can be reused across jobs, because a
+    // new SparkLauncher gets created for each job.
+    private static SparkContext sparkContext = null;
+    
     @Override
     public PigStats launchPig(PhysicalPlan physicalPlan, String grpName, PigContext pigContext) throws Exception {
         LOG.info("!!!!!!!!!!  Launching Spark (woot) !!!!!!!!!!!!");
@@ -60,17 +66,53 @@ public class SparkLauncher extends Launcher {
         
 /////////
         
-        // Example of how to launch Spark
-        SparkContext sc = new SparkContext("local", "Spork", null, null);
+        startSparkIfNeeded();
 
         Map<OperatorKey, RDD<Tuple>> rdds = new HashMap<OperatorKey, RDD<Tuple>>();
         
         LinkedList<POStore> stores = PlanHelper.getStores(physicalPlan);
         for (POStore poStore : stores) {
-            physicalToRDD(pigContext, physicalPlan, poStore, rdds, sc);
+            physicalToRDD(pigContext, physicalPlan, poStore, rdds, sparkContext);
         }
 
         return PigStats.get();
+    }
+    
+    private static void startSparkIfNeeded() throws PigException {
+        if (sparkContext == null) {
+            String master = System.getenv("SPARK_MASTER");
+            if (master == null) {
+                LOG.info("SPARK_MASTER not specified, using \"local\"");
+                master = "local";
+            }
+
+            String sparkHome = System.getenv("SPARK_HOME"); // It's okay if this is null for local mode
+
+            // TODO: Don't hardcode this JAR
+            List<String> jars = Collections.singletonList("build/pig-0.11.0-SNAPSHOT-withdependencies.jar");
+
+            if (!master.startsWith("local")) {
+                // Check that we have the Mesos native library and Spark home are set
+                if (sparkHome == null) {
+                    System.err.println("You need to set SPARK_HOME to run on a Mesos cluster!");
+                    throw new PigException("SPARK_HOME is not set");
+                }
+                if (System.getenv("MESOS_NATIVE_LIBRARY") == null) {
+                    System.err.println("You need to set MESOS_NATIVE_LIBRARY to run on a Mesos cluster!");
+                    throw new PigException("MESOS_NATIVE_LIBRARY is not set");
+                }
+            }
+
+            sparkContext = new SparkContext(master, "Spork", sparkHome, SparkUtil.toScalaSeq(jars));
+        }
+    }
+
+    // You can use this in unit tests to stop the SparkContext between tests.
+    static void stopSpark() {
+        if (sparkContext != null) {
+            sparkContext.stop();
+            sparkContext = null;
+        }
     }
 
 
