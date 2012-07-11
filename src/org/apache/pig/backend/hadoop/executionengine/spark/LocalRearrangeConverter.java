@@ -21,6 +21,9 @@ import spark.RDD;
 
 public class LocalRearrangeConverter implements POConverter<Tuple, Tuple, POLocalRearrange> {
 
+    private static final GetKeyFunction GET_KEY_FUNCTION = new GetKeyFunction();
+    private static final GroupTupleFunction GROUP_TUPLE_FUNCTION = new GroupTupleFunction();
+    
     @Override
     public RDD<Tuple> convert(RDD<Tuple> rdd, POLocalRearrange physicalOperator)
             throws IOException {
@@ -28,9 +31,9 @@ public class LocalRearrangeConverter implements POConverter<Tuple, Tuple, POLoca
         // call local rearrange to get key and value
         .map(new LocalRearrangeFunction(physicalOperator), SparkUtil.getManifest(Tuple.class))
         // group by key
-        .groupBy(new GetKeyFunction(), SparkUtil.getManifest(Object.class))
+        .groupBy(GET_KEY_FUNCTION, SparkUtil.getManifest(Object.class))
         // convert result to a tuple (key, { values })
-        .map(new GroupTupleFunction(), SparkUtil.getManifest(Tuple.class));
+        .map(GROUP_TUPLE_FUNCTION, SparkUtil.getManifest(Tuple.class));
     }
     
     private static class LocalRearrangeFunction extends AbstractFunction1<Tuple, Tuple> implements Serializable {
