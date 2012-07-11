@@ -10,8 +10,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
-import javax.management.RuntimeErrorException;
-
 import org.apache.pig.ExecType;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.executionengine.ExecJob;
@@ -23,9 +21,11 @@ import org.junit.Test;
 
 public class TestSpark {
 
+    private static final ExecType MODE = ExecType.SPARK;
+
     @Test
     public void testLoadStore() throws Exception {
-        PigServer pigServer = new PigServer(ExecType.SPARK);
+        PigServer pigServer = new PigServer(MODE);
         Data data = Storage.resetData(pigServer);
         data.set("input", 
                 tuple("test1"), 
@@ -45,7 +45,7 @@ public class TestSpark {
 
     @Test
     public void testGroupBy() throws Exception {
-        PigServer pigServer = new PigServer(ExecType.SPARK);
+        PigServer pigServer = new PigServer(MODE);
         Data data = Storage.resetData(pigServer);
         data.set("input", 
                 tuple("foo", "key1", "test1"),
@@ -81,7 +81,7 @@ public class TestSpark {
     
     @Test
     public void testGroupByFlatten() throws Exception {
-        PigServer pigServer = new PigServer(ExecType.SPARK);
+        PigServer pigServer = new PigServer(MODE);
         Data data = Storage.resetData(pigServer);
         data.set("input", 
                 tuple("test1"),
@@ -100,7 +100,7 @@ public class TestSpark {
 
     @Test
     public void testCount() throws Exception {
-        PigServer pigServer = new PigServer(ExecType.SPARK);
+        PigServer pigServer = new PigServer(MODE);
         Data data = Storage.resetData(pigServer);
         data.set("input", 
                 tuple("test1"),
@@ -119,7 +119,7 @@ public class TestSpark {
 
     @Test
     public void testForEach() throws Exception {
-        PigServer pigServer = new PigServer(ExecType.SPARK);
+        PigServer pigServer = new PigServer(MODE);
         Data data = Storage.resetData(pigServer);
         data.set("input", 
                 tuple("1"),
@@ -138,7 +138,7 @@ public class TestSpark {
     
     @Test
     public void testForEachFlatten() throws Exception {
-        PigServer pigServer = new PigServer(ExecType.SPARK);
+        PigServer pigServer = new PigServer(MODE);
         Data data = Storage.resetData(pigServer);
         data.set("input", 
                 tuple(bag(tuple("1"), tuple("2"), tuple("3"))),
@@ -155,7 +155,7 @@ public class TestSpark {
     
     @Test
     public void testFilter() throws Exception {
-        PigServer pigServer = new PigServer(ExecType.SPARK);
+        PigServer pigServer = new PigServer(MODE);
         Data data = Storage.resetData(pigServer);
         data.set("input", 
                 tuple("1"),
@@ -169,6 +169,64 @@ public class TestSpark {
 
         assertEquals(
                 Arrays.asList(tuple("1"), tuple("1")),
+                data.get("output"));
+    }
+    
+    @Test
+    public void testCoGroup() throws Exception {
+        PigServer pigServer = new PigServer(MODE);
+        Data data = Storage.resetData(pigServer);
+        data.set("input1", 
+                tuple(1, "a"),
+                tuple(2, "b"), 
+                tuple(3, "c"), 
+                tuple(1, "d"));
+        data.set("input2", 
+                tuple(1, "e"),
+                tuple(2, "f"), 
+                tuple(1, "g"));
+
+        pigServer.registerQuery("A = LOAD 'input1' using mock.Storage;");
+        pigServer.registerQuery("B = LOAD 'input2' using mock.Storage;");
+        pigServer.registerQuery("C = COGROUP A BY $0, B BY $0;");
+        pigServer.registerQuery("STORE C INTO 'output' using mock.Storage;");
+
+        assertEquals(
+                Arrays.asList(
+                        tuple(1,bag(tuple(1,"a"),tuple(1,"d")),bag(tuple(1,"e"),tuple(1,"g"))), 
+                        tuple(2,bag(tuple(2,"b")),bag(tuple(2,"f"))), 
+                        tuple(3,bag(tuple(3,"c")),bag())
+                        ),
+                data.get("output"));
+    }
+    
+    @Test
+    public void testJoin() throws Exception {
+        PigServer pigServer = new PigServer(MODE);
+        Data data = Storage.resetData(pigServer);
+        data.set("input1", 
+                tuple(1, "a"),
+                tuple(2, "b"), 
+                tuple(3, "c"), 
+                tuple(1, "d"));
+        data.set("input2", 
+                tuple(1, "e"),
+                tuple(2, "f"), 
+                tuple(1, "g"));
+
+        pigServer.registerQuery("A = LOAD 'input1' using mock.Storage;");
+        pigServer.registerQuery("B = LOAD 'input2' using mock.Storage;");
+        pigServer.registerQuery("C = JOIN A BY $0, B BY $0;");
+        pigServer.registerQuery("STORE C INTO 'output' using mock.Storage;");
+
+        assertEquals(
+                Arrays.asList(
+                        tuple(1, "a", 1, "e"),
+                        tuple(1, "a", 1, "g"),
+                        tuple(1, "d", 1, "e"),
+                        tuple(1, "d", 1, "g"),
+                        tuple(2, "b", 2, "f")
+                        ),
                 data.get("output"));
     }
 }

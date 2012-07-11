@@ -43,6 +43,7 @@ import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.logicalLayer.schema.Schema;
 import org.apache.pig.impl.util.Utils;
 import org.apache.pig.parser.ParserException;
+import org.apache.pig.tools.pigstats.PigStats;
 
 /**
  * A convenient mock Storage for unit tests
@@ -254,7 +255,9 @@ public class Storage extends LoadFunc implements StoreFuncInterface, LoadMetadat
      */
     public List<Tuple> get(String location) {
       if (!locationToData.containsKey(location)) {
-        throw new RuntimeException("No data for location '" + location + "'");
+          PigStats pigStats = PigStats.get();
+          boolean successful = pigStats.isSuccessful();
+          throw new RuntimeException("No data for location '" + location + "'." + (successful ? "" : " It seems the job has failled, check logs"));
       }
       Collection<Tuple> collection = locationToData.get(location);
 	return collection instanceof List ? (List<Tuple>)collection : new ArrayList<Tuple>(collection);

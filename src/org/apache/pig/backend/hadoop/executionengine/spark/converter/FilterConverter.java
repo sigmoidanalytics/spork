@@ -10,6 +10,7 @@ import scala.runtime.AbstractFunction1;
 import spark.RDD;
 
 import java.io.Serializable;
+import java.util.List;
 
 /**
  * Converter that converts an RDD to a filtered RRD using POFilter
@@ -18,7 +19,11 @@ import java.io.Serializable;
 public class FilterConverter implements POConverter<Tuple, Tuple, POFilter> {
 
     @Override
-    public RDD<Tuple> convert(RDD<Tuple> rdd, POFilter physicalOperator) {
+    public RDD<Tuple> convert(List<RDD<Tuple>> predecessors, POFilter physicalOperator) {
+        if (predecessors.size()!=1) {
+            throw new RuntimeException("Should not have 1 predecessors for Filter. Got : "+predecessors);
+        }
+        RDD<Tuple> rdd = predecessors.get(0);
         Function1 filterFunction = new FilterFunction(physicalOperator);
         return rdd.filter(filterFunction);
     }

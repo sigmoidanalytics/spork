@@ -5,6 +5,7 @@ import spark.RDD;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.List;
 
 /**
  * Given an RDD and a PhysicalOperater, and implementation of this class can convert the RRD to
@@ -13,5 +14,5 @@ import java.io.Serializable;
  * @author billg
  */
 public interface POConverter<IN, OUT, T extends PhysicalOperator> extends Serializable {
-    RDD<OUT> convert(RDD<IN> rdd, T physicalOperator) throws IOException;
+    RDD<OUT> convert(List<RDD<IN>> rdd, T physicalOperator) throws IOException;
 }
