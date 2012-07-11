@@ -75,7 +75,7 @@ public class SparkLauncher extends Launcher {
     private void physicalToRDD(PigContext pigContext, PhysicalPlan plan,
                                PhysicalOperator physicalOperator, RDD<Tuple> rdd) throws IOException {
         RDD<Tuple> nextRDD = null;
-
+        LOG.info("Converting operator " + physicalOperator.getClass().getSimpleName()+" "+physicalOperator);
         // TODO: put these converters in a Map and look up which one to invoke
         if (physicalOperator instanceof POStore) {
 
