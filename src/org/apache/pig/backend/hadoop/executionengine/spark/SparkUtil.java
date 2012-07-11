@@ -33,6 +33,6 @@ public class SparkUtil {
     }
     
     public static <T> Seq<T> toScalaSeq(List<T> list) {
-      return JavaConversions.asScalaBuffer(list);
+        return JavaConversions.asScalaBuffer(list);
     }
 }
