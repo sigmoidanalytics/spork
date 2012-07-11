@@ -1,16 +1,18 @@
 package org.apache.pig.backend.hadoop.executionengine.spark.converter;
 
+import java.io.Serializable;
+
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.POStatus;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.Result;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POForEach;
 import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.data.Tuple;
-import scala.Function1;
+
+import scala.collection.Iterator;
+import scala.collection.JavaConversions;
 import scala.runtime.AbstractFunction1;
 import spark.RDD;
-
-import java.io.Serializable;
 
 /**
  * Convert that is able to convert an RRD to another RRD using a POForEach
@@ -20,12 +22,12 @@ public class ForEachConverter implements POConverter<Tuple, Tuple, POForEach> {
 
     @Override
     public RDD<Tuple> convert(RDD<Tuple> rdd, POForEach physicalOperator) {
-        Function1 forEachFunction = new ForEachFunction(physicalOperator);
-        return (RDD<Tuple>) rdd.map(forEachFunction, SparkUtil.getManifest(Tuple.class));
+        ForEachFunction forEachFunction = new ForEachFunction(physicalOperator);
+        return rdd.mapPartitions(forEachFunction, SparkUtil.getManifest(Tuple.class));
     }
 
-    private static class ForEachFunction extends AbstractFunction1<Tuple, Tuple>
-            implements Function1<Tuple, Tuple>, Serializable {
+    private static class ForEachFunction extends AbstractFunction1<Iterator<Tuple>, Iterator<Tuple>>
+            implements Serializable {
 
         private POForEach poForEach;
 
@@ -33,26 +35,75 @@ public class ForEachConverter implements POConverter<Tuple, Tuple, POForEach> {
             this.poForEach = poForEach;
         }
 
-        public Tuple apply(Tuple v1) {
-            Result result;
-            try {
-                poForEach.setInputs(null);
-                poForEach.attachInput(v1);
-                result = poForEach.getNext(v1);
-            } catch (ExecException e) {
-                throw new RuntimeException("Couldn't do forEach on tuple: " + v1, e);
-            }
+        public Iterator<Tuple> apply(Iterator<Tuple> i) {
+            final java.util.Iterator<Tuple> input = JavaConversions.asJavaIterator(i);
+            Iterator<Tuple> output = JavaConversions.asScalaIterator(new java.util.Iterator<Tuple>() {
 
-            if (result == null) {
-                throw new RuntimeException("Null response found for forEach on tuple: " + v1);
-            }
+                private Result result = null;
+                private boolean returned = true;
+                private boolean finished = false;
 
-            switch (result.returnStatus) {
-                case POStatus.STATUS_OK:
+                private void readNext() {
+                    try {
+                        if (result != null && !returned) {
+                            return;
+                        }
+                        // see PigGenericMapBase
+                        if (result == null) {
+                            Tuple v1 = input.next();
+                            poForEach.setInputs(null);
+                            poForEach.attachInput(v1);
+                        }
+                        result = poForEach.getNext((Tuple)null);
+                        returned = false;
+                        switch (result.returnStatus) {
+                        case POStatus.STATUS_OK:
+                            returned = false;
+                            break;
+                        case POStatus.STATUS_NULL:
+                            returned = true; // skip: see PigGenericMapBase
+                            readNext();
+                            break;
+                        case POStatus.STATUS_EOP:
+                            finished = !input.hasNext();
+                            if (!finished) {
+                                result = null;
+                                readNext();
+                            }
+                            break;
+                        case POStatus.STATUS_ERR:
+                            throw new RuntimeException("Error while processing "+result);
+                        }
+                    } catch (ExecException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+
+                @Override
+                public boolean hasNext() {
+                    readNext();
+                    return !finished;
+                }
+
+                @Override
+                public Tuple next() {
+                    readNext();
+                    if (finished) {
+                        throw new RuntimeException("Passed the end. call hasNext() first");
+                    }
+                    if (result == null || result.returnStatus!=POStatus.STATUS_OK) {
+                        throw new RuntimeException("Unexpected response code in ForEach: " + result);
+                    }
+                    returned = true;
                     return (Tuple)result.result;
-                default:
-                    throw new RuntimeException("Unexpected response code from filter: " + result);
-            }
+                }
+
+                @Override
+                public void remove() {
+                    throw new UnsupportedOperationException();
+                }
+            });
+            return output;
         }
     }
 }
