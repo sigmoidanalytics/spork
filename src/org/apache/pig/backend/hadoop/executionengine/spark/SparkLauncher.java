@@ -115,9 +115,11 @@ public class SparkLauncher extends Launcher {
             }
 
             String sparkHome = System.getenv("SPARK_HOME"); // It's okay if this is null for local mode
+            String sparkJarsSetting = System.getenv("SPARK_JARS");
+            String[] sparkJars = sparkJarsSetting == null ? new String[]{} : sparkJarsSetting.split(",");
 
             // TODO: Don't hardcode this JAR
-            List<String> jars = Collections.singletonList("build/pig-0.11.0-SNAPSHOT-withdependencies.jar");
+            List<String> jars = Lists.asList("build/pig-0.11.0-SNAPSHOT-withdependencies.jar", sparkJars);
 
             if (!master.startsWith("local")) {
                 // Check that we have the Mesos native library and Spark home are set
