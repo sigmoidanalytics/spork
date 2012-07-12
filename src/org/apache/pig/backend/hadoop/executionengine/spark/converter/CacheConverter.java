@@ -41,6 +41,10 @@ public class CacheConverter implements POConverter<Tuple, Tuple, POCache> {
     /**
      * Get a cache key for the given operator, or null if we don't know how to handle its type (or one of
      * its predcesessors' types) and want to not cache this subplan at all.
+     * 
+     * Right now, this only handles loads. Unless we figure out a nice way to turn the PO plan into a
+     * string or compare two PO plans, we'll probably have to handle each type of physical operator
+     * recursively to generate a cache key.
      */
     private String computeCacheKey(PhysicalOperator operator) {
         if (operator instanceof POLoad) {
