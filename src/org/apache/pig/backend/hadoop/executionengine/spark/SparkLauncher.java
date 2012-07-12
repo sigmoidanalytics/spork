@@ -17,6 +17,7 @@ import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.MROper
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.POPackageAnnotator;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POCache;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POFilter;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POForEach;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POGlobalRearrange;
@@ -25,6 +26,7 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOpe
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPackage;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.util.PlanHelper;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.CacheConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.FilterConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.ForEachConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.LoadConverter;
@@ -48,6 +50,10 @@ public class SparkLauncher extends Launcher {
     // Our connection to Spark. It needs to be static so that it can be reused across jobs, because a
     // new SparkLauncher gets created for each job.
     private static SparkContext sparkContext = null;
+    
+    // An object that handle cache calls in the operator graph. This is again static because we want
+    // it to be shared across SparkLaunchers. It gets cleared whenever we close the SparkContext.
+    private static CacheConverter cacheConverter;
     
     @Override
     public PigStats launchPig(PhysicalPlan physicalPlan, String grpName, PigContext pigContext) throws Exception {
@@ -104,6 +110,7 @@ public class SparkLauncher extends Launcher {
             }
 
             sparkContext = new SparkContext(master, "Spork", sparkHome, SparkUtil.toScalaSeq(jars));
+            cacheConverter = new CacheConverter();
         }
     }
 
@@ -112,6 +119,7 @@ public class SparkLauncher extends Launcher {
         if (sparkContext != null) {
             sparkContext.stop();
             sparkContext = null;
+            cacheConverter = null;
         }
     }
 
@@ -166,6 +174,10 @@ public class SparkLauncher extends Launcher {
             
             PackageConverter packageConverter = new PackageConverter();
             nextRDD = packageConverter.convert(predecessorRdds, (POPackage)physicalOperator);
+            
+        } else if (physicalOperator instanceof POCache) {
+            
+            nextRDD = cacheConverter.convert(predecessorRdds, (POCache)physicalOperator);
             
         }
 
