@@ -25,7 +25,7 @@ import spark.RDD;
 
 public class PackageConverter implements POConverter<Tuple, Tuple, POPackage> {
     private static final Log LOG = LogFactory.getLog(PackageConverter.class);
-    
+
     @Override
     public RDD<Tuple> convert(List<RDD<Tuple>> predecessors, POPackage physicalOperator)
             throws IOException {
@@ -51,7 +51,7 @@ public class PackageConverter implements POConverter<Tuple, Tuple, POPackage> {
             Result result;
             try {
                 PigNullableWritable key = new PigNullableWritable() {
-                    
+
                     public Object getValueAsPigType() {
                         try {
                             Object keyTuple = t.get(0);
@@ -91,15 +91,21 @@ public class PackageConverter implements POConverter<Tuple, Tuple, POPackage> {
             if (result == null) {
                 throw new RuntimeException("Null response found for Package on tuple: " + t);
             }
-
+            Tuple out;
             switch (result.returnStatus) {
                 case POStatus.STATUS_OK:
                     // (key, {(value)...})
                     LOG.debug("PackageFunction out "+result.result);
-                return (Tuple)result.result;
+                    out = (Tuple)result.result;
+                    break;
+                case POStatus.STATUS_NULL:
+                    out = null;
+                    break;
                 default:
                     throw new RuntimeException("Unexpected response code from operator "+physicalOperator+" : " + result + " " + result.returnStatus);
             }
+            LOG.debug("PackageFunction out " + out);
+            return out;
         }
 
     }

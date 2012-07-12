@@ -8,9 +8,7 @@ import java.util.*;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.mapred.JobClient;
 import org.apache.pig.PigException;
-import org.apache.pig.PigRunner;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.Launcher;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRCompiler;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.MROperPlan;
@@ -93,7 +91,7 @@ public class SparkLauncher extends Launcher {
         convertMap.put(POGlobalRearrange.class, new GlobalRearrangeConverter());
 
         Map<OperatorKey, RDD<Tuple>> rdds = new HashMap<OperatorKey, RDD<Tuple>>();
-        
+
         SparkStats stats = new SparkStats();
 
         // this is required for dump to work
