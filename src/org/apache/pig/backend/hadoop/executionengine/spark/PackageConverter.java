@@ -99,7 +99,7 @@ public class PackageConverter implements POConverter<Tuple, Tuple, POPackage> {
                     LOG.debug("PackageFunction out "+result.result);
                 return (Tuple)result.result;
                 default:
-                    throw new RuntimeException("Unexpected response code from operator "+physicalOperator+" : " + result);
+                    throw new RuntimeException("Unexpected response code from operator "+physicalOperator+" : " + result + " " + result.returnStatus);
             }
         }
 
