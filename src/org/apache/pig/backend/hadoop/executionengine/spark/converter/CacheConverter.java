@@ -12,11 +12,17 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOpera
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PlanPrinter;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POCache;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POFilter;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POForEach;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLoad;
 import org.apache.pig.data.Tuple;
+import org.apache.pig.impl.plan.VisitorException;
+
 import spark.RDD;
 
+import com.google.common.annotations.VisibleForTesting;
+
+@SuppressWarnings("serial")
 public class CacheConverter implements POConverter<Tuple, Tuple, POCache> {
 
     private static final Log LOG = LogFactory.getLog(CacheConverter.class);
@@ -56,7 +62,8 @@ public class CacheConverter implements POConverter<Tuple, Tuple, POCache> {
      * @param plan
      * @throws IOException
      */
-    private String computeCacheKey(PhysicalPlan plan, List<PhysicalOperator> preds) throws IOException {
+    @VisibleForTesting
+    protected String computeCacheKey(PhysicalPlan plan, List<PhysicalOperator> preds) throws IOException {
         StringBuilder sb = new StringBuilder();
         for (PhysicalOperator operator : preds) {
             if (operator instanceof POLoad) {
@@ -72,24 +79,46 @@ public class CacheConverter implements POConverter<Tuple, Tuple, POCache> {
                 // Potential problems downstream:
                 // * not checking for Nondeterministic UDFs
                 // * jars / class defs changing under us
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                StringBuilder foreachPlanKeysBuilder = new StringBuilder();
                 for (PhysicalPlan innerPlan : ((POForEach) operator).getInputPlans()) {
-                    PlanPrinter<PhysicalOperator, PhysicalPlan> pp =
-                            new PlanPrinter<PhysicalOperator, PhysicalPlan>(innerPlan);
-                    pp.print(baos);
+                    foreachPlanKeysBuilder.append(innerPlanKey(innerPlan));
                 }
-                String explained = baos.toString();
-
-                // get rid of scope numbers in these inner plans.
-                sb.append(explained.replaceAll("scope-\\d+", ""));
-                sb.append(computeCacheKey(plan, operator.getInputs()));
-
+                sb.append(foreachPlanKeysBuilder.toString());
+                String inputKey = computeCacheKey(plan, operator.getInputs());
+                if (inputKey == null) {
+                    return null;
+                } else {
+                    sb.append(inputKey);
+                    LOG.info("Input key: " + inputKey);
+                }
+            } else if (operator instanceof POFilter) {
+                // Similar to foreach.
+                PhysicalPlan innerPlan = ((POFilter) operator).getPlan();
+                sb.append(innerPlanKey(innerPlan));
+                String inputKey = computeCacheKey(plan, operator.getInputs());
+                if (inputKey == null) {
+                    return null;
+                } else {
+                    sb.append(inputKey);
+                    LOG.info("Input key: " + inputKey);
+                }
             } else {
                 LOG.info("Don't know how to generate cache key for " + operator.getClass() + "; not caching");
                 return null;
             }
         }
         return sb.toString();
+    }
+
+    private String innerPlanKey(PhysicalPlan plan) throws VisitorException, IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        PlanPrinter<PhysicalOperator, PhysicalPlan> pp =
+                new PlanPrinter<PhysicalOperator, PhysicalPlan>(plan);
+        pp.print(baos);
+        String explained = baos.toString();
+
+        // get rid of scope numbers in these inner plans.
+        return explained.replaceAll("scope-\\d+", "");
     }
 
 }

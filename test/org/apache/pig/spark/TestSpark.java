@@ -263,6 +263,15 @@ public class TestSpark {
                 "STORE A INTO 'output' using mock.Storage;");
     }
 
+    @Test
+    public void testCachingWithFilter() throws Exception {
+        testCaching("A = LOAD 'input' using mock.Storage; " +
+                "B = FILTER A by $0 == $0;" + // useless filter
+                "A = FOREACH B GENERATE (chararray) $0;" +
+                "CACHE A;" +
+                "STORE A INTO 'output' using mock.Storage;");
+    }
+
     /**
      * Kind of a hack: To test whether caching is happening, we modify a file on disk after caching
      * it in Spark.
