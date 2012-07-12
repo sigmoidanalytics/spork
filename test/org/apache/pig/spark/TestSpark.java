@@ -118,6 +118,22 @@ public class TestSpark {
     }
 
     @Test
+    public void testCountWithNoData() throws Exception {
+        PigServer pigServer = new PigServer(ExecType.SPARK);
+        Data data = Storage.resetData(pigServer);
+        data.set("input");
+
+        pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
+        pigServer.registerQuery("B = GROUP A BY $0;");
+        pigServer.registerQuery("C = FOREACH B GENERATE COUNT(A);");
+        pigServer.registerQuery("STORE C INTO 'output' using mock.Storage;");
+
+        assertEquals(
+                Arrays.asList(),
+                data.get("output"));
+    }
+
+    @Test
     public void testForEach() throws Exception {
         PigServer pigServer = new PigServer(MODE);
         Data data = Storage.resetData(pigServer);
