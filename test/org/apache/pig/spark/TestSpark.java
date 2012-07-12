@@ -49,9 +49,6 @@ public class TestSpark {
                 data.get("output"));
     }
 
-    // This test works if it's run without the other tests. It fails when run with all of them though
-    // due to an error of a temporary file path already existing. For that reason I think the temp
-    // file conflicts between jobs.
     @Test
     public void testDump() throws Exception {
         PigServer pigServer = new PigServer(MODE);
