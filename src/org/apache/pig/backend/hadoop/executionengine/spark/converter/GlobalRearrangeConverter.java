@@ -2,6 +2,7 @@ package org.apache.pig.backend.hadoop.executionengine.spark.converter;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Iterator;
 import java.util.List;
 
 import org.apache.commons.logging.Log;
@@ -13,6 +14,8 @@ import org.apache.pig.backend.hadoop.executionengine.spark.converter.POConverter
 import org.apache.pig.data.Tuple;
 import org.apache.pig.data.TupleFactory;
 import org.python.google.common.collect.Lists;
+
+import com.sun.org.apache.xalan.internal.xsltc.dom.UnionIterator;
 
 import scala.Tuple2;
 import scala.collection.JavaConversions;
@@ -96,7 +99,7 @@ public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlo
                 LOG.debug("GroupTupleFunction in "+v1);
                 Tuple tuple = tf.newTuple(2);
                 tuple.set(0, v1._1()); // the (index, key) tuple
-                tuple.set(1, v1._2()); // the Seq<Tuple> aka bag of values
+                tuple.set(1, JavaConversions.asJavaCollection(v1._2()).iterator()); // the Seq<Tuple> aka bag of values
                 LOG.debug("GroupTupleFunction out "+tuple);
                 return tuple;
             } catch (ExecException e) {
@@ -130,32 +133,99 @@ public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlo
         public Tuple apply(Tuple2<Object, Seq<Seq<Tuple>>> input) {
             try {
                 LOG.debug("ToGroupKeyValueFunction2 in "+input);
-                Object key = input._1();
+                final Object key = input._1();
                 Seq<Seq<Tuple>> bags = input._2();
                 Iterable<Seq<Tuple>> bagsList = JavaConversions.asJavaIterable(bags);
                 int i = 0;
-//                // I would call scala's .union(...) if it did not take a second argument
-//                // TODO: improve this it would be better to wrap this without materializing the data
-//                // all we need is an iterator
-                List<Tuple> tuples = Lists.newArrayList();
+                List<Iterator<Tuple>> tupleIterators = Lists.newArrayList();
                 for (Seq<Tuple> bag : bagsList) {
-                    for (Tuple t : JavaConversions.asJavaCollection(bag)) {
-                        Tuple toadd = tf.newTuple(3);
-                        toadd.set(0, i);
-                        toadd.set(1, key);
-                        toadd.set(2, t);
-                        tuples.add(toadd);
-                    }
+                    Iterator<Tuple> iterator = JavaConversions.asJavaCollection(bag).iterator();
+                    final int index = i;
+                    tupleIterators.add(new IteratorTransform<Tuple>(iterator) {
+                        @Override
+                        protected Tuple transform(Tuple next) {
+                            try {
+                                Tuple tuple = tf.newTuple(3);
+                                tuple.set(0, index);
+                                tuple.set(1, key);
+                                tuple.set(2, next);
+                                return tuple;
+                            } catch (ExecException e) {
+                                throw new RuntimeException(e);
+                            }
+                        }
+                    });
                     ++i;
                 }
                 Tuple out = tf.newTuple(2);
                 out.set(0, key);
-                out.set(1, JavaConversions.asScalaBuffer(tuples));
+                out.set(1, new IteratorUnion<Tuple>(tupleIterators.iterator()));
                 LOG.debug("ToGroupKeyValueFunction2 out "+out);
                 return out;
             } catch(Exception e) {
                 throw new RuntimeException(e);
             }
         }
+    }
+
+    abstract private static class IteratorTransform<T> implements Iterator<T> {
+        private Iterator<T> delegate;
+
+        public IteratorTransform(Iterator<T> delegate) {
+            super();
+            this.delegate = delegate;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return delegate.hasNext();
+        }
+
+        @Override
+        public T next() {
+            return transform(delegate.next());
+        }
+
+        abstract protected T transform(T next);
+
+        @Override
+        public void remove() {
+            delegate.remove();
+        }
+    }
+
+    private static class IteratorUnion<T> implements Iterator<T> {
+
+        private final Iterator<Iterator<T>> iterators;
+
+        private Iterator<T> current;
+
+        public IteratorUnion(Iterator<Iterator<T>> iterators) {
+            super();
+            this.iterators = iterators;
+        }
+
+        @Override
+        public boolean hasNext() {
+            if (current != null && current.hasNext()) {
+                return true;
+            } else if (iterators.hasNext()) {
+                current = iterators.next();
+                return hasNext();
+            } else {
+                return false;
+            }
+        }
+
+        @Override
+        public T next() {
+            return current.next();
+        }
+
+        @Override
+        public void remove() {
+            current.remove();
+        }
+
     }
 }

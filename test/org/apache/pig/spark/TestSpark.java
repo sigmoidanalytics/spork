@@ -9,6 +9,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Properties;
 
 import org.apache.log4j.Level;
 import org.apache.pig.ExecType;
@@ -29,7 +30,13 @@ public class TestSpark {
     }
 
     private PigServer newPigServer() throws ExecException {
-        PigServer pigServer = new PigServer(MODE);
+        Properties properties = new Properties();
+        // to avoid pig running out of memory in LOCAL mode
+        properties.put("io.sort.mb", "1");
+//        properties.put("io.file.buffer.size", "128");
+
+        PigServer pigServer = new PigServer(MODE, properties);
+
         return pigServer;
     }
 

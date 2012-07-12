@@ -61,7 +61,7 @@ public class PackageConverter implements POConverter<Tuple, Tuple, POPackage> {
                         }
                     }
                 };
-                final Iterator<Tuple> bagIterator = JavaConversions.asJavaIterator(((Seq<Tuple>)t.get(1)).iterator());
+                final Iterator<Tuple> bagIterator = (Iterator<Tuple>)t.get(1);
                 Iterator<NullableTuple> iterator = new Iterator<NullableTuple>() {
                     public boolean hasNext() {
                         return bagIterator.hasNext();
