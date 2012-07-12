@@ -2,7 +2,6 @@ package org.apache.pig.backend.hadoop.executionengine.spark;
 
 import java.io.IOException;
 import java.io.PrintStream;
-import java.lang.reflect.*;
 import java.util.*;
 
 import org.apache.commons.logging.Log;
@@ -157,26 +156,14 @@ public class SparkLauncher extends Launcher {
         }
 
         LOG.info("Converting operator " + physicalOperator.getClass().getSimpleName()+" "+physicalOperator);
-
-        // invoke the converter
-        try {
-            Method m = converter.getClass().getMethod("convert", List.class, PhysicalOperator.class);
-            nextRDD = (RDD<Tuple>) m.invoke(converter, predecessorRdds, physicalOperator);
-        } catch (IllegalAccessException e) {
-            throw new RuntimeException("Could not access converter method: " + converter, e);
-        } catch (InvocationTargetException e) {
-            throw new RuntimeException("Could not invoke converter method: " + converter, e);
-        } catch (NoSuchMethodException e) {
-            throw new RuntimeException("Could not find converter method: " + converter, e);
-        }
+        nextRDD = (RDD<Tuple>)converter.convert(predecessorRdds, physicalOperator);
 
         if (POStore.class.equals(physicalOperator.getClass())) {
             return;
-
         }
 
         if (nextRDD == null) {
-            throw new IllegalArgumentException("Spork unsupported PhysicalOperator: " + physicalOperator);
+            throw new IllegalArgumentException("RDD should not be null after PhysicalOperator: " + physicalOperator);
         }
 
         rdds.put(physicalOperator.getOperatorKey(), nextRDD);
