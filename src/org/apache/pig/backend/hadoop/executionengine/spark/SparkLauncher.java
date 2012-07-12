@@ -119,6 +119,17 @@ public class SparkLauncher extends Launcher {
                     throw new PigException("MESOS_NATIVE_LIBRARY is not set");
                 }
             }
+            
+            // Tell Spark to use Mesos in coarse-grained mode (only affects Spark 0.6+; no impact on others)
+            System.setProperty("spark.mesos.coarse", "true");
+
+            // For coarse-grained Mesos mode, tell it an upper bound on how many cores to grab in total;
+            // we conservatively set this to 32 unless the user set the SPARK_MAX_CPUS environment variable.
+            int maxCores = 32;
+            if (System.getenv("SPARK_MAX_CPUS") != null) {
+                maxCores = Integer.parseInt(System.getenv("SPARK_MAX_CPUS"));
+            }
+            System.setProperty("spark.cores.max", "" + maxCores);
 
             sparkContext = new SparkContext(master, "Spork", sparkHome, SparkUtil.toScalaSeq(jars));
             cacheConverter = new CacheConverter();
