@@ -1,4 +1,4 @@
-package org.apache.pig.backend.hadoop.executionengine.spark;
+package org.apache.pig.backend.hadoop.executionengine.spark.converter;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -11,6 +11,7 @@ import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.POStatus;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.Result;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPackage;
+import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.POConverter;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.data.TupleFactory;
@@ -28,9 +29,7 @@ public class PackageConverter implements POConverter<Tuple, Tuple, POPackage> {
     @Override
     public RDD<Tuple> convert(List<RDD<Tuple>> predecessors, POPackage physicalOperator)
             throws IOException {
-        if (predecessors.size()!=1) {
-            throw new RuntimeException("Should have 1 predecessor for Package. Got : "+predecessors);
-        }
+        SparkUtil.assertPredecessorSize(predecessors, physicalOperator, 1);
         RDD<Tuple> rdd = predecessors.get(0);
         // package will generate the group from the result of the local rearrange
         return rdd.map(new PackageFunction(physicalOperator), SparkUtil.getManifest(Tuple.class));

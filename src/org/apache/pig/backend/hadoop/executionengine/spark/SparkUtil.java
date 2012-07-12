@@ -2,6 +2,8 @@ package org.apache.pig.backend.hadoop.executionengine.spark;
 
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.pig.backend.hadoop.datastorage.ConfigurationUtil;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
+import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.util.ObjectSerializer;
 import org.apache.pig.impl.util.UDFContext;
@@ -10,9 +12,9 @@ import scala.collection.JavaConversions;
 import scala.collection.Seq;
 import scala.reflect.ClassManifest;
 import scala.reflect.ClassManifest$;
+import spark.RDD;
 
 import java.io.IOException;
-import java.util.Collection;
 import java.util.List;
 
 /**
@@ -34,5 +36,21 @@ public class SparkUtil {
     
     public static <T> Seq<T> toScalaSeq(List<T> list) {
         return JavaConversions.asScalaBuffer(list);
+    }
+
+    public static void assertPredecessorSize(List<RDD<Tuple>> predecessors,
+                                             PhysicalOperator physicalOperator, int size) {
+        if (predecessors.size() != size) {
+            throw new RuntimeException("Should have " + size + " predecessors for " +
+                    physicalOperator.getClass() + ". Got : " + predecessors.size());
+        }
+    }
+
+    public static void assertPredecessorSizeGreaterThan(List<RDD<Tuple>> predecessors,
+                                             PhysicalOperator physicalOperator, int size) {
+        if (predecessors.size() <= size) {
+            throw new RuntimeException("Should have greater than" + size + " predecessors for " +
+                    physicalOperator.getClass() + ". Got : " + predecessors.size());
+        }
     }
 }

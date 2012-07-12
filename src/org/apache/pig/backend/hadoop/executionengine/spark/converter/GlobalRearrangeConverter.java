@@ -1,4 +1,4 @@
-package org.apache.pig.backend.hadoop.executionengine.spark;
+package org.apache.pig.backend.hadoop.executionengine.spark.converter;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -8,6 +8,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POGlobalRearrange;
+import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.POConverter;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.data.TupleFactory;
@@ -37,10 +38,7 @@ public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlo
     @Override
     public RDD<Tuple> convert(List<RDD<Tuple>> predecessors,
             POGlobalRearrange physicalOperator) throws IOException {
-        if (predecessors.size()<1) {
-            throw new RuntimeException("Should not have at least 1 predecessor for GlobalRearrange. Got : "+predecessors);
-        }
-
+        SparkUtil.assertPredecessorSizeGreaterThan(predecessors, physicalOperator, 0);
         int parallelism = physicalOperator.getRequestedParallelism();
         if (parallelism <= 0) {
             // Parallelism wasn't set in Pig, so set it to whatever Spark thinks is reasonable.

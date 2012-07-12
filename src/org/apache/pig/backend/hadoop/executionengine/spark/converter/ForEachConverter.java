@@ -23,9 +23,7 @@ public class ForEachConverter implements POConverter<Tuple, Tuple, POForEach> {
 
     @Override
     public RDD<Tuple> convert(List<RDD<Tuple>> predecessors, POForEach physicalOperator) {
-        if (predecessors.size()!=1) {
-            throw new RuntimeException("Should not have 1 predecessors for ForEach. Got : "+predecessors);
-        }
+        SparkUtil.assertPredecessorSize(predecessors, physicalOperator, 1);
         RDD<Tuple> rdd = predecessors.get(0);
         ForEachFunction forEachFunction = new ForEachFunction(physicalOperator);
         return rdd.mapPartitions(forEachFunction, SparkUtil.getManifest(Tuple.class));

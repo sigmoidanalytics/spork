@@ -40,9 +40,7 @@ public class StoreConverter implements POConverter<Tuple, Tuple2<Text, Tuple>, P
 
     @Override
     public RDD<Tuple2<Text, Tuple>> convert(List<RDD<Tuple>> predecessors, POStore physicalOperator) throws IOException {
-        if (predecessors.size()!=1) {
-            throw new RuntimeException("Should not have 1 predecessors for Store. Got : "+predecessors);
-        }
+        SparkUtil.assertPredecessorSize(predecessors, physicalOperator, 1);
         RDD<Tuple> rdd = predecessors.get(0);
         // convert back to KV pairs
         RDD<Tuple2<Text, Tuple>> rddPairs =
@@ -59,7 +57,7 @@ public class StoreConverter implements POConverter<Tuple, Tuple2<Text, Tuple>, P
         return rddPairs;
     }
 
-    private POStore configureStorer(JobConf jobConf,
+    private static POStore configureStorer(JobConf jobConf,
             PhysicalOperator physicalOperator) throws IOException {
         ArrayList<POStore> storeLocations = Lists.newArrayList();
         POStore poStore = (POStore)physicalOperator;

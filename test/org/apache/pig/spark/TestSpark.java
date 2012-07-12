@@ -173,6 +173,24 @@ public class TestSpark {
                 Arrays.asList(tuple("1"), tuple("2"), tuple("3"), tuple("4"), tuple("5"), tuple("6")),
                 data.get("output"));
     }
+
+    @Test
+    public void testSimpleUDF() throws Exception {
+        PigServer pigServer = new PigServer(ExecType.SPARK);
+        Data data = Storage.resetData(pigServer);
+        data.set("input",
+                tuple("Foo"),
+                tuple("BAR"),
+                tuple("baT"));
+
+        pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
+        pigServer.registerQuery("B = FOREACH A GENERATE org.apache.pig.spark.LowercaseUDF($0);");
+        pigServer.registerQuery("STORE B INTO 'output' using mock.Storage;");
+
+        assertEquals(
+                Arrays.asList(tuple("foo"), tuple("bar"), tuple("bat")),
+                data.get("output"));
+    }
     
     @Test
     public void testFilter() throws Exception {
