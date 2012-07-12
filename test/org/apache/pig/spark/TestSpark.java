@@ -61,6 +61,26 @@ public class TestSpark {
     }
 
     @Test
+    public void testDump() throws Exception {
+        PigServer pigServer = new PigServer(MODE);
+        Data data = Storage.resetData(pigServer);
+        data.set("input",
+                tuple("test1"),
+                tuple("test2"));
+
+        pigServer.setBatchOn();
+        pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
+        Iterator<Tuple> result = pigServer.openIterator("A");
+
+        List<Tuple> resultList = new ArrayList<Tuple>();
+        while (result.hasNext()) {
+            resultList.add(result.next());
+        }
+
+        assertEquals(Arrays.asList(tuple("test1"), tuple("test2")), resultList);
+    }
+
+    @Test
     public void testGroupBy() throws Exception {
         PigServer pigServer = newPigServer();
         Data data = Storage.resetData(pigServer);
