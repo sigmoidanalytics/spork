@@ -245,4 +245,44 @@ public class TestSpark {
                         ),
                 data.get("output"));
     }
+    
+    /**
+     * Kind of a hack: To test whether caching is happening, we modify a file on disk after caching
+     * it in Spark.
+     */
+    @Test
+    public void testCaching() throws Exception {
+        PigServer pigServer = new PigServer(MODE);
+        
+        Data data = Storage.resetData(pigServer);
+        data.set("input", 
+                tuple("test1"), 
+                tuple("test2"));
+        
+        pigServer.setBatchOn();
+        pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
+        pigServer.registerQuery("CACHE A;");
+        pigServer.registerQuery("STORE A INTO 'output' using mock.Storage;");
+        pigServer.executeBatch();
+        
+        System.out.println("After first query: " + data.get("output"));
+        
+        assertEquals(
+                Arrays.asList(tuple("test1"), tuple("test2")),
+                data.get("output"));
+        
+        data = Storage.resetData(pigServer);
+        data.set("input", 
+                tuple("test3"), 
+                tuple("test4"));
+
+        pigServer.registerQuery("STORE A INTO 'output' using mock.Storage;");
+        pigServer.executeBatch();
+
+        System.out.println("After second query: " + data.get("output"));
+        
+        assertEquals(
+                Arrays.asList(tuple("test1"), tuple("test2")),
+                data.get("output"));
+    }
 }
