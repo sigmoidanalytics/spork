@@ -325,6 +325,19 @@ public class TestSpark {
                 "STORE A INTO 'output' using mock.Storage;");
     }
 
+    @Test
+    public void testIgnoreDiffFilterCache() throws Exception {
+        testIgnoreCache("A = LOAD 'input' using mock.Storage;" +
+                "A = FILTER A by $0 == 'test1';" +
+                "CACHE A;" +
+                "STORE A INTO 'output' using mock.Storage;",
+                "A = LOAD 'input' using mock.Storage;" +
+                "A = FILTER A by $0 == 'test2';" +
+                "CACHE A;" +
+                "STORE A INTO 'output' using mock.Storage;");
+
+    }
+
     public void testIgnoreCache(String query1, String query2) throws Exception {
         PigServer pigServer = newPigServer();
 
