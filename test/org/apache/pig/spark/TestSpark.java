@@ -23,7 +23,7 @@ import org.junit.Test;
 public class TestSpark {
 
     private static final ExecType MODE = ExecType.SPARK;
-    
+
     static {
         org.apache.log4j.Logger.getLogger("org.apache.pig.backend.hadoop.executionengine.spark").setLevel(Level.DEBUG);
     }
@@ -32,16 +32,16 @@ public class TestSpark {
     public void testLoadStore() throws Exception {
         PigServer pigServer = new PigServer(MODE);
         Data data = Storage.resetData(pigServer);
-        data.set("input", 
-                tuple("test1"), 
+        data.set("input",
+                tuple("test1"),
                 tuple("test2"));
         pigServer.setBatchOn();
         pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
         pigServer.registerQuery("STORE A INTO 'output' using mock.Storage;");
         List<ExecJob> executeBatch = pigServer.executeBatch();
         // TODO: good stats
-        //		assertEquals(1, executeBatch.size());
-        //		assertTrue(executeBatch.get(0).hasCompleted());
+        //      assertEquals(1, executeBatch.size());
+        //      assertTrue(executeBatch.get(0).hasCompleted());
 
         assertEquals(
                 Arrays.asList(tuple("test1"), tuple("test2")),
@@ -52,9 +52,9 @@ public class TestSpark {
     public void testGroupBy() throws Exception {
         PigServer pigServer = new PigServer(MODE);
         Data data = Storage.resetData(pigServer);
-        data.set("input", 
+        data.set("input",
                 tuple("foo", "key1", "test1"),
-                tuple("bar", "key1", "test2"), 
+                tuple("bar", "key1", "test2"),
                 tuple("baz", "key2", "test3"));
 
         pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
@@ -83,14 +83,14 @@ public class TestSpark {
         });
         return result;
     }
-    
+
     @Test
     public void testGroupByFlatten() throws Exception {
         PigServer pigServer = new PigServer(MODE);
         Data data = Storage.resetData(pigServer);
-        data.set("input", 
+        data.set("input",
                 tuple("test1"),
-                tuple("test1"), 
+                tuple("test1"),
                 tuple("test2"));
 
         pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
@@ -107,9 +107,9 @@ public class TestSpark {
     public void testCount() throws Exception {
         PigServer pigServer = new PigServer(MODE);
         Data data = Storage.resetData(pigServer);
-        data.set("input", 
+        data.set("input",
                 tuple("test1"),
-                tuple("test1"), 
+                tuple("test1"),
                 tuple("test2"));
 
         pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
@@ -142,9 +142,9 @@ public class TestSpark {
     public void testForEach() throws Exception {
         PigServer pigServer = new PigServer(MODE);
         Data data = Storage.resetData(pigServer);
-        data.set("input", 
+        data.set("input",
                 tuple("1"),
-                tuple("12"), 
+                tuple("12"),
                 tuple("123"));
 
         pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
@@ -156,12 +156,12 @@ public class TestSpark {
                 data.get("output"));
     }
 
-    
+
     @Test
     public void testForEachFlatten() throws Exception {
         PigServer pigServer = new PigServer(MODE);
         Data data = Storage.resetData(pigServer);
-        data.set("input", 
+        data.set("input",
                 tuple(bag(tuple("1"), tuple("2"), tuple("3"))),
                 tuple(bag(tuple("4"), tuple("5"), tuple("6"))));
 
@@ -191,15 +191,15 @@ public class TestSpark {
                 Arrays.asList(tuple("foo"), tuple("bar"), tuple("bat")),
                 data.get("output"));
     }
-    
+
     @Test
     public void testFilter() throws Exception {
         PigServer pigServer = new PigServer(MODE);
         Data data = Storage.resetData(pigServer);
-        data.set("input", 
+        data.set("input",
                 tuple("1"),
-                tuple("2"), 
-                tuple("3"), 
+                tuple("2"),
+                tuple("3"),
                 tuple("1"));
 
         pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
@@ -210,19 +210,19 @@ public class TestSpark {
                 Arrays.asList(tuple("1"), tuple("1")),
                 data.get("output"));
     }
-    
+
     @Test
     public void testCoGroup() throws Exception {
         PigServer pigServer = new PigServer(MODE);
         Data data = Storage.resetData(pigServer);
-        data.set("input1", 
+        data.set("input1",
                 tuple("foo", 1, "a"),
-                tuple("foo", 2, "b"), 
-                tuple("foo", 3, "c"), 
+                tuple("foo", 2, "b"),
+                tuple("foo", 3, "c"),
                 tuple("foo", 1, "d"));
-        data.set("input2", 
+        data.set("input2",
                 tuple("bar", 1, "e"),
-                tuple("bar", 2, "f"), 
+                tuple("bar", 2, "f"),
                 tuple("bar", 1, "g"));
 
         pigServer.registerQuery("A = LOAD 'input1' using mock.Storage;");
@@ -232,25 +232,25 @@ public class TestSpark {
 
         assertEquals(
                 Arrays.asList(
-                        tuple(1,bag(tuple("foo", 1,"a"),tuple("foo", 1,"d")),bag(tuple("bar", 1,"e"),tuple("bar", 1,"g"))), 
-                        tuple(2,bag(tuple("foo", 2,"b")),bag(tuple("bar", 2,"f"))), 
+                        tuple(1,bag(tuple("foo", 1,"a"),tuple("foo", 1,"d")),bag(tuple("bar", 1,"e"),tuple("bar", 1,"g"))),
+                        tuple(2,bag(tuple("foo", 2,"b")),bag(tuple("bar", 2,"f"))),
                         tuple(3,bag(tuple("foo", 3,"c")),bag())
                         ),
                 sortByIndex(data.get("output"), 0));
     }
-    
+
     @Test
     public void testJoin() throws Exception {
         PigServer pigServer = new PigServer(MODE);
         Data data = Storage.resetData(pigServer);
-        data.set("input1", 
+        data.set("input1",
                 tuple(1, "a"),
-                tuple(2, "b"), 
-                tuple(3, "c"), 
+                tuple(2, "b"),
+                tuple(3, "c"),
                 tuple(1, "d"));
-        data.set("input2", 
+        data.set("input2",
                 tuple(1, "e"),
-                tuple(2, "f"), 
+                tuple(2, "f"),
                 tuple(1, "g"));
 
         pigServer.registerQuery("A = LOAD 'input1' using mock.Storage;");
@@ -268,7 +268,7 @@ public class TestSpark {
                         ),
                 data.get("output"));
     }
-    
+
     /**
      * Kind of a hack: To test whether caching is happening, we modify a file on disk after caching
      * it in Spark.
@@ -276,34 +276,34 @@ public class TestSpark {
     @Test
     public void testCaching() throws Exception {
         PigServer pigServer = new PigServer(MODE);
-        
+
         Data data = Storage.resetData(pigServer);
-        data.set("input", 
-                tuple("test1"), 
+        data.set("input",
+                tuple("test1"),
                 tuple("test2"));
-        
+
         pigServer.setBatchOn();
         pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
         pigServer.registerQuery("CACHE A;");
         pigServer.registerQuery("STORE A INTO 'output' using mock.Storage;");
         pigServer.executeBatch();
-        
+
         System.out.println("After first query: " + data.get("output"));
-        
+
         assertEquals(
                 Arrays.asList(tuple("test1"), tuple("test2")),
                 data.get("output"));
-        
+
         data = Storage.resetData(pigServer);
-        data.set("input", 
-                tuple("test3"), 
+        data.set("input",
+                tuple("test3"),
                 tuple("test4"));
 
         pigServer.registerQuery("STORE A INTO 'output' using mock.Storage;");
         pigServer.executeBatch();
 
         System.out.println("After second query: " + data.get("output"));
-        
+
         assertEquals(
                 Arrays.asList(tuple("test1"), tuple("test2")),
                 data.get("output"));
