@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.List;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POGlobalRearrange;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.POConverter;
@@ -20,6 +22,8 @@ import spark.RDD;
 
 public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlobalRearrange> {
 
+    private static final Log LOG = LogFactory.getLog(POGlobalRearrange.class);
+    
     private static final GetKeyFunction GET_KEY_FUNCTION = new GetKeyFunction();
     private static final GroupTupleFunction GROUP_TUPLE_FUNCTION = new GroupTupleFunction();
     
@@ -29,9 +33,15 @@ public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlo
         if (predecessors.size()<1) {
             throw new RuntimeException("Should not have at least 1 predecessor for GlobalRearrange. Got : "+predecessors);
         }
+        int parallelism = physicalOperator.getRequestedParallelism();
+        if (parallelism <= 0) {
+            // Parallelism wasn't set in Pig, so set it to whatever Spark thinks is reasonable.
+            parallelism = predecessors.get(0).context().defaultParallelism();
+        }
+        LOG.info("Parallelism for Spark groupBy: " + parallelism);
         return predecessors.get(0)
                 // group by key
-                .groupBy(GET_KEY_FUNCTION, SparkUtil.getManifest(Object.class))
+                .groupBy(GET_KEY_FUNCTION, parallelism, SparkUtil.getManifest(Object.class))
                 // convert result to a tuple (key, { values })
                 .map(GROUP_TUPLE_FUNCTION, SparkUtil.getManifest(Tuple.class));
     }
