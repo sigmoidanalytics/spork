@@ -50,11 +50,11 @@ public class SparkLauncher extends Launcher {
     // Our connection to Spark. It needs to be static so that it can be reused across jobs, because a
     // new SparkLauncher gets created for each job.
     private static SparkContext sparkContext = null;
-    
+
     // An object that handle cache calls in the operator graph. This is again static because we want
     // it to be shared across SparkLaunchers. It gets cleared whenever we close the SparkContext.
     private static CacheConverter cacheConverter;
-    
+
     @Override
     public PigStats launchPig(PhysicalPlan physicalPlan, String grpName, PigContext pigContext) throws Exception {
         LOG.info("!!!!!!!!!!  Launching Spark (woot) !!!!!!!!!!!!");
@@ -69,13 +69,13 @@ public class SparkLauncher extends Launcher {
 //        KeyTypeDiscoveryVisitor kdv = new KeyTypeDiscoveryVisitor(plan);
 //        kdv.visit();
 
-        
+
 /////////
-        
+
         startSparkIfNeeded();
 
         Map<OperatorKey, RDD<Tuple>> rdds = new HashMap<OperatorKey, RDD<Tuple>>();
-        
+
         LinkedList<POStore> stores = PlanHelper.getStores(physicalPlan);
         for (POStore poStore : stores) {
             physicalToRDD(pigContext, physicalPlan, poStore, rdds, sparkContext);
@@ -83,7 +83,7 @@ public class SparkLauncher extends Launcher {
 
         return PigStats.get();
     }
-    
+
     private static void startSparkIfNeeded() throws PigException {
         if (sparkContext == null) {
             String master = System.getenv("SPARK_MASTER");
@@ -136,49 +136,49 @@ public class SparkLauncher extends Launcher {
                 predecessorRdds.add(rdds.get(predecessor.getOperatorKey()));
             }
         }
-        
+
         LOG.info("Converting operator " + physicalOperator.getClass().getSimpleName()+" "+physicalOperator);
         // TODO: put these converters in a Map and look up which one to invoke
         if (physicalOperator instanceof POLoad) {
-            
+
             LoadConverter loadConverter = new LoadConverter(pigContext, plan, sc);
             nextRDD = loadConverter.convert(predecessorRdds, (POLoad)physicalOperator);
-            
+
         } else if (physicalOperator instanceof POStore) {
-            
+
             StoreConverter storeConverter = new StoreConverter(pigContext);
             storeConverter.convert(predecessorRdds, (POStore)physicalOperator);
             return;
-            
+
         } else if (physicalOperator instanceof POForEach) {
 
             ForEachConverter filterConverter = new ForEachConverter();
             nextRDD = filterConverter.convert(predecessorRdds, (POForEach)physicalOperator);
 
         } else if (physicalOperator instanceof POFilter) {
-            
+
             FilterConverter filterConverter = new FilterConverter();
             nextRDD = filterConverter.convert(predecessorRdds, (POFilter)physicalOperator);
 
         } else if (physicalOperator instanceof POLocalRearrange) {
-           
+
             LocalRearrangeConverter localRearrangeConverter = new LocalRearrangeConverter();
             nextRDD = localRearrangeConverter.convert(predecessorRdds, (POLocalRearrange)physicalOperator);
 
         } else if (physicalOperator instanceof POGlobalRearrange) {
-           
+
             GlobalRearrangeConverter globalRearrangeConverter = new GlobalRearrangeConverter();
             nextRDD = globalRearrangeConverter.convert(predecessorRdds, (POGlobalRearrange)physicalOperator);
 
         } else if (physicalOperator instanceof POPackage) {
-            
+
             PackageConverter packageConverter = new PackageConverter();
             nextRDD = packageConverter.convert(predecessorRdds, (POPackage)physicalOperator);
-            
+
         } else if (physicalOperator instanceof POCache) {
-            
-            nextRDD = cacheConverter.convert(predecessorRdds, (POCache)physicalOperator);
-            
+
+            nextRDD = cacheConverter.convert(predecessorRdds, (POCache)physicalOperator, plan);
+
         }
 
         if (nextRDD == null) {
