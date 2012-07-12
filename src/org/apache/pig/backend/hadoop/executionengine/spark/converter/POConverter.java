@@ -13,6 +13,6 @@ import java.util.List;
  *
  * @author billg
  */
-public interface POConverter<IN, OUT, T extends PhysicalOperator> extends Serializable {
+public interface POConverter<IN, OUT, T extends PhysicalOperator> {
     RDD<OUT> convert(List<RDD<IN>> rdd, T physicalOperator) throws IOException;
 }
