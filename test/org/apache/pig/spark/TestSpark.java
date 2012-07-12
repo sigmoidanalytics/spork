@@ -18,6 +18,7 @@ import org.apache.pig.backend.executionengine.ExecJob;
 import org.apache.pig.builtin.mock.Storage;
 import org.apache.pig.builtin.mock.Storage.Data;
 import org.apache.pig.data.Tuple;
+import org.junit.Assert;
 import org.junit.Test;
 
 public class TestSpark {
@@ -70,7 +71,7 @@ public class TestSpark {
                 Arrays.asList(
                         tuple("key1", bag(tuple("foo", "key1", "test1"), tuple("bar", "key1", "test2"))),
                         tuple("key2", bag(tuple("baz", "key2", "test3")))),
-                sortByIndex(data.get("output"), 0));
+                        sortByIndex(data.get("output"), 0));
     }
 
     private List<Tuple> sortByIndex(List<Tuple> out, final int i) {
@@ -79,9 +80,9 @@ public class TestSpark {
             @Override
             public int compare(Tuple o1, Tuple o2) {
                 try {
-                Comparable c1 = (Comparable)o1.get(i);
-                Comparable c2 = (Comparable)o2.get(i);
-                return c1.compareTo(c2);
+                    Comparable c1 = (Comparable)o1.get(i);
+                    Comparable c2 = (Comparable)o2.get(i);
+                    return c1.compareTo(c2);
                 } catch (ExecException e) {
                     throw new RuntimeException(e);
                 }
@@ -242,7 +243,7 @@ public class TestSpark {
                         tuple(2,bag(tuple("foo", 2,"b")),bag(tuple("bar", 2,"f"))),
                         tuple(3,bag(tuple("foo", 3,"c")),bag())
                         ),
-                sortByIndex(data.get("output"), 0));
+                        sortByIndex(data.get("output"), 0));
     }
 
     @Test
@@ -272,7 +273,7 @@ public class TestSpark {
                         tuple(1, "d", 1, "g"),
                         tuple(2, "b", 2, "f")
                         ),
-                data.get("output"));
+                        data.get("output"));
     }
 
     @Test
@@ -300,12 +301,65 @@ public class TestSpark {
                 "STORE A INTO 'output' using mock.Storage;");
     }
 
+    @Test
+    public void testCachingJoin() throws Exception {
+        testCaching("A = LOAD 'input' using mock.Storage; " +
+                "B = LOAD 'input' using mock.Storage; " +
+                "A = JOIN A by $0, B by LOWER($0); " +
+                "CACHE A; " +
+                "STORE A INTO 'output' using mock.Storage;");
+    }
+
+    @Test
+    public void testIgnoreWrongUDFCache() throws Exception {
+        testIgnoreCache(
+                "A = LOAD 'input' using mock.Storage; " +
+                "B = LOAD 'input' using mock.Storage; " +
+                "A = JOIN A by $0, B by LOWER($0); " +
+                "CACHE A; " +
+                "STORE A INTO 'output' using mock.Storage;",
+                "A = LOAD 'input' using mock.Storage; " +
+                "B = LOAD 'input' using mock.Storage; " +
+                "A = JOIN A by $0, B by UPPER($0); " +
+                "CACHE A; " +
+                "STORE A INTO 'output' using mock.Storage;");
+    }
+
+    public void testIgnoreCache(String query1, String query2) throws Exception {
+        PigServer pigServer = newPigServer();
+
+        Data data = Storage.resetData(pigServer);
+        data.set("input",
+                tuple("test1"),
+                tuple("test2"));
+
+        pigServer.setBatchOn();
+        pigServer.registerQuery(query1);
+        pigServer.executeBatch();
+
+        System.out.println("After first query: " + data.get("output"));
+        List<Tuple> originalOutput = data.get("output");
+
+        data = Storage.resetData(pigServer);
+        data.set("input",
+                tuple("test3"),
+                tuple("test4"));
+        pigServer.registerQuery(query2);
+        pigServer.executeBatch();
+
+        System.out.println("After second query: " + data.get("output"));
+
+        Assert.assertFalse(
+                originalOutput.equals(
+                        data.get("output")));
+    }
+
     /**
      * Kind of a hack: To test whether caching is happening, we modify a file on disk after caching
      * it in Spark.
      */
     private void testCaching(String query) throws Exception {
-    PigServer pigServer = newPigServer();
+        PigServer pigServer = newPigServer();
 
         Data data = Storage.resetData(pigServer);
         data.set("input",
@@ -317,10 +371,7 @@ public class TestSpark {
         pigServer.executeBatch();
 
         System.out.println("After first query: " + data.get("output"));
-
-        assertEquals(
-                Arrays.asList(tuple("test1"), tuple("test2")),
-                data.get("output"));
+        List<Tuple> originalOutput = data.get("output");
 
         data = Storage.resetData(pigServer);
         data.set("input",
@@ -333,7 +384,7 @@ public class TestSpark {
         System.out.println("After second query: " + data.get("output"));
 
         assertEquals(
-                Arrays.asList(tuple("test1"), tuple("test2")),
+                originalOutput,
                 data.get("output"));
     }
 }
