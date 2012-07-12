@@ -109,18 +109,25 @@ public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlo
 
     private static final GetKeyFunction GET_KEY_FUNCTION = new GetKeyFunction();
     private static final GroupTupleFunction GROUP_TUPLE_FUNCTION = new GroupTupleFunction();
-    
+
     @Override
     public RDD<Tuple> convert(List<RDD<Tuple>> predecessors,
             POGlobalRearrange physicalOperator) throws IOException {
         if (predecessors.size()<1) {
             throw new RuntimeException("Should not have at least 1 predecessor for GlobalRearrange. Got : "+predecessors);
         }
+
+        int parallelism = physicalOperator.getRequestedParallelism();
+        if (parallelism <= 0) {
+            // Parallelism wasn't set in Pig, so set it to whatever Spark thinks is reasonable.
+            parallelism = predecessors.get(0).context().defaultParallelism();
+        }
+        LOG.info("Parallelism for Spark groupBy: " + parallelism);
         if (predecessors.size() == 1) {
             //GROUP
             return predecessors.get(0)
                 // group by key
-                .groupBy(GET_KEY_FUNCTION, SparkUtil.getManifest(Object.class))
+                .groupBy(GET_KEY_FUNCTION, parallelism, SparkUtil.getManifest(Object.class))
                 // convert result to a tuple (key, { values })
                 .map(GROUP_TUPLE_FUNCTION, SparkUtil.getManifest(Tuple.class));
         } else {
