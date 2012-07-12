@@ -36,7 +36,10 @@ public class LOCache extends LogicalRelationalOperator {
 
     @Override
     public LogicalSchema getSchema() throws FrontendException {
-        return getPredecessor().getSchema();
+        if (schema == null) {
+            schema = getPredecessor().getSchema();
+        }
+        return schema;
     }
 
     @Override
@@ -55,10 +58,10 @@ public class LOCache extends LogicalRelationalOperator {
 
     public LogicalRelationalOperator getPredecessor() throws FrontendException {
         List<Operator> preds = plan.getPredecessors(this);
-        if (preds == null || preds.size() != 1) {
+        if (preds != null && preds.size() == 1) {
             return (LogicalRelationalOperator) preds.get(0);
         } else {
-            throw new FrontendException("No predecessors, or more than 1 predecessor, to LOCache found.");
+            throw new FrontendException("LOCache expects exactly 1 predecessor. Saw " + preds.size());
         }
     }
 }

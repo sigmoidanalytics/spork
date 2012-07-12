@@ -683,9 +683,13 @@ public class LogicalPlanBuilder {
         return buildOp( loc, op, alias, new ArrayList<String>(), null );
     }
 
-    public String buildCacheOp(SourceLocation loc,
+    public String buildCacheOp(SourceLocation loc, LOCache cacheOp,
             String inputAlias) throws ParserValidationException {
-        return buildOp(loc, createCacheOp(), null, inputAlias, null);
+        String newAlias = newOperatorKey();
+        String alias = buildOp(loc, cacheOp, newAlias, inputAlias, null);
+        operators.remove(newAlias);
+        putOperator(inputAlias, cacheOp);
+        return alias;
     }
 
     private String buildOp(SourceLocation loc, LogicalRelationalOperator op, String alias,

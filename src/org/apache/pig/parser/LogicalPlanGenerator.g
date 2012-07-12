@@ -201,8 +201,9 @@ realias_clause
 rel_cache_clause
 : ^( CACHE IDENTIFIER )
     {
-        builder.buildCacheOp(new SourceLocation( (PigParserNode) $rel_cache_clause.start ),
-            $IDENTIFIER.text);
+        LOCache cacheOp = builder.createCacheOp();
+        String alias = builder.buildCacheOp(new SourceLocation( (PigParserNode) $rel_cache_clause.start ),
+            cacheOp, $IDENTIFIER.text);
     }
 ;
 
