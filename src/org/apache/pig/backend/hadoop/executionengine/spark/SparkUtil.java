@@ -41,7 +41,7 @@ public class SparkUtil {
     public static void assertPredecessorSize(List<RDD<Tuple>> predecessors,
                                              PhysicalOperator physicalOperator, int size) {
         if (predecessors.size() != size) {
-            throw new RuntimeException("Should not have " + size + " predecessors for " +
+            throw new RuntimeException("Should have " + size + " predecessors for " +
                     physicalOperator.getClass() + ". Got : " + predecessors.size());
         }
     }
@@ -49,7 +49,7 @@ public class SparkUtil {
     public static void assertPredecessorSizeGreaterThan(List<RDD<Tuple>> predecessors,
                                              PhysicalOperator physicalOperator, int size) {
         if (predecessors.size() <= size) {
-            throw new RuntimeException("Should at least " + size + " predecessors for " +
+            throw new RuntimeException("Should have greater than" + size + " predecessors for " +
                     physicalOperator.getClass() + ". Got : " + predecessors.size());
         }
     }

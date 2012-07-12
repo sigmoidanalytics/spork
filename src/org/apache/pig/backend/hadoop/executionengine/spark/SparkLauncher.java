@@ -52,6 +52,10 @@ public class SparkLauncher extends Launcher {
     // new SparkLauncher gets created for each job.
     private static SparkContext sparkContext = null;
 
+    // An object that handle cache calls in the operator graph. This is again static because we want
+    // it to be shared across SparkLaunchers. It gets cleared whenever we close the SparkContext.
+    private static CacheConverter cacheConverter = null;
+
     @Override
     public PigStats launchPig(PhysicalPlan physicalPlan, String grpName, PigContext pigContext) throws Exception {
         LOG.info("!!!!!!!!!!  Launching Spark (woot) !!!!!!!!!!!!");
@@ -79,7 +83,7 @@ public class SparkLauncher extends Launcher {
         convertMap.put(POForEach.class, new ForEachConverter());
         convertMap.put(POFilter.class,  new FilterConverter());
         convertMap.put(POPackage.class, new PackageConverter());
-        convertMap.put(POCache.class,   new CacheConverter());
+        convertMap.put(POCache.class,   cacheConverter);
         convertMap.put(POLocalRearrange.class,  new LocalRearrangeConverter());
         convertMap.put(POGlobalRearrange.class, new GlobalRearrangeConverter());
 
@@ -119,6 +123,7 @@ public class SparkLauncher extends Launcher {
             }
 
             sparkContext = new SparkContext(master, "Spork", sparkHome, SparkUtil.toScalaSeq(jars));
+            cacheConverter = new CacheConverter();
         }
     }
 
@@ -127,6 +132,7 @@ public class SparkLauncher extends Launcher {
         if (sparkContext != null) {
             sparkContext.stop();
             sparkContext = null;
+            cacheConverter = null;
         }
     }
 
