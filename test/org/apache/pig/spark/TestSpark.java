@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
+import org.apache.log4j.Level;
 import org.apache.pig.ExecType;
 import org.apache.pig.PigServer;
 import org.apache.pig.backend.executionengine.ExecException;
@@ -22,6 +23,10 @@ import org.junit.Test;
 public class TestSpark {
 
     private static final ExecType MODE = ExecType.SPARK;
+    
+    static {
+        org.apache.log4j.Logger.getLogger("org.apache.pig.backend.hadoop.executionengine.spark").setLevel(Level.DEBUG);
+    }
 
     @Test
     public void testLoadStore() throws Exception {
@@ -171,6 +176,24 @@ public class TestSpark {
     }
 
     @Test
+    public void testSimpleUDF() throws Exception {
+        PigServer pigServer = new PigServer(ExecType.SPARK);
+        Data data = Storage.resetData(pigServer);
+        data.set("input",
+                tuple("Foo"),
+                tuple("BAR"),
+                tuple("baT"));
+
+        pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
+        pigServer.registerQuery("B = FOREACH A GENERATE org.apache.pig.spark.LowercaseUDF($0);");
+        pigServer.registerQuery("STORE B INTO 'output' using mock.Storage;");
+
+        assertEquals(
+                Arrays.asList(tuple("foo"), tuple("bar"), tuple("bat")),
+                data.get("output"));
+    }
+
+    @Test
     public void testFilter() throws Exception {
         PigServer pigServer = new PigServer(MODE);
         Data data = Storage.resetData(pigServer);
@@ -193,28 +216,28 @@ public class TestSpark {
     public void testCoGroup() throws Exception {
         PigServer pigServer = new PigServer(MODE);
         Data data = Storage.resetData(pigServer);
-        data.set("input1",
-                tuple(1, "a"),
-                tuple(2, "b"),
-                tuple(3, "c"),
-                tuple(1, "d"));
-        data.set("input2",
-                tuple(1, "e"),
-                tuple(2, "f"),
-                tuple(1, "g"));
+        data.set("input1", 
+                tuple("foo", 1, "a"),
+                tuple("foo", 2, "b"), 
+                tuple("foo", 3, "c"), 
+                tuple("foo", 1, "d"));
+        data.set("input2", 
+                tuple("bar", 1, "e"),
+                tuple("bar", 2, "f"), 
+                tuple("bar", 1, "g"));
 
         pigServer.registerQuery("A = LOAD 'input1' using mock.Storage;");
         pigServer.registerQuery("B = LOAD 'input2' using mock.Storage;");
-        pigServer.registerQuery("C = COGROUP A BY $0, B BY $0;");
+        pigServer.registerQuery("C = COGROUP A BY $1, B BY $1;");
         pigServer.registerQuery("STORE C INTO 'output' using mock.Storage;");
 
         assertEquals(
                 Arrays.asList(
-                        tuple(1,bag(tuple(1,"a"),tuple(1,"d")),bag(tuple(1,"e"),tuple(1,"g"))),
-                        tuple(2,bag(tuple(2,"b")),bag(tuple(2,"f"))),
-                        tuple(3,bag(tuple(3,"c")),bag())
+                        tuple(1,bag(tuple("foo", 1,"a"),tuple("foo", 1,"d")),bag(tuple("bar", 1,"e"),tuple("bar", 1,"g"))), 
+                        tuple(2,bag(tuple("foo", 2,"b")),bag(tuple("bar", 2,"f"))), 
+                        tuple(3,bag(tuple("foo", 3,"c")),bag())
                         ),
-                data.get("output"));
+                sortByIndex(data.get("output"), 0));
     }
 
     @Test

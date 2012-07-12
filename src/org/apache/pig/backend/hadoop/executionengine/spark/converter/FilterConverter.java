@@ -4,6 +4,7 @@ import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.POStatus;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.Result;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POFilter;
+import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.data.Tuple;
 import scala.Function1;
 import scala.runtime.AbstractFunction1;
@@ -21,9 +22,7 @@ public class FilterConverter implements POConverter<Tuple, Tuple, POFilter> {
 
     @Override
     public RDD<Tuple> convert(List<RDD<Tuple>> predecessors, POFilter physicalOperator) {
-        if (predecessors.size()!=1) {
-            throw new RuntimeException("Should not have 1 predecessors for Filter. Got : "+predecessors);
-        }
+        SparkUtil.assertPredecessorSize(predecessors, physicalOperator, 1);
         RDD<Tuple> rdd = predecessors.get(0);
         Function1 filterFunction = new FilterFunction(physicalOperator);
         return rdd.filter(filterFunction);

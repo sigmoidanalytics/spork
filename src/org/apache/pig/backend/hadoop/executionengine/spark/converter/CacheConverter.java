@@ -12,7 +12,6 @@ import org.apache.pig.data.Tuple;
 
 import spark.RDD;
 
-@SuppressWarnings("serial")
 public class CacheConverter implements POConverter<Tuple, Tuple, POCache> {
 
     private static final Log LOG = LogFactory.getLog(CacheConverter.class);

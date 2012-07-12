@@ -1,32 +1,35 @@
-package org.apache.pig.backend.hadoop.executionengine.spark;
+package org.apache.pig.backend.hadoop.executionengine.spark.converter;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Iterator;
 import java.util.List;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.POStatus;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.Result;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPackage;
+import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.POConverter;
-import org.apache.pig.data.DataBag;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.data.TupleFactory;
 import org.apache.pig.impl.io.NullableTuple;
 import org.apache.pig.impl.io.PigNullableWritable;
 
+import scala.collection.JavaConversions;
+import scala.collection.Seq;
 import scala.runtime.AbstractFunction1;
 import spark.RDD;
 
 public class PackageConverter implements POConverter<Tuple, Tuple, POPackage> {
-
+    private static final Log LOG = LogFactory.getLog(PackageConverter.class);
+    
     @Override
     public RDD<Tuple> convert(List<RDD<Tuple>> predecessors, POPackage physicalOperator)
             throws IOException {
-        if (predecessors.size()!=1) {
-            throw new RuntimeException("Should have 1 predecessor for Package. Got : "+predecessors);
-        }
+        SparkUtil.assertPredecessorSize(predecessors, physicalOperator, 1);
         RDD<Tuple> rdd = predecessors.get(0);
         // package will generate the group from the result of the local rearrange
         return rdd.map(new PackageFunction(physicalOperator), SparkUtil.getManifest(Tuple.class));
@@ -43,9 +46,12 @@ public class PackageConverter implements POConverter<Tuple, Tuple, POPackage> {
 
         @Override
         public Tuple apply(final Tuple t) {
+            // (key, Seq<Tuple>:{(index, key, value without key)})
+            LOG.debug("PackageFunction in "+t);
             Result result;
             try {
                 PigNullableWritable key = new PigNullableWritable() {
+                    
                     public Object getValueAsPigType() {
                         try {
                             Object keyTuple = t.get(0);
@@ -55,15 +61,21 @@ public class PackageConverter implements POConverter<Tuple, Tuple, POPackage> {
                         }
                     }
                 };
-                final Iterator<Tuple> bagIterator = ((DataBag)t.get(1)).iterator();
+                final Iterator<Tuple> bagIterator = JavaConversions.asJavaIterator(((Seq<Tuple>)t.get(1)).iterator());
                 Iterator<NullableTuple> iterator = new Iterator<NullableTuple>() {
                     public boolean hasNext() {
                         return bagIterator.hasNext();
                     }
                     public NullableTuple next() {
-                        Tuple next = bagIterator.next();
-                        
-                        return new NullableTuple(next);
+                        try {
+                            // we want the value and index only
+                            Tuple next = bagIterator.next();
+                            NullableTuple nullableTuple = new NullableTuple((Tuple)next.get(2));
+                            nullableTuple.setIndex(((Number)next.get(0)).byteValue());
+                            return nullableTuple;
+                        } catch (ExecException e) {
+                            throw new RuntimeException(e);
+                        }
                     }
                     public void remove() {
                         throw new UnsupportedOperationException();
@@ -83,9 +95,10 @@ public class PackageConverter implements POConverter<Tuple, Tuple, POPackage> {
             switch (result.returnStatus) {
                 case POStatus.STATUS_OK:
                     // (key, {(value)...})
+                    LOG.debug("PackageFunction out "+result.result);
                 return (Tuple)result.result;
                 default:
-                    throw new RuntimeException("Unexpected response code from operator "+physicalOperator+" : " + result);
+                    throw new RuntimeException("Unexpected response code from operator "+physicalOperator+" : " + result + " " + result.returnStatus);
             }
         }
 

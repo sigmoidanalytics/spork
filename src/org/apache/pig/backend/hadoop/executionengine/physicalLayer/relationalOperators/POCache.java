@@ -20,6 +20,7 @@ package org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOp
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.List;
+import java.util.UUID;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -41,7 +42,8 @@ public class POCache extends PhysicalOperator {
     private static final long serialVersionUID = 1L;
 
     // The expression plan
-    PhysicalPlan plan;
+    transient PhysicalPlan plan;
+    String key;
 
     public POCache(OperatorKey k, PhysicalPlan plan) {
         super(k);
@@ -108,10 +110,12 @@ public class POCache extends PhysicalOperator {
      * @throws IOException
      */
     public String computeCacheKey() throws IOException {
-        String key = computeRawCacheKey(inputs);
-        if (key != null) {
-            // TODO deal with collisions!!
-            key = String.valueOf(key.hashCode());
+        if (key == null) {
+            key = computeRawCacheKey(inputs);
+            if (key != null) {
+                // TODO deal with collisions!!
+                key = UUID.nameUUIDFromBytes(key.getBytes()).toString();
+            }
         }
         return key;
     }

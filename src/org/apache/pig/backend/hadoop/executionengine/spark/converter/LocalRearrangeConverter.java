@@ -1,38 +1,33 @@
-package org.apache.pig.backend.hadoop.executionengine.spark;
+package org.apache.pig.backend.hadoop.executionengine.spark.converter;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.List;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.POStatus;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.Result;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLocalRearrange;
+import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.POConverter;
-import org.apache.pig.data.BagFactory;
-import org.apache.pig.data.DataBag;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.data.TupleFactory;
 
-import scala.Tuple2;
-import scala.collection.JavaConversions;
-import scala.collection.Seq;
 import scala.runtime.AbstractFunction1;
 import spark.RDD;
 
 public class LocalRearrangeConverter implements POConverter<Tuple, Tuple, POLocalRearrange> {
-
+    private static final Log LOG = LogFactory.getLog(GlobalRearrangeConverter.class);
     
     @Override
     public RDD<Tuple> convert(List<RDD<Tuple>> predecessors, POLocalRearrange physicalOperator)
             throws IOException {
-        if (predecessors.size()!=1) {
-            throw new RuntimeException("Should not have 1 predecessors for LocalRearrange. Got : "+predecessors);
-        }
+        SparkUtil.assertPredecessorSize(predecessors, physicalOperator, 1);
         RDD<Tuple> rdd = predecessors.get(0);
-        return rdd
         // call local rearrange to get key and value
-        .map(new LocalRearrangeFunction(physicalOperator), SparkUtil.getManifest(Tuple.class));
+        return rdd.map(new LocalRearrangeFunction(physicalOperator), SparkUtil.getManifest(Tuple.class));
         
     }
     
@@ -59,12 +54,10 @@ public class LocalRearrangeConverter implements POConverter<Tuple, Tuple, POLoca
 
                 switch (result.returnStatus) {
                 case POStatus.STATUS_OK:
-                    // we don't need the index used for namespacing in Pig
+                    // (index, key, value without keys)
                     Tuple resultTuple = (Tuple)result.result;
-                    Tuple newTuple = tf.newTuple(2);
-                    newTuple.set(0, resultTuple.get(1)); // key
-                    newTuple.set(1, resultTuple.get(2)); // value (stripped of the key, reconstructed in package)
-                    return newTuple;
+                    LOG.debug("LocalRearrangeFunction out "+resultTuple);
+                    return resultTuple;
                 default:
                     throw new RuntimeException("Unexpected response code from operator "+physicalOperator+" : " + result);
                 }
