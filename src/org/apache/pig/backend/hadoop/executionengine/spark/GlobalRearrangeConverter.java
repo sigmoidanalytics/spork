@@ -2,8 +2,6 @@ package org.apache.pig.backend.hadoop.executionengine.spark;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.Collection;
-import java.util.Iterator;
 import java.util.List;
 
 import org.apache.commons.logging.Log;
@@ -11,7 +9,6 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POGlobalRearrange;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.POConverter;
-import org.apache.pig.data.BagFactory;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.data.TupleFactory;
 import org.python.google.common.collect.Lists;
@@ -21,21 +18,21 @@ import scala.collection.JavaConversions;
 import scala.collection.Seq;
 import scala.reflect.ClassManifest;
 import scala.runtime.AbstractFunction1;
-import spark.PairRDDFunctions;
+import spark.CoGroupedRDD;
+import spark.HashPartitioner;
 import spark.RDD;
 
 public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlobalRearrange> {
-    private static final ToKeyValueFunction TO_KEY_VALUE_FUNCTION = new ToKeyValueFunction();
-
-    private static final ToValueFunction TO_VALUE_FUNCTION = new ToValueFunction();
-
     private static final Log LOG = LogFactory.getLog(GlobalRearrangeConverter.class);
 
-    private static final BagFactory bf = BagFactory.getInstance();
     private static final TupleFactory tf = TupleFactory.getInstance();
-    
+
+    // GROUP FUNCTIONS
+    private static final ToKeyValueFunction TO_KEY_VALUE_FUNCTION = new ToKeyValueFunction();
     private static final GetKeyFunction GET_KEY_FUNCTION = new GetKeyFunction();
+    // COGROUP FUNCTIONS
     private static final GroupTupleFunction GROUP_TUPLE_FUNCTION = new GroupTupleFunction();
+    private static final ToGroupKeyValueFunction TO_GROUP_KEY_VALUE_FUNCTION = new ToGroupKeyValueFunction();
 
     @Override
     public RDD<Tuple> convert(List<RDD<Tuple>> predecessors,
@@ -58,30 +55,30 @@ public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlo
                 // convert result to a tuple (key, { values })
                 .map(GROUP_TUPLE_FUNCTION, SparkUtil.getManifest(Tuple.class));
         } else {
-          //COGROUP
+            //COGROUP
             // each pred returns (index, key, value)
-            Iterator<RDD<Tuple>> iterator = predecessors.iterator();
             ClassManifest<Tuple2<Object, Tuple>> tuple2ClassManifest = (ClassManifest<Tuple2<Object, Tuple>>)(Object)SparkUtil.getManifest(Tuple2.class);
 
-            RDD<Tuple2<Object, Tuple>> rddPairs = iterator.next().map(TO_KEY_VALUE_FUNCTION, tuple2ClassManifest);
-            int index = 0;
-            while(iterator.hasNext()) {
-                PairRDDFunctions<Object, Tuple> rdd = 
-                        new PairRDDFunctions<Object, Tuple>(
-                                rddPairs,
-                                SparkUtil.getManifest(Object.class), 
-                                SparkUtil.getManifest(Tuple.class));
-                rddPairs = rdd
-                        .cogroup(
-                                iterator.next().map(TO_KEY_VALUE_FUNCTION, tuple2ClassManifest))
-                        .map(new ToGroupKeyValueFunction(index), tuple2ClassManifest);
-                ++index;
+            List<RDD<Tuple2<Object, Tuple>>> rddPairs = Lists.newArrayList();
+            for (RDD<Tuple> rdd : predecessors) {
+                RDD<Tuple2<Object, Tuple>> rddPair = rdd.map(TO_KEY_VALUE_FUNCTION, tuple2ClassManifest);
+                rddPairs.add(rddPair);
             }
-            return rddPairs.map(TO_VALUE_FUNCTION,  SparkUtil.getManifest(Tuple.class));
+
+            // Something's wrong with the type parameters of CoGroupedRDD
+            // key and value are the same type ???
+            CoGroupedRDD<Object> coGroupedRDD = new CoGroupedRDD<Object>(
+                    (Seq<RDD<Tuple2<?, ?>>>)(Object)JavaConversions.asScalaBuffer(rddPairs),
+                    new HashPartitioner(1)); // TODO: set parallelism
+
+            RDD<Tuple2<Object,Seq<Seq<Tuple>>>> rdd = (RDD<Tuple2<Object,Seq<Seq<Tuple>>>>)(Object)coGroupedRDD;
+            return rdd.map(TO_GROUP_KEY_VALUE_FUNCTION,  SparkUtil.getManifest(Tuple.class));
         }
     }
 
-    private static class GetKeyFunction extends AbstractFunction1<Tuple, Object> implements Serializable {
+    private static class GetKeyFunction
+    extends AbstractFunction1<Tuple, Object>
+    implements Serializable {
 
         public Object apply(Tuple t) {
             try {
@@ -96,7 +93,9 @@ public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlo
         }
     }
 
-    private static class GroupTupleFunction extends AbstractFunction1<Tuple2<Object, Seq<Tuple>>, Tuple> implements Serializable {
+    private static class GroupTupleFunction
+    extends AbstractFunction1<Tuple2<Object, Seq<Tuple>>, Tuple>
+    implements Serializable {
 
         public Tuple apply(Tuple2<Object, Seq<Tuple>> v1) {
             try {
@@ -110,69 +109,11 @@ public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlo
                 throw new RuntimeException(e);
             }
         }
-
     }
 
-    public static class ToGroupKeyValueFunction extends AbstractFunction1<Tuple2<Object,Tuple2<Seq<Tuple>,Seq<Tuple>>>, Tuple2<Object,Tuple>> implements Serializable {
-
-        private final int index;
-
-        public ToGroupKeyValueFunction(int index) {
-            this.index = index;
-        }
-
-        @Override
-        public Tuple2<Object, Tuple> apply(
-                Tuple2<Object, Tuple2<Seq<Tuple>, Seq<Tuple>>> tuple2) {
-            try {
-                LOG.debug("ToGroupKeyValueFunction in "+tuple2);
-                Object key = tuple2._1();
-                Tuple2<Seq<Tuple>, Seq<Tuple>> bags = tuple2._2();
-                // I would call scala's .union(...) if it did not take a second argument
-                // TODO: improve this it would be better to wrap this without materializing the data
-                // all we need is an iterator
-                List<Tuple> tuples = Lists.newArrayList();
-                addTuplesFromBag(key, tuples, JavaConversions.asJavaCollection(bags._1()), index);
-                addTuplesFromBag(key, tuples, JavaConversions.asJavaCollection(bags._2()), index + 1);
-                Tuple newTuple = tf.newTuple(1);
-                newTuple.set(0, JavaConversions.asScalaBuffer(tuples));
-                Tuple2<Object, Tuple> out = new Tuple2<Object, Tuple>(key, newTuple);
-                LOG.debug("ToGroupKeyValueFunction out "+out);
-                return out;
-            } catch(ExecException e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        private void addTuplesFromBag(Object key, List<Tuple> tuples,
-                Collection<Tuple> bag, int index) throws ExecException {
-            for (Tuple t1 : bag) {
-                Tuple toadd = tf.newTuple(3);
-                toadd.set(0, index);
-                toadd.set(1, key);
-                toadd.set(2, t1);
-                tuples.add(toadd);
-            }
-        }
-    }
-
-    public static class ToValueFunction extends AbstractFunction1<Tuple2<Object,Tuple>,Tuple> implements Serializable {
-        @Override
-        public Tuple apply(Tuple2<Object, Tuple> in) {
-            try {
-                LOG.debug("ToValueFunction (in) "+in);
-                Tuple out = tf.newTuple(2);
-                out.set(0, in._1);
-                out.set(1, in._2.get(0));
-                LOG.debug("ToValueFunction (out) "+out);
-                return out;
-            } catch (ExecException e) {
-                throw new RuntimeException(e);
-            }
-        }
-    }
-
-    public static class ToKeyValueFunction extends AbstractFunction1<Tuple,Tuple2<Object, Tuple>> implements Serializable {
+    private static class ToKeyValueFunction
+    extends AbstractFunction1<Tuple,Tuple2<Object, Tuple>>
+    implements Serializable {
 
         @Override
         public Tuple2<Object, Tuple> apply(Tuple t) {
@@ -181,11 +122,48 @@ public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlo
                 LOG.debug("ToKeyValueFunction in "+t);
                 Object key = t.get(1);
                 Tuple value = (Tuple)t.get(2); //value
-                // (key, (index, value))
+                // (key, value)
                 Tuple2<Object, Tuple> out = new Tuple2<Object, Tuple>(key, value);
                 LOG.debug("ToKeyValueFunction out "+out);
                 return out;
             } catch (ExecException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    private static class ToGroupKeyValueFunction
+    extends AbstractFunction1<Tuple2<Object,Seq<Seq<Tuple>>>,Tuple>
+    implements Serializable {
+
+        @Override
+        public Tuple apply(Tuple2<Object, Seq<Seq<Tuple>>> input) {
+            try {
+                LOG.debug("ToGroupKeyValueFunction2 in "+input);
+                Object key = input._1();
+                Seq<Seq<Tuple>> bags = input._2();
+                Iterable<Seq<Tuple>> bagsList = JavaConversions.asJavaIterable(bags);
+                int i = 0;
+//                // I would call scala's .union(...) if it did not take a second argument
+//                // TODO: improve this it would be better to wrap this without materializing the data
+//                // all we need is an iterator
+                List<Tuple> tuples = Lists.newArrayList();
+                for (Seq<Tuple> bag : bagsList) {
+                    for (Tuple t : JavaConversions.asJavaCollection(bag)) {
+                        Tuple toadd = tf.newTuple(3);
+                        toadd.set(0, i);
+                        toadd.set(1, key);
+                        toadd.set(2, t);
+                        tuples.add(toadd);
+                    }
+                    ++i;
+                }
+                Tuple out = tf.newTuple(2);
+                out.set(0, key);
+                out.set(1, JavaConversions.asScalaBuffer(tuples));
+                LOG.debug("ToGroupKeyValueFunction2 out "+out);
+                return out;
+            } catch(Exception e) {
                 throw new RuntimeException(e);
             }
         }

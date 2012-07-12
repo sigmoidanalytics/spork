@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
+import org.apache.log4j.Level;
 import org.apache.pig.ExecType;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.executionengine.ExecJob;
@@ -22,6 +23,10 @@ import org.junit.Test;
 public class TestSpark {
 
     private static final ExecType MODE = ExecType.SPARK;
+    
+    static {
+        org.apache.log4j.Logger.getLogger("org.apache.pig.backend.hadoop.executionengine.spark").setLevel(Level.DEBUG);
+    }
 
     @Test
     public void testLoadStore() throws Exception {
