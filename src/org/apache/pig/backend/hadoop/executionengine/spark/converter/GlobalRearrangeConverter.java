@@ -39,11 +39,7 @@ public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlo
     public RDD<Tuple> convert(List<RDD<Tuple>> predecessors,
             POGlobalRearrange physicalOperator) throws IOException {
         SparkUtil.assertPredecessorSizeGreaterThan(predecessors, physicalOperator, 0);
-        int parallelism = physicalOperator.getRequestedParallelism();
-        if (parallelism <= 0) {
-            // Parallelism wasn't set in Pig, so set it to whatever Spark thinks is reasonable.
-            parallelism = predecessors.get(0).context().defaultParallelism();
-        }
+        int parallelism = SparkUtil.getParallelism(predecessors, physicalOperator);
         LOG.info("Parallelism for Spark groupBy: " + parallelism);
         if (predecessors.size() == 1) {
             //GROUP
