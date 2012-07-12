@@ -1,12 +1,16 @@
 package org.apache.pig.backend.hadoop.executionengine.spark;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.*;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.mapred.JobClient;
 import org.apache.pig.PigException;
+import org.apache.pig.PigRunner;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.Launcher;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRCompiler;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.MROperPlan;
@@ -33,8 +37,9 @@ import org.apache.pig.backend.hadoop.executionengine.spark.converter.GlobalRearr
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.PackageConverter;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.PigContext;
+import org.apache.pig.impl.io.FileLocalizer;
 import org.apache.pig.impl.plan.OperatorKey;
-import org.apache.pig.tools.pigstats.PigStats;
+import org.apache.pig.tools.pigstats.*;
 import org.python.google.common.collect.Lists;
 
 import spark.RDD;
@@ -89,14 +94,22 @@ public class SparkLauncher extends Launcher {
 
         Map<OperatorKey, RDD<Tuple>> rdds = new HashMap<OperatorKey, RDD<Tuple>>();
         
+        SparkStats stats = new SparkStats();
+
+        // this is required for dump to work
+        Path tempPath = FileLocalizer.getTemporaryPath(pigContext);
+        File f = new File(tempPath.getName());
+        f.delete();
+
         LinkedList<POStore> stores = PlanHelper.getStores(physicalPlan);
         for (POStore poStore : stores) {
             physicalToRDD(physicalPlan, poStore, rdds, convertMap);
+            stats.addOutputInfo(poStore, 1, 1, true); // TODO: use real values
         }
 
-        return PigStats.get();
+        return stats;
     }
-    
+
     private static void startSparkIfNeeded() throws PigException {
         if (sparkContext == null) {
             String master = System.getenv("SPARK_MASTER");
