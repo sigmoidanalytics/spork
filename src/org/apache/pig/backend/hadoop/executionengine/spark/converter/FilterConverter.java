@@ -17,6 +17,7 @@ import java.util.List;
  * Converter that converts an RDD to a filtered RRD using POFilter
  * @author billg
  */
+@SuppressWarnings({ "serial"})
 public class FilterConverter implements POConverter<Tuple, Tuple, POFilter> {
 
     @Override
@@ -36,6 +37,7 @@ public class FilterConverter implements POConverter<Tuple, Tuple, POFilter> {
             this.poFilter = poFilter;
         }
 
+        @Override
         public Boolean apply(Tuple v1) {
             Result result;
             try {
