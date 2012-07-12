@@ -14,6 +14,7 @@ import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.MROper
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.POPackageAnnotator;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POCache;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POFilter;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POForEach;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POGlobalRearrange;
@@ -22,7 +23,15 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOpe
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPackage;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.util.PlanHelper;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.*;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.POConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.CacheConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.FilterConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.ForEachConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.LoadConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.StoreConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.LocalRearrangeConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.GlobalRearrangeConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.PackageConverter;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.plan.OperatorKey;
@@ -42,7 +51,7 @@ public class SparkLauncher extends Launcher {
     // Our connection to Spark. It needs to be static so that it can be reused across jobs, because a
     // new SparkLauncher gets created for each job.
     private static SparkContext sparkContext = null;
-    
+
     @Override
     public PigStats launchPig(PhysicalPlan physicalPlan, String grpName, PigContext pigContext) throws Exception {
         LOG.info("!!!!!!!!!!  Launching Spark (woot) !!!!!!!!!!!!");
@@ -57,9 +66,8 @@ public class SparkLauncher extends Launcher {
 //        KeyTypeDiscoveryVisitor kdv = new KeyTypeDiscoveryVisitor(plan);
 //        kdv.visit();
 
-        
 /////////
-        
+
         startSparkIfNeeded();
 
         // initialize the supported converters
@@ -70,9 +78,10 @@ public class SparkLauncher extends Launcher {
         convertMap.put(POStore.class,   new StoreConverter(pigContext));
         convertMap.put(POForEach.class, new ForEachConverter());
         convertMap.put(POFilter.class,  new FilterConverter());
+        convertMap.put(POPackage.class, new PackageConverter());
+        convertMap.put(POCache.class,   new CacheConverter());
         convertMap.put(POLocalRearrange.class,  new LocalRearrangeConverter());
         convertMap.put(POGlobalRearrange.class, new GlobalRearrangeConverter());
-        convertMap.put(POPackage.class,         new PackageConverter());
 
         Map<OperatorKey, RDD<Tuple>> rdds = new HashMap<OperatorKey, RDD<Tuple>>();
         
@@ -157,6 +166,7 @@ public class SparkLauncher extends Launcher {
 
         if (POStore.class.equals(physicalOperator.getClass())) {
             return;
+
         }
 
         if (nextRDD == null) {

@@ -235,6 +235,7 @@ TOKEN_MGR_DECLS : {
 <DEFAULT> MORE :
 {
     <"split"> : PIG_START
+|   <"cache"> : PIG_START
 |   <"define"> : PIG_START
 |	<"store"> : PIG_START
 |	<"import"> : PIG_START

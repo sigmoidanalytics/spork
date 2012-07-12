@@ -101,12 +101,16 @@ query : ^( QUERY statement* )
 statement : general_statement
           | split_statement
           | realias_statement
+          | rel_cache_statement
 ;
 
 split_statement : split_clause
 ;
 
 realias_statement : realias_clause
+;
+
+rel_cache_statement: rel_cache_clause
 ;
 
 general_statement : ^( STATEMENT ( alias { aliases.add( $alias.name ); } )? op_clause parallel_clause? )
@@ -380,6 +384,9 @@ bin_expr : ^( BIN_EXPR cond expr expr )
 ;
 
 limit_clause : ^( LIMIT rel ( INTEGER | LONGINTEGER | expr ) )
+;
+
+rel_cache_clause : ^( CACHE IDENTIFIER)
 ;
 
 sample_clause : ^( SAMPLE rel ( DOUBLENUMBER | expr ) )
