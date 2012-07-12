@@ -74,9 +74,7 @@ public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlo
         }
     }
 
-    private static class GetKeyFunction
-    extends AbstractFunction1<Tuple, Object>
-    implements Serializable {
+    private static class GetKeyFunction extends AbstractFunction1<Tuple, Object> implements Serializable {
 
         public Object apply(Tuple t) {
             try {
@@ -91,9 +89,7 @@ public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlo
         }
     }
 
-    private static class GroupTupleFunction
-    extends AbstractFunction1<Tuple2<Object, Seq<Tuple>>, Tuple>
-    implements Serializable {
+    private static class GroupTupleFunction extends AbstractFunction1<Tuple2<Object, Seq<Tuple>>, Tuple> implements Serializable {
 
         public Tuple apply(Tuple2<Object, Seq<Tuple>> v1) {
             try {
@@ -109,9 +105,7 @@ public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlo
         }
     }
 
-    private static class ToKeyValueFunction
-    extends AbstractFunction1<Tuple,Tuple2<Object, Tuple>>
-    implements Serializable {
+    private static class ToKeyValueFunction extends AbstractFunction1<Tuple,Tuple2<Object, Tuple>> implements Serializable {
 
         @Override
         public Tuple2<Object, Tuple> apply(Tuple t) {
@@ -130,9 +124,7 @@ public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlo
         }
     }
 
-    private static class ToGroupKeyValueFunction
-    extends AbstractFunction1<Tuple2<Object,Seq<Seq<Tuple>>>,Tuple>
-    implements Serializable {
+    private static class ToGroupKeyValueFunction extends AbstractFunction1<Tuple2<Object,Seq<Seq<Tuple>>>,Tuple> implements Serializable {
 
         @Override
         public Tuple apply(Tuple2<Object, Seq<Seq<Tuple>>> input) {
