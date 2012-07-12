@@ -1353,7 +1353,7 @@ public class LogToPhyTranslationVisitor extends LogicalRelationalNodesVisitor {
     @Override
     public void visit(LOCache loCache) throws FrontendException {
         POCache poCache = new POCache(new OperatorKey(DEFAULT_SCOPE,
-                nodeGen.getNextNodeId(DEFAULT_SCOPE)));
+                nodeGen.getNextNodeId(DEFAULT_SCOPE)), currentPlan);
         currentPlan.add(poCache);
         logToPhyMap.put(loCache, poCache);
         Operator op = loCache.getPredecessor();
