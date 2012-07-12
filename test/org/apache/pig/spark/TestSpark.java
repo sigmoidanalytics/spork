@@ -261,7 +261,7 @@ public class TestSpark {
 
         assertEquals(
                 Arrays.asList(tuple("1"), tuple("2"), tuple("3")),
-                data.get("output"));
+                sortByIndex(data.get("output"), 0));
     }
 
     @Test
