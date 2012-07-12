@@ -20,6 +20,7 @@ package org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOp
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.apache.commons.logging.Log;
@@ -34,6 +35,7 @@ import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.plan.NodeIdGenerator;
 import org.apache.pig.impl.plan.OperatorKey;
 import org.apache.pig.impl.plan.VisitorException;
+import org.apache.pig.impl.util.Pair;
 import org.apache.pig.pen.util.ExampleTuple;
 
 public class POCache extends PhysicalOperator {
@@ -121,6 +123,9 @@ public class POCache extends PhysicalOperator {
     }
 
     private String computeRawCacheKey(List<PhysicalOperator> preds) throws IOException {
+        if (preds == null) {
+            return "";
+        }
         StringBuilder sb = new StringBuilder();
         for (PhysicalOperator operator : preds) {
             if (operator instanceof POLoad) {
@@ -157,12 +162,41 @@ public class POCache extends PhysicalOperator {
                     return null;
                 } else {
                     sb.append(inputKey);
-                    LOG.info("Input key: " + inputKey);
+                }
+            } else if (operator instanceof POLocalRearrange) {
+                POLocalRearrange localRearrange = (POLocalRearrange) operator;
+                sb.append("LocRearrange");
+                sb.append("ProjCol");
+                for (Map.Entry<Integer, Integer> entry : localRearrange.getProjectedColsMap().entrySet()) {
+                    sb.append(entry.getKey() + "+" + entry.getValue());
+                }
+                sb.append("SecProjCol");
+                for (Map.Entry<Integer, Integer> entry : localRearrange.getSecondaryProjectedColsMap().entrySet()) {
+                    sb.append(entry.getKey() + "+" + entry.getValue());
+                }
+                sb.append(localRearrange.getIndex());
+                sb.append(localRearrange.getKeyType());
+                for (PhysicalPlan plan : localRearrange.getPlans()) {
+                    sb.append(innerPlanKey(plan));
+                }
+            } else if (operator instanceof POGlobalRearrange) {
+                sb.append("POGLOBALREARRANGE");
+            } else if (operator instanceof POPackage) {
+                POPackage pkg = (POPackage) operator;
+                sb.append("POPakage");
+                for (Map.Entry<Integer, Pair<Boolean, Map<Integer, Integer>>> entry : pkg.getKeyInfo().entrySet()) {
+                    sb.append(entry.getKey()).append("-").append(entry.getValue().first);
+                    sb.append("->");
+                    for (Map.Entry<Integer, Integer> valentry : entry.getValue().second.entrySet()) {
+                        sb.append(valentry.getKey()).append("-").append(valentry.getValue());
+                    }
+                    sb.append(".");
                 }
             } else {
                 LOG.info("Don't know how to generate cache key for " + operator.getClass() + "; not caching");
                 return null;
             }
+            sb.append(computeRawCacheKey(operator.getInputs()));
         }
         return sb.toString();
     }
