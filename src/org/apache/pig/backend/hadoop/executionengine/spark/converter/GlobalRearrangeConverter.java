@@ -10,12 +10,9 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POGlobalRearrange;
 import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.POConverter;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.data.TupleFactory;
 import org.python.google.common.collect.Lists;
-
-import com.sun.org.apache.xalan.internal.xsltc.dom.UnionIterator;
 
 import scala.Tuple2;
 import scala.collection.JavaConversions;
