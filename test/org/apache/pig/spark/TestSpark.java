@@ -4,11 +4,7 @@ import static org.apache.pig.builtin.mock.Storage.bag;
 import static org.apache.pig.builtin.mock.Storage.tuple;
 import static org.junit.Assert.assertEquals;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 
 import org.apache.log4j.Level;
 import org.apache.pig.ExecType;
@@ -51,6 +47,26 @@ public class TestSpark {
         assertEquals(
                 Arrays.asList(tuple("test1"), tuple("test2")),
                 data.get("output"));
+    }
+
+    @Test
+    public void testDump() throws Exception {
+        PigServer pigServer = new PigServer(MODE);
+        Data data = Storage.resetData(pigServer);
+        data.set("input",
+                tuple("test1"),
+                tuple("test2"));
+
+        pigServer.setBatchOn();
+        pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
+        Iterator<Tuple> result = pigServer.openIterator("A");
+
+        List<Tuple> resultList = new ArrayList<Tuple>();
+        while (result.hasNext()) {
+            resultList.add(result.next());
+        }
+
+        assertEquals(Arrays.asList(tuple("test1"), tuple("test2")), resultList);
     }
 
     @Test
