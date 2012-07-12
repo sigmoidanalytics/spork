@@ -525,7 +525,8 @@ public class FileLocalizer {
           relativeRoot(pigContext).create();
       }
       ElementDescriptor elem=
-          pigContext.getDfs().asElement(relative.toString(), "tmp" + r.nextInt() + suffix);
+          pigContext.getDfs().asElement(relative.toString(), "tmp" + r.nextInt() +
+                  "_" + System.currentTimeMillis() + suffix);
       toDelete().push(elem);
       return ((HPath)elem).getPath();
   }

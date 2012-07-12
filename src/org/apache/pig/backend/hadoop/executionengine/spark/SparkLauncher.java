@@ -94,11 +94,6 @@ public class SparkLauncher extends Launcher {
 
         SparkStats stats = new SparkStats();
 
-        // this is required for dump to work
-        Path tempPath = FileLocalizer.getTemporaryPath(pigContext);
-        File f = new File(tempPath.getName());
-        f.delete();
-
         LinkedList<POStore> stores = PlanHelper.getStores(physicalPlan);
         for (POStore poStore : stores) {
             physicalToRDD(physicalPlan, poStore, rdds, convertMap);
