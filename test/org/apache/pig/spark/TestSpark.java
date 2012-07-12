@@ -4,7 +4,12 @@ import static org.apache.pig.builtin.mock.Storage.bag;
 import static org.apache.pig.builtin.mock.Storage.tuple;
 import static org.junit.Assert.assertEquals;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Properties;
 
 import org.apache.log4j.Level;
 import org.apache.pig.ExecType;
@@ -25,7 +30,13 @@ public class TestSpark {
     }
 
     private PigServer newPigServer() throws ExecException {
-        PigServer pigServer = new PigServer(MODE);
+        Properties properties = new Properties();
+        // to avoid pig running out of memory in LOCAL mode
+        properties.put("io.sort.mb", "1");
+//        properties.put("io.file.buffer.size", "128");
+
+        PigServer pigServer = new PigServer(MODE, properties);
+
         return pigServer;
     }
 
@@ -230,6 +241,25 @@ public class TestSpark {
 
         assertEquals(
                 Arrays.asList(tuple("1"), tuple("1")),
+                data.get("output"));
+    }
+
+    @Test
+    public void testLimit() throws Exception {
+        PigServer pigServer = newPigServer();
+        Data data = Storage.resetData(pigServer);
+        data.set("input",
+                tuple("1"),
+                tuple("2"),
+                tuple("3"),
+                tuple("4"));
+
+        pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
+        pigServer.registerQuery("B = LIMIT A 2;");
+        pigServer.registerQuery("STORE B INTO 'output' using mock.Storage;");
+
+        assertEquals(
+                Arrays.asList(tuple("1"), tuple("2")),
                 data.get("output"));
     }
 
