@@ -10,6 +10,8 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.log4j.Level;
 import org.apache.pig.ExecType;
 import org.apache.pig.PigServer;
@@ -24,6 +26,7 @@ import org.junit.Test;
 public class TestSpark {
 
     private static final ExecType MODE = ExecType.SPARK;
+    private static final Log LOG = LogFactory.getLog(TestSpark.class);
 
     static {
         org.apache.log4j.Logger.getLogger("org.apache.pig.backend.hadoop.executionengine.spark").setLevel(Level.DEBUG);
@@ -350,8 +353,8 @@ public class TestSpark {
         pigServer.registerQuery(query1);
         pigServer.executeBatch();
 
-        System.out.println("After first query: " + data.get("output"));
         List<Tuple> originalOutput = data.get("output");
+        LOG.debug("After first query: " + originalOutput);
 
         data = Storage.resetData(pigServer);
         data.set("input",
@@ -360,7 +363,7 @@ public class TestSpark {
         pigServer.registerQuery(query2);
         pigServer.executeBatch();
 
-        System.out.println("After second query: " + data.get("output"));
+        LOG.debug("After second query: " + data.get("output"));
 
         Assert.assertFalse(
                 originalOutput.equals(
@@ -383,7 +386,7 @@ public class TestSpark {
         pigServer.registerQuery(query);
         pigServer.executeBatch();
 
-        System.out.println("After first query: " + data.get("output"));
+        LOG.debug("After first query: " + data.get("output"));
         List<Tuple> originalOutput = data.get("output");
 
         data = Storage.resetData(pigServer);
@@ -394,7 +397,7 @@ public class TestSpark {
         pigServer.registerQuery("STORE A INTO 'output' using mock.Storage;");
         pigServer.executeBatch();
 
-        System.out.println("After second query: " + data.get("output"));
+        LOG.debug("After second query: " + data.get("output"));
 
         assertEquals(
                 originalOutput,
