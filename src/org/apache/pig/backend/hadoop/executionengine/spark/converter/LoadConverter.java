@@ -82,7 +82,8 @@ public class LoadConverter implements POConverter<Tuple, Tuple, POLoad> {
      * @return
      * @throws java.io.IOException
      */
-    private JobConf configureLoader(PhysicalPlan physicalPlan, POLoad poLoad, JobConf jobConf) throws IOException {
+    private static JobConf configureLoader(PhysicalPlan physicalPlan,
+                                           POLoad poLoad, JobConf jobConf) throws IOException {
 
         Job job = new Job(jobConf);
         LoadFunc loadFunc = poLoad.getLoadFunc();

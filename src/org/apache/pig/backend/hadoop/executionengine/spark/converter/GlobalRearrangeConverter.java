@@ -1,4 +1,4 @@
-package org.apache.pig.backend.hadoop.executionengine.spark;
+package org.apache.pig.backend.hadoop.executionengine.spark.converter;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POGlobalRearrange;
+import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.POConverter;
 import org.apache.pig.data.BagFactory;
 import org.apache.pig.data.DataBag;
@@ -26,9 +27,7 @@ public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlo
     @Override
     public RDD<Tuple> convert(List<RDD<Tuple>> predecessors,
             POGlobalRearrange physicalOperator) throws IOException {
-        if (predecessors.size()<1) {
-            throw new RuntimeException("Should not have at least 1 predecessor for GlobalRearrange. Got : "+predecessors);
-        }
+        SparkUtil.assertPredecessorSizeGreaterThan(predecessors, physicalOperator, 0);
         return predecessors.get(0)
                 // group by key
                 .groupBy(GET_KEY_FUNCTION, SparkUtil.getManifest(Object.class))

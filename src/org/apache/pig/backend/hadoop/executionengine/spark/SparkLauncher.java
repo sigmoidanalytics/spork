@@ -2,11 +2,8 @@ package org.apache.pig.backend.hadoop.executionengine.spark;
 
 import java.io.IOException;
 import java.io.PrintStream;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.lang.reflect.*;
+import java.util.*;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -25,10 +22,7 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOpe
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPackage;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.util.PlanHelper;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.FilterConverter;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.ForEachConverter;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.LoadConverter;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.StoreConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.*;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.plan.OperatorKey;
@@ -68,11 +62,23 @@ public class SparkLauncher extends Launcher {
         
         startSparkIfNeeded();
 
+        // initialize the supported converters
+        Map<Class<? extends PhysicalOperator>, POConverter> convertMap =
+                new HashMap<Class<? extends PhysicalOperator>, POConverter>();
+
+        convertMap.put(POLoad.class,    new LoadConverter(pigContext, physicalPlan, sparkContext));
+        convertMap.put(POStore.class,   new StoreConverter(pigContext));
+        convertMap.put(POForEach.class, new ForEachConverter());
+        convertMap.put(POFilter.class,  new FilterConverter());
+        convertMap.put(POLocalRearrange.class,  new LocalRearrangeConverter());
+        convertMap.put(POGlobalRearrange.class, new GlobalRearrangeConverter());
+        convertMap.put(POPackage.class,         new PackageConverter());
+
         Map<OperatorKey, RDD<Tuple>> rdds = new HashMap<OperatorKey, RDD<Tuple>>();
         
         LinkedList<POStore> stores = PlanHelper.getStores(physicalPlan);
         for (POStore poStore : stores) {
-            physicalToRDD(pigContext, physicalPlan, poStore, rdds, sparkContext);
+            physicalToRDD(physicalPlan, poStore, rdds, convertMap);
         }
 
         return PigStats.get();
@@ -115,63 +121,48 @@ public class SparkLauncher extends Launcher {
         }
     }
 
+    private void physicalToRDD(PhysicalPlan plan, PhysicalOperator physicalOperator,
+                               Map<OperatorKey, RDD<Tuple>> rdds,
+                               Map<Class<? extends PhysicalOperator>, POConverter> convertMap)
+            throws IOException {
 
-
-    private void physicalToRDD(PigContext pigContext, PhysicalPlan plan,
-                               PhysicalOperator physicalOperator, Map<OperatorKey, RDD<Tuple>> rdds, SparkContext sc) throws IOException {
         RDD<Tuple> nextRDD = null;
         List<PhysicalOperator> predecessors = plan.getPredecessors(physicalOperator);
         List<RDD<Tuple>> predecessorRdds = Lists.newArrayList();
         if (predecessors!=null) {
             for (PhysicalOperator predecessor : predecessors) {
-                physicalToRDD(pigContext, plan, predecessor, rdds, sc);
+                physicalToRDD(plan, predecessor, rdds, convertMap);
                 predecessorRdds.add(rdds.get(predecessor.getOperatorKey()));
             }
         }
-        
+
+        POConverter converter = convertMap.get(physicalOperator.getClass());
+        if (converter == null) {
+            throw new IllegalArgumentException("Spork unsupported PhysicalOperator: " + physicalOperator);
+        }
+
         LOG.info("Converting operator " + physicalOperator.getClass().getSimpleName()+" "+physicalOperator);
-        // TODO: put these converters in a Map and look up which one to invoke
-        if (physicalOperator instanceof POLoad) {
-            
-            LoadConverter loadConverter = new LoadConverter(pigContext, plan, sc);
-            nextRDD = loadConverter.convert(predecessorRdds, (POLoad)physicalOperator);
-            
-        } else if (physicalOperator instanceof POStore) {
-            
-            StoreConverter storeConverter = new StoreConverter(pigContext);
-            storeConverter.convert(predecessorRdds, (POStore)physicalOperator);
+
+        // invoke the converter
+        try {
+            Method m = converter.getClass().getMethod("convert", List.class, PhysicalOperator.class);
+            nextRDD = (RDD<Tuple>) m.invoke(converter, predecessorRdds, physicalOperator);
+        } catch (IllegalAccessException e) {
+            throw new RuntimeException("Could not access converter method: " + converter, e);
+        } catch (InvocationTargetException e) {
+            throw new RuntimeException("Could not invoke converter method: " + converter, e);
+        } catch (NoSuchMethodException e) {
+            throw new RuntimeException("Could not find converter method: " + converter, e);
+        }
+
+        if (POStore.class.equals(physicalOperator.getClass())) {
             return;
-            
-        } else if (physicalOperator instanceof POForEach) {
-
-            ForEachConverter filterConverter = new ForEachConverter();
-            nextRDD = filterConverter.convert(predecessorRdds, (POForEach)physicalOperator);
-
-        } else if (physicalOperator instanceof POFilter) {
-            
-            FilterConverter filterConverter = new FilterConverter();
-            nextRDD = filterConverter.convert(predecessorRdds, (POFilter)physicalOperator);
-
-        } else if (physicalOperator instanceof POLocalRearrange) {
-           
-            LocalRearrangeConverter localRearrangeConverter = new LocalRearrangeConverter();
-            nextRDD = localRearrangeConverter.convert(predecessorRdds, (POLocalRearrange)physicalOperator);
-
-        } else if (physicalOperator instanceof POGlobalRearrange) {
-           
-            GlobalRearrangeConverter globalRearrangeConverter = new GlobalRearrangeConverter();
-            nextRDD = globalRearrangeConverter.convert(predecessorRdds, (POGlobalRearrange)physicalOperator);
-
-        } else if (physicalOperator instanceof POPackage) {
-            
-            PackageConverter packageConverter = new PackageConverter();
-            nextRDD = packageConverter.convert(predecessorRdds, (POPackage)physicalOperator);
-            
         }
 
         if (nextRDD == null) {
             throw new IllegalArgumentException("Spork unsupported PhysicalOperator: " + physicalOperator);
         }
+
         rdds.put(physicalOperator.getOperatorKey(), nextRDD);
     }
 

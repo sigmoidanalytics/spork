@@ -1,4 +1,4 @@
-package org.apache.pig.backend.hadoop.executionengine.spark;
+package org.apache.pig.backend.hadoop.executionengine.spark.converter;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -8,6 +8,7 @@ import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.POStatus;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.Result;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLocalRearrange;
+import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.POConverter;
 import org.apache.pig.data.BagFactory;
 import org.apache.pig.data.DataBag;
@@ -26,9 +27,7 @@ public class LocalRearrangeConverter implements POConverter<Tuple, Tuple, POLoca
     @Override
     public RDD<Tuple> convert(List<RDD<Tuple>> predecessors, POLocalRearrange physicalOperator)
             throws IOException {
-        if (predecessors.size()!=1) {
-            throw new RuntimeException("Should not have 1 predecessors for LocalRearrange. Got : "+predecessors);
-        }
+        SparkUtil.assertPredecessorSize(predecessors, physicalOperator, 1);
         RDD<Tuple> rdd = predecessors.get(0);
         return rdd
         // call local rearrange to get key and value
