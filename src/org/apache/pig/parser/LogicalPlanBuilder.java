@@ -688,6 +688,7 @@ public class LogicalPlanBuilder {
         String newAlias = newOperatorKey();
         String alias = buildOp(loc, cacheOp, newAlias, inputAlias, null);
         operators.remove(newAlias);
+        cacheOp.setAlias(inputAlias);
         putOperator(inputAlias, cacheOp);
         return alias;
     }
