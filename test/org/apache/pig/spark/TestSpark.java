@@ -225,6 +225,25 @@ public class TestSpark {
     }
 
     @Test
+    public void testLimit() throws Exception {
+        PigServer pigServer = newPigServer();
+        Data data = Storage.resetData(pigServer);
+        data.set("input",
+                tuple("1"),
+                tuple("2"),
+                tuple("3"),
+                tuple("4"));
+
+        pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
+        pigServer.registerQuery("B = LIMIT A 2;");
+        pigServer.registerQuery("STORE B INTO 'output' using mock.Storage;");
+
+        assertEquals(
+                Arrays.asList(tuple("1"), tuple("2")),
+                data.get("output"));
+    }
+
+    @Test
     public void testCoGroup() throws Exception {
         PigServer pigServer = newPigServer();
         Data data = Storage.resetData(pigServer);
