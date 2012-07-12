@@ -69,7 +69,7 @@ public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlo
             // key and value are the same type ???
             CoGroupedRDD<Object> coGroupedRDD = new CoGroupedRDD<Object>(
                     (Seq<RDD<Tuple2<?, ?>>>)(Object)JavaConversions.asScalaBuffer(rddPairs),
-                    new HashPartitioner(1)); // TODO: set parallelism
+                    new HashPartitioner(parallelism));
 
             RDD<Tuple2<Object,Seq<Seq<Tuple>>>> rdd = (RDD<Tuple2<Object,Seq<Seq<Tuple>>>>)(Object)coGroupedRDD;
             return rdd.map(TO_GROUP_KEY_VALUE_FUNCTION,  SparkUtil.getManifest(Tuple.class));
