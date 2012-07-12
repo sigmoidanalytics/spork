@@ -70,8 +70,6 @@ public class SparkLauncher extends Launcher {
 //        KeyTypeDiscoveryVisitor kdv = new KeyTypeDiscoveryVisitor(plan);
 //        kdv.visit();
 
-/////////
-
         startSparkIfNeeded();
 
         // initialize the supported converters
@@ -88,7 +86,7 @@ public class SparkLauncher extends Launcher {
         convertMap.put(POGlobalRearrange.class, new GlobalRearrangeConverter());
 
         Map<OperatorKey, RDD<Tuple>> rdds = new HashMap<OperatorKey, RDD<Tuple>>();
-        
+
         LinkedList<POStore> stores = PlanHelper.getStores(physicalPlan);
         for (POStore poStore : stores) {
             physicalToRDD(physicalPlan, poStore, rdds, convertMap);
@@ -96,7 +94,7 @@ public class SparkLauncher extends Launcher {
 
         return PigStats.get();
     }
-    
+
     private static void startSparkIfNeeded() throws PigException {
         if (sparkContext == null) {
             String master = System.getenv("SPARK_MASTER");
@@ -157,7 +155,7 @@ public class SparkLauncher extends Launcher {
         }
 
         LOG.info("Converting operator " + physicalOperator.getClass().getSimpleName()+" "+physicalOperator);
-        nextRDD = (RDD<Tuple>)converter.convert(predecessorRdds, physicalOperator);
+        nextRDD = converter.convert(predecessorRdds, physicalOperator);
 
         if (POStore.class.equals(physicalOperator.getClass())) {
             return;

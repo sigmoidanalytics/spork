@@ -12,12 +12,12 @@ import java.util.List;
 
 import org.apache.log4j.Level;
 import org.apache.pig.ExecType;
+import org.apache.pig.PigServer;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.executionengine.ExecJob;
 import org.apache.pig.builtin.mock.Storage;
 import org.apache.pig.builtin.mock.Storage.Data;
 import org.apache.pig.data.Tuple;
-import org.apache.pig.pigunit.pig.PigServer;
 import org.junit.Test;
 
 public class TestSpark {
@@ -76,6 +76,7 @@ public class TestSpark {
     private List<Tuple> sortByIndex(List<Tuple> out, final int i) {
         List<Tuple> result = new ArrayList<Tuple>(out);
         Collections.sort(result, new Comparator<Tuple>() {
+            @Override
             public int compare(Tuple o1, Tuple o2) {
                 try {
                 Comparable c1 = (Comparable)o1.get(i);
@@ -274,13 +275,37 @@ public class TestSpark {
                 data.get("output"));
     }
 
+    @Test
+    public void testCachingLoad() throws Exception {
+
+        testCaching("A = LOAD 'input' using mock.Storage;" +
+                "CACHE A;" +
+                "STORE A INTO 'output' using mock.Storage;");
+    }
+
+    @Test
+    public void testCachingLoadCast() throws Exception {
+
+        testCaching("A = LOAD 'input' using mock.Storage as (foo:chararray);" +
+                "CACHE A;" +
+                "STORE A INTO 'output' using mock.Storage;");
+    }
+
+    @Test
+    public void testCachingWithFilter() throws Exception {
+        testCaching("A = LOAD 'input' using mock.Storage; " +
+                "B = FILTER A by $0 == $0;" + // useless filter
+                "A = FOREACH B GENERATE (chararray) $0;" +
+                "CACHE A;" +
+                "STORE A INTO 'output' using mock.Storage;");
+    }
+
     /**
      * Kind of a hack: To test whether caching is happening, we modify a file on disk after caching
      * it in Spark.
      */
-    @Test
-    public void testCaching() throws Exception {
-        PigServer pigServer = newPigServer();
+    private void testCaching(String query) throws Exception {
+    PigServer pigServer = newPigServer();
 
         Data data = Storage.resetData(pigServer);
         data.set("input",
@@ -288,9 +313,7 @@ public class TestSpark {
                 tuple("test2"));
 
         pigServer.setBatchOn();
-        pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
-        pigServer.registerQuery("CACHE A;");
-        pigServer.registerQuery("STORE A INTO 'output' using mock.Storage;");
+        pigServer.registerQuery(query);
         pigServer.executeBatch();
 
         System.out.println("After first query: " + data.get("output"));
