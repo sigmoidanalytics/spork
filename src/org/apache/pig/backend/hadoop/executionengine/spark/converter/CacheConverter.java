@@ -60,8 +60,18 @@ public class CacheConverter implements POConverter<Tuple, Tuple, POCache> {
         StringBuilder sb = new StringBuilder();
         for (PhysicalOperator operator : preds) {
             if (operator instanceof POLoad) {
-                sb.append("LOAD: " + ((POLoad) operator).getLFile().getFileName());
+                // Load operators are equivalent if the file is the same
+                // and the loader is the same
+                // Potential problems down the line:
+                // * not checking LoadFunc arguments
+                sb.append("LOAD: " + ((POLoad) operator).getLFile().getFileName()
+                        + ((POLoad) operator).getLoadFunc());
             } else if (operator instanceof POForEach) {
+                // We consider ForEach operators to be equivalent if their inner plans
+                // have the same explain plan after dropping scope markers.
+                // Potential problems downstream:
+                // * not checking for Nondeterministic UDFs
+                // * jars / class defs changing under us
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 for (PhysicalPlan innerPlan : ((POForEach) operator).getInputPlans()) {
                     PlanPrinter<PhysicalOperator, PhysicalPlan> pp =
