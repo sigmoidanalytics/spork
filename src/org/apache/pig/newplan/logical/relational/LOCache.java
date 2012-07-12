@@ -53,7 +53,7 @@ public class LOCache extends LogicalRelationalOperator {
     @Override
     public boolean isEqual(Operator operator) throws FrontendException {
         return operator instanceof LOCache &&
-                ((LOCache) operator).getPredecessor().equals(getPredecessor());
+                ((LOCache) operator).getPredecessor().isEqual(getPredecessor());
     }
 
     public LogicalRelationalOperator getPredecessor() throws FrontendException {

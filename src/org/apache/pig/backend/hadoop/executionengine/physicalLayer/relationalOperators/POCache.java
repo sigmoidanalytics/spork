@@ -31,9 +31,7 @@ import org.apache.pig.impl.plan.VisitorException;
 import org.apache.pig.pen.util.ExampleTuple;
 
 public class POCache extends PhysicalOperator {
-       /**
-     *
-     */
+
     private static final long serialVersionUID = 1L;
 
     // Counts for outputs processed
