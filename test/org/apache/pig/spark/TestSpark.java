@@ -28,9 +28,14 @@ public class TestSpark {
         org.apache.log4j.Logger.getLogger("org.apache.pig.backend.hadoop.executionengine.spark").setLevel(Level.DEBUG);
     }
 
+    private PigServer newPigServer() throws ExecException {
+        PigServer pigServer = new PigServer(MODE);
+        return pigServer;
+    }
+
     @Test
     public void testLoadStore() throws Exception {
-        PigServer pigServer = new PigServer(MODE);
+        PigServer pigServer = newPigServer();
         Data data = Storage.resetData(pigServer);
         data.set("input",
                 tuple("test1"),
@@ -50,7 +55,7 @@ public class TestSpark {
 
     @Test
     public void testGroupBy() throws Exception {
-        PigServer pigServer = new PigServer(MODE);
+        PigServer pigServer = newPigServer();
         Data data = Storage.resetData(pigServer);
         data.set("input",
                 tuple("foo", "key1", "test1"),
@@ -86,7 +91,7 @@ public class TestSpark {
 
     @Test
     public void testGroupByFlatten() throws Exception {
-        PigServer pigServer = new PigServer(MODE);
+        PigServer pigServer = newPigServer();
         Data data = Storage.resetData(pigServer);
         data.set("input",
                 tuple("test1"),
@@ -105,7 +110,7 @@ public class TestSpark {
 
     @Test
     public void testCount() throws Exception {
-        PigServer pigServer = new PigServer(MODE);
+        PigServer pigServer = newPigServer();
         Data data = Storage.resetData(pigServer);
         data.set("input",
                 tuple("test1"),
@@ -140,7 +145,7 @@ public class TestSpark {
 
     @Test
     public void testForEach() throws Exception {
-        PigServer pigServer = new PigServer(MODE);
+        PigServer pigServer = newPigServer();
         Data data = Storage.resetData(pigServer);
         data.set("input",
                 tuple("1"),
@@ -159,7 +164,7 @@ public class TestSpark {
 
     @Test
     public void testForEachFlatten() throws Exception {
-        PigServer pigServer = new PigServer(MODE);
+        PigServer pigServer = newPigServer();
         Data data = Storage.resetData(pigServer);
         data.set("input",
                 tuple(bag(tuple("1"), tuple("2"), tuple("3"))),
@@ -194,7 +199,7 @@ public class TestSpark {
 
     @Test
     public void testFilter() throws Exception {
-        PigServer pigServer = new PigServer(MODE);
+        PigServer pigServer = newPigServer();
         Data data = Storage.resetData(pigServer);
         data.set("input",
                 tuple("1"),
@@ -213,7 +218,7 @@ public class TestSpark {
 
     @Test
     public void testCoGroup() throws Exception {
-        PigServer pigServer = new PigServer(MODE);
+        PigServer pigServer = newPigServer();
         Data data = Storage.resetData(pigServer);
         data.set("input1",
                 tuple("foo", 1, "a"),
@@ -241,7 +246,7 @@ public class TestSpark {
 
     @Test
     public void testJoin() throws Exception {
-        PigServer pigServer = new PigServer(MODE);
+        PigServer pigServer = newPigServer();
         Data data = Storage.resetData(pigServer);
         data.set("input1",
                 tuple(1, "a"),
@@ -275,7 +280,7 @@ public class TestSpark {
      */
     @Test
     public void testCaching() throws Exception {
-        PigServer pigServer = new PigServer(MODE);
+        PigServer pigServer = newPigServer();
 
         Data data = Storage.resetData(pigServer);
         data.set("input",
