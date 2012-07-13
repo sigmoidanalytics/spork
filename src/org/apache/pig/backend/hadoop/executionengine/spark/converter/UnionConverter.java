@@ -17,7 +17,6 @@ public class UnionConverter implements POConverter<Tuple, Tuple, POUnion> {
     private final SparkContext sc;
 
     public UnionConverter(SparkContext sc) {
-        super();
         this.sc = sc;
     }
 

@@ -290,6 +290,127 @@ public class TestSpark {
     }
 
     @Test
+    public void testExplicitSPLIT() throws Exception {
+        PigServer pigServer = newPigServer();
+        Data data = Storage.resetData(pigServer);
+        data.set("input",
+                tuple("1", 2, "foo"),
+                tuple("2", 3, "bar"),
+                tuple("2", 1, "bar"),
+                tuple("1", 4, "foo"));
+
+        pigServer.setBatchOn();
+        pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
+        pigServer.registerQuery("SPLIT A INTO B IF $0 == '1', C IF $0 == '2';");
+        pigServer.registerQuery("STORE B INTO 'output1' using mock.Storage;");
+        pigServer.registerQuery("STORE C INTO 'output2' using mock.Storage;");
+        pigServer.executeBatch();
+
+        assertEquals(
+                Arrays.asList(
+                        tuple("1", 2, "foo"),
+                        tuple("1", 4, "foo")
+                        ),
+                sortByIndex(data.get("output1"), 0));
+        assertEquals(
+                Arrays.asList(
+                        tuple("2", 3, "bar"),
+                        tuple("2", 1, "bar")
+                        ),
+                sortByIndex(data.get("output2"), 0));
+    }
+
+    @Test
+    public void testExplicitSPLITWithDistinct() throws Exception {
+        PigServer pigServer = newPigServer();
+        Data data = Storage.resetData(pigServer);
+        data.set("input",
+                tuple("1", 2, "foo"),
+                tuple("2", 3, "bar"),
+                tuple("2", 1, "bar"),
+                tuple("1", 4, "foo"));
+
+        pigServer.setBatchOn();
+        pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
+        pigServer.registerQuery("B = DISTINCT A;");
+        pigServer.registerQuery("SPLIT B INTO C IF $0 == '1', D IF $0 == '2';");
+        pigServer.registerQuery("E = DISTINCT C;");
+        pigServer.registerQuery("F = DISTINCT D;");
+        pigServer.registerQuery("STORE E INTO 'output1' using mock.Storage;");
+        pigServer.registerQuery("STORE F INTO 'output2' using mock.Storage;");
+        pigServer.executeBatch();
+
+        assertEquals(
+                Arrays.asList(
+                        tuple("1", 2, "foo"),
+                        tuple("1", 4, "foo")
+                        ),
+                sortByIndex(data.get("output1"), 1));
+        assertEquals(
+                Arrays.asList(
+                        tuple("2", 1, "bar"),
+                        tuple("2", 3, "bar")
+                        ),
+                sortByIndex(data.get("output2"),1));
+    }
+
+    @Test
+    public void testImplicitSPLIT() throws Exception {
+        PigServer pigServer = newPigServer();
+        Data data = Storage.resetData(pigServer);
+        data.set("input",
+                tuple("1", 2, "foo"),
+                tuple("2", 3, "bar"),
+                tuple("2", 1, "bar"),
+                tuple("1", 4, "foo"));
+
+        pigServer.setBatchOn();
+        pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
+        pigServer.registerQuery("B = FILTER A BY $0 == '1';");
+        pigServer.registerQuery("C = FILTER A BY $0 == '2';");
+        pigServer.registerQuery("STORE B INTO 'output1' using mock.Storage;");
+        pigServer.registerQuery("STORE C INTO 'output2' using mock.Storage;");
+        pigServer.executeBatch();
+
+        assertEquals(
+                Arrays.asList(
+                        tuple("1", 2, "foo"),
+                        tuple("1", 4, "foo")
+                        ),
+                sortByIndex(data.get("output1"), 0));
+        assertEquals(
+                Arrays.asList(
+                        tuple("2", 3, "bar"),
+                        tuple("2", 1, "bar")
+                        ),
+                sortByIndex(data.get("output2"), 0));
+    }
+
+    @Test
+    public void testOrderBy() throws Exception {
+        PigServer pigServer = newPigServer();
+        Data data = Storage.resetData(pigServer);
+        data.set("input",
+                tuple("1", 2, "foo"),
+                tuple("2", 3, "foo"),
+                tuple("3", 1, "foo"),
+                tuple("1", 4, "foo"));
+
+        pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
+        pigServer.registerQuery("B = ORDER A BY $1;");
+        pigServer.registerQuery("STORE B INTO 'output' using mock.Storage;");
+
+        assertEquals(
+                Arrays.asList(
+                        tuple("3", 1, "foo"),
+                        tuple("1", 2, "foo"),
+                        tuple("2", 3, "foo"),
+                        tuple("1", 4, "foo")
+                        ),
+                sortByIndex(data.get("output"), 0));
+    }
+
+    @Test
     public void testLimit() throws Exception {
         PigServer pigServer = newPigServer();
         Data data = Storage.resetData(pigServer);
@@ -349,7 +470,9 @@ public class TestSpark {
                 tuple("1"),
                 tuple("2"),
                 tuple("3"),
-                tuple("4"));
+                tuple("4"),
+                tuple("2"),
+                tuple("3"));
         data.set("input2",
                 tuple("5"),
                 tuple("6"),
