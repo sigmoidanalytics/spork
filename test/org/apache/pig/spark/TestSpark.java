@@ -626,6 +626,14 @@ public class TestSpark {
     }
 
     @Test
+    public void testCachingGroup() throws Exception {
+        testCaching("A = LOAD 'input' using mock.Storage; " +
+                "A = GROUP A by LOWER($0); " +
+                "CACHE A; " +
+                "STORE A INTO 'output' using mock.Storage;");
+    }
+
+    @Test
     public void testIgnoreWrongUDFCache() throws Exception {
         testIgnoreCache(
                 "A = LOAD 'input' using mock.Storage; " +

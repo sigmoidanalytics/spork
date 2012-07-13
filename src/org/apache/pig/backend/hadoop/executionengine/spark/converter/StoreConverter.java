@@ -16,12 +16,13 @@ import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.util.ObjectSerializer;
-import org.python.google.common.collect.Lists;
 
 import scala.Tuple2;
 import scala.runtime.AbstractFunction1;
 import spark.PairRDDFunctions;
 import spark.RDD;
+
+import com.google.common.collect.Lists;
 
 /**
  * Converter that takes a POStore and stores it's content.

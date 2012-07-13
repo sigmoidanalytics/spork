@@ -49,10 +49,11 @@ import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.plan.OperatorKey;
 import org.apache.pig.tools.pigstats.PigStats;
 import org.apache.pig.tools.pigstats.SparkStats;
-import org.python.google.common.collect.Lists;
 
 import spark.RDD;
 import spark.SparkContext;
+
+import com.google.common.collect.Lists;
 
 /**
  * @author billg
@@ -192,7 +193,7 @@ public class SparkLauncher extends Launcher {
         }
 
         LOG.info("Converting operator " + physicalOperator.getClass().getSimpleName()+" "+physicalOperator);
-        nextRDD = (RDD<Tuple>)converter.convert(predecessorRdds, physicalOperator);
+        nextRDD = converter.convert(predecessorRdds, physicalOperator);
 
         if (POStore.class.equals(physicalOperator.getClass())) {
             return;
