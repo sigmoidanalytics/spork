@@ -40,8 +40,6 @@ public class SortConverter implements POConverter<Tuple, Tuple, POSort> {
                         SparkUtil.getManifest(Tuple.class),
                         SparkUtil.getManifest(Object.class)
                 ).sortByKey(true);
-        // problem
-        // result is sorted but mapping the output shuffles it ... :(
         return sorted.mapPartitions(TO_VALUE_FUCTION, SparkUtil.getManifest(Tuple.class));
     }
 
