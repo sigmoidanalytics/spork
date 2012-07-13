@@ -301,7 +301,11 @@ public class POSort extends PhysicalOperator {
 		return res;
 	}
 
-	@Override
+	public Comparator<Tuple> getmComparator() {
+        return mComparator;
+    }
+
+    @Override
 	public boolean supportsMultipleInputs() {
 
 		return false;
@@ -382,7 +386,7 @@ public class POSort extends PhysicalOperator {
             requestedParallelism, null, clonePlans, cloneAsc, cloneFunc);
     }
 
-   
+
     public Tuple illustratorMarkup(Object in, Object out, int eqClassIndex) {
         if(illustrator != null) {
           illustrator.getEquivalenceClasses().get(eqClassIndex).add((Tuple) in);

@@ -136,7 +136,7 @@ public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlo
                 for (Seq<Tuple> bag : bagsList) {
                     Iterator<Tuple> iterator = JavaConversions.asJavaCollection(bag).iterator();
                     final int index = i;
-                    tupleIterators.add(new IteratorTransform<Tuple>(iterator) {
+                    tupleIterators.add(new IteratorTransform<Tuple, Tuple>(iterator) {
                         @Override
                         protected Tuple transform(Tuple next) {
                             try {
@@ -160,32 +160,6 @@ public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlo
             } catch(Exception e) {
                 throw new RuntimeException(e);
             }
-        }
-    }
-
-    abstract private static class IteratorTransform<T> implements Iterator<T> {
-        private Iterator<T> delegate;
-
-        public IteratorTransform(Iterator<T> delegate) {
-            super();
-            this.delegate = delegate;
-        }
-
-        @Override
-        public boolean hasNext() {
-            return delegate.hasNext();
-        }
-
-        @Override
-        public T next() {
-            return transform(delegate.next());
-        }
-
-        abstract protected T transform(T next);
-
-        @Override
-        public void remove() {
-            delegate.remove();
         }
     }
 
