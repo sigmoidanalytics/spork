@@ -25,6 +25,7 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOpe
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLoad;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLocalRearrange;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPackage;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSort;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSplit;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POUnion;
@@ -39,6 +40,7 @@ import org.apache.pig.backend.hadoop.executionengine.spark.converter.LoadConvert
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.LocalRearrangeConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.POConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.PackageConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.SortConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.SplitConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.StoreConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.UnionConverter;
@@ -101,6 +103,7 @@ public class SparkLauncher extends Launcher {
         convertMap.put(POLimit.class, new LimitConverter());
         convertMap.put(PODistinct.class, new DistinctConverter());
         convertMap.put(POUnion.class, new UnionConverter(sparkContext));
+        convertMap.put(POSort.class, new SortConverter());
         convertMap.put(POSplit.class, new SplitConverter());
 
         Map<OperatorKey, RDD<Tuple>> rdds = new HashMap<OperatorKey, RDD<Tuple>>();
