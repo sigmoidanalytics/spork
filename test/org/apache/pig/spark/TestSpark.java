@@ -407,7 +407,7 @@ public class TestSpark {
                         tuple("2", 3, "foo"),
                         tuple("1", 4, "foo")
                         ),
-                sortByIndex(data.get("output"), 0));
+                data.get("output"));
     }
 
     @Test
