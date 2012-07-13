@@ -6,9 +6,6 @@ import java.util.List;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.io.Text;
-import org.apache.pig.backend.executionengine.ExecException;
-import org.apache.pig.backend.hadoop.executionengine.physicalLayer.Result;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.PODistinct;
 import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.data.Tuple;
@@ -16,14 +13,13 @@ import org.apache.pig.data.Tuple;
 import scala.Function1;
 import scala.Function2;
 import scala.Tuple2;
-import scala.collection.Iterator;
-import scala.collection.JavaConversions;
 import scala.reflect.ClassManifest;
 import scala.runtime.AbstractFunction1;
 import scala.runtime.AbstractFunction2;
 import spark.PairRDDFunctions;
 import spark.RDD;
 
+@SuppressWarnings({ "serial"})
 public class DistinctConverter implements POConverter<Tuple, Tuple, PODistinct> {
     private static final Log LOG = LogFactory.getLog(DistinctConverter.class);
 
@@ -37,7 +33,7 @@ public class DistinctConverter implements POConverter<Tuple, Tuple, PODistinct> 
         SparkUtil.assertPredecessorSize(predecessors, poDistinct, 1);
         RDD<Tuple> rdd = predecessors.get(0);
 
-        ClassManifest<Tuple2<Tuple, Object>> tuple2ClassManifest = (ClassManifest<Tuple2<Tuple, Object>>)(Object)SparkUtil.getManifest(Tuple2.class);
+        ClassManifest<Tuple2<Tuple, Object>> tuple2ClassManifest = SparkUtil.<Tuple, Object>getTuple2Manifest();
 
         RDD<Tuple2<Tuple, Object>> rddPairs = rdd.map(TO_KEY_VALUE_FUNCTION, tuple2ClassManifest);
         PairRDDFunctions<Tuple, Object> pairRDDFunctions =
@@ -47,7 +43,6 @@ public class DistinctConverter implements POConverter<Tuple, Tuple, PODistinct> 
     }
 
     private static final class ToKeyValueFunction extends AbstractFunction1<Tuple,Tuple2<Tuple, Object>> implements Serializable {
-
         @Override
         public Tuple2<Tuple, Object> apply(Tuple t) {
             LOG.debug("DistinctConverter.ToKeyValueFunction in "+t);

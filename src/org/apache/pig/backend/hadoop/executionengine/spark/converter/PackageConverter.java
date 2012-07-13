@@ -12,17 +12,15 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.POStatus;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.Result;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPackage;
 import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.POConverter;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.data.TupleFactory;
 import org.apache.pig.impl.io.NullableTuple;
 import org.apache.pig.impl.io.PigNullableWritable;
 
-import scala.collection.JavaConversions;
-import scala.collection.Seq;
 import scala.runtime.AbstractFunction1;
 import spark.RDD;
 
+@SuppressWarnings({ "serial"})
 public class PackageConverter implements POConverter<Tuple, Tuple, POPackage> {
     private static final Log LOG = LogFactory.getLog(PackageConverter.class);
 
@@ -37,7 +35,6 @@ public class PackageConverter implements POConverter<Tuple, Tuple, POPackage> {
 
     private static class PackageFunction extends AbstractFunction1<Tuple, Tuple> implements Serializable {
 
-        private static TupleFactory tf = TupleFactory.getInstance();
         private final POPackage physicalOperator;
 
         public PackageFunction(POPackage physicalOperator) {

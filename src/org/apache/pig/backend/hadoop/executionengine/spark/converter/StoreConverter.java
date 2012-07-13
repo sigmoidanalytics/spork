@@ -1,5 +1,10 @@
 package org.apache.pig.backend.hadoop.executionengine.spark.converter;
 
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.pig.StoreFuncInterface;
@@ -12,22 +17,18 @@ import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.util.ObjectSerializer;
 import org.python.google.common.collect.Lists;
-import scala.Function1;
+
 import scala.Tuple2;
 import scala.runtime.AbstractFunction1;
 import spark.PairRDDFunctions;
 import spark.RDD;
-
-import java.io.IOException;
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Converter that takes a POStore and stores it's content.
  *
  * @author billg
  */
+@SuppressWarnings({ "serial"})
 public class StoreConverter implements POConverter<Tuple, Tuple2<Text, Tuple>, POStore> {
 
     private static final FromTupleFunction FROM_TUPLE_FUNCTION = new FromTupleFunction();
@@ -43,8 +44,7 @@ public class StoreConverter implements POConverter<Tuple, Tuple2<Text, Tuple>, P
         SparkUtil.assertPredecessorSize(predecessors, physicalOperator, 1);
         RDD<Tuple> rdd = predecessors.get(0);
         // convert back to KV pairs
-        RDD<Tuple2<Text, Tuple>> rddPairs =
-                (RDD<Tuple2<Text, Tuple>>)((Object)rdd.map(FROM_TUPLE_FUNCTION, SparkUtil.getManifest(Tuple2.class)));
+        RDD<Tuple2<Text, Tuple>> rddPairs = rdd.map(FROM_TUPLE_FUNCTION, SparkUtil.<Text, Tuple>getTuple2Manifest());
         PairRDDFunctions<Text, Tuple> pairRDDFunctions = new PairRDDFunctions<Text, Tuple>(rddPairs,
                 SparkUtil.getManifest(Text.class), SparkUtil.getManifest(Tuple.class));
 
@@ -72,13 +72,13 @@ public class StoreConverter implements POConverter<Tuple, Tuple2<Text, Tuple>, P
         return poStore;
     }
 
-    private static class FromTupleFunction extends AbstractFunction1<Tuple, Tuple2>
-            implements Function1<Tuple, Tuple2>, Serializable {
+    private static class FromTupleFunction extends AbstractFunction1<Tuple, Tuple2<Text, Tuple>>
+            implements Serializable {
 
         private static Text EMPTY_TEXT = new Text();
 
-        public Tuple2 apply(Tuple v1) {
-            return new Tuple2(EMPTY_TEXT, v1);
+        public Tuple2<Text, Tuple> apply(Tuple v1) {
+            return new Tuple2<Text, Tuple>(EMPTY_TEXT, v1);
         }
     }
 }

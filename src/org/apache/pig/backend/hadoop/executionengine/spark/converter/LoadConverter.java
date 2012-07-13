@@ -33,6 +33,7 @@ import java.util.List;
  *
  * @author billg
  */
+@SuppressWarnings({ "serial"})
 public class LoadConverter implements POConverter<Tuple, Tuple, POLoad> {
 
     private static final ToTupleFunction TO_TUPLE_FUNCTION = new ToTupleFunction();

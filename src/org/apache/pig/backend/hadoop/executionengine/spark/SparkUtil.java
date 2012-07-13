@@ -9,6 +9,7 @@ import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.util.ObjectSerializer;
 import org.apache.pig.impl.util.UDFContext;
 
+import scala.Tuple2;
 import scala.collection.JavaConversions;
 import scala.collection.Seq;
 import scala.reflect.ClassManifest;
@@ -25,6 +26,11 @@ public class SparkUtil {
 
     public static <T> ClassManifest<T> getManifest(Class<T> clazz) {
         return ClassManifest$.MODULE$.fromClass(clazz);
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <K,V> ClassManifest<Tuple2<K, V>> getTuple2Manifest() {
+        return (ClassManifest<Tuple2<K, V>>)(Object)getManifest(Tuple2.class);
     }
 
     public static JobConf newJobConf(PigContext pigContext) throws IOException {
@@ -63,4 +69,5 @@ public class SparkUtil {
         }
         return parallelism;
     }
+
 }

@@ -1,11 +1,11 @@
 package org.apache.pig.backend.hadoop.executionengine.spark.converter;
 
-import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
-import spark.RDD;
-
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.List;
+
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
+
+import spark.RDD;
 
 /**
  * Given an RDD and a PhysicalOperater, and implementation of this class can convert the RRD to

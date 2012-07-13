@@ -23,6 +23,7 @@ import spark.CoGroupedRDD;
 import spark.HashPartitioner;
 import spark.RDD;
 
+@SuppressWarnings({ "serial"})
 public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlobalRearrange> {
     private static final Log LOG = LogFactory.getLog(GlobalRearrangeConverter.class);
 
@@ -51,7 +52,7 @@ public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlo
         } else {
             //COGROUP
             // each pred returns (index, key, value)
-            ClassManifest<Tuple2<Object, Tuple>> tuple2ClassManifest = (ClassManifest<Tuple2<Object, Tuple>>)(Object)SparkUtil.getManifest(Tuple2.class);
+            ClassManifest<Tuple2<Object, Tuple>> tuple2ClassManifest = SparkUtil.<Object, Tuple>getTuple2Manifest();
 
             List<RDD<Tuple2<Object, Tuple>>> rddPairs = Lists.newArrayList();
             for (RDD<Tuple> rdd : predecessors) {
