@@ -15,6 +15,7 @@ import scala.collection.JavaConversions;
 import scala.runtime.AbstractFunction1;
 import spark.RDD;
 
+@SuppressWarnings({ "serial"})
 public class LimitConverter implements POConverter<Tuple, Tuple, POLimit> {
 
     @Override

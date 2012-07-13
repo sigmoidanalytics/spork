@@ -18,6 +18,7 @@ import spark.RDD;
  * Convert that is able to convert an RRD to another RRD using a POForEach
  * @author billg
  */
+@SuppressWarnings({ "serial"})
 public class ForEachConverter implements POConverter<Tuple, Tuple, POForEach> {
 
     @Override
