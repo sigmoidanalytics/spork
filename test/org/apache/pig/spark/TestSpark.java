@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
 import java.util.Iterator;
@@ -247,6 +248,25 @@ public class TestSpark {
         assertEquals(
                 Arrays.asList(tuple("1"), tuple("1")),
                 data.get("output"));
+    }
+
+    @Test
+    public void testDistinct() throws Exception {
+        PigServer pigServer = newPigServer();
+        Data data = Storage.resetData(pigServer);
+        data.set("input",
+                tuple("1"),
+                tuple("2"),
+                tuple("3"),
+                tuple("1"));
+
+        pigServer.registerQuery("A = LOAD 'input' using mock.Storage;");
+        pigServer.registerQuery("B = DISTINCT A;");
+        pigServer.registerQuery("STORE B INTO 'output' using mock.Storage;");
+
+        assertEquals(
+                Arrays.asList(tuple("1"), tuple("2"), tuple("3")),
+                sortByIndex(data.get("output"), 0));
     }
 
     @Test

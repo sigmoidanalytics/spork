@@ -1,17 +1,17 @@
 package org.apache.pig.backend.hadoop.executionengine.spark.converter;
 
+import java.io.Serializable;
+import java.util.List;
+
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.POStatus;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.Result;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POFilter;
 import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.data.Tuple;
-import scala.Function1;
+
 import scala.runtime.AbstractFunction1;
 import spark.RDD;
-
-import java.io.Serializable;
-import java.util.List;
 
 /**
  * Converter that converts an RDD to a filtered RRD using POFilter
@@ -24,12 +24,12 @@ public class FilterConverter implements POConverter<Tuple, Tuple, POFilter> {
     public RDD<Tuple> convert(List<RDD<Tuple>> predecessors, POFilter physicalOperator) {
         SparkUtil.assertPredecessorSize(predecessors, physicalOperator, 1);
         RDD<Tuple> rdd = predecessors.get(0);
-        Function1 filterFunction = new FilterFunction(physicalOperator);
+        FilterFunction filterFunction = new FilterFunction(physicalOperator);
         return rdd.filter(filterFunction);
     }
 
-    private static class FilterFunction extends AbstractFunction1<Tuple, Boolean>
-            implements Function1<Tuple, Boolean>, Serializable {
+    private static class FilterFunction extends AbstractFunction1<Tuple, Object>
+            implements Serializable {
 
         private POFilter poFilter;
 

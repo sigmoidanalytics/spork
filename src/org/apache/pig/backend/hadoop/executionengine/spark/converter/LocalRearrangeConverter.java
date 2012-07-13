@@ -11,16 +11,15 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.POStatus;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.Result;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLocalRearrange;
 import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.POConverter;
 import org.apache.pig.data.Tuple;
-import org.apache.pig.data.TupleFactory;
 
 import scala.runtime.AbstractFunction1;
 import spark.RDD;
 
+@SuppressWarnings({ "serial"})
 public class LocalRearrangeConverter implements POConverter<Tuple, Tuple, POLocalRearrange> {
     private static final Log LOG = LogFactory.getLog(GlobalRearrangeConverter.class);
-    
+
     @Override
     public RDD<Tuple> convert(List<RDD<Tuple>> predecessors, POLocalRearrange physicalOperator)
             throws IOException {
@@ -28,12 +27,11 @@ public class LocalRearrangeConverter implements POConverter<Tuple, Tuple, POLoca
         RDD<Tuple> rdd = predecessors.get(0);
         // call local rearrange to get key and value
         return rdd.map(new LocalRearrangeFunction(physicalOperator), SparkUtil.getManifest(Tuple.class));
-        
+
     }
-    
+
     private static class LocalRearrangeFunction extends AbstractFunction1<Tuple, Tuple> implements Serializable {
-        
-        private static TupleFactory tf = TupleFactory.getInstance();
+
         private final POLocalRearrange physicalOperator;
 
         public LocalRearrangeFunction(POLocalRearrange physicalOperator) {
@@ -56,7 +54,8 @@ public class LocalRearrangeConverter implements POConverter<Tuple, Tuple, POLoca
                 case POStatus.STATUS_OK:
                     // (index, key, value without keys)
                     Tuple resultTuple = (Tuple)result.result;
-                    LOG.debug("LocalRearrangeFunction out "+resultTuple);
+                    if (LOG.isDebugEnabled())
+                        LOG.debug("LocalRearrangeFunction out "+resultTuple);
                     return resultTuple;
                 default:
                     throw new RuntimeException("Unexpected response code from operator "+physicalOperator+" : " + result);

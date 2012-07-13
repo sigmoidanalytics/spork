@@ -16,6 +16,7 @@ import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.POPack
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POCache;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.PODistinct;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POFilter;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POForEach;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POGlobalRearrange;
@@ -25,6 +26,7 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOpe
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPackage;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.util.PlanHelper;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.DistinctConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.LimitConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.POConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.CacheConverter;
@@ -92,6 +94,7 @@ public class SparkLauncher extends Launcher {
         convertMap.put(POLocalRearrange.class,  new LocalRearrangeConverter());
         convertMap.put(POGlobalRearrange.class, new GlobalRearrangeConverter());
         convertMap.put(POLimit.class, new LimitConverter());
+        convertMap.put(PODistinct.class, new DistinctConverter());
 
         Map<OperatorKey, RDD<Tuple>> rdds = new HashMap<OperatorKey, RDD<Tuple>>();
 
@@ -132,7 +135,7 @@ public class SparkLauncher extends Launcher {
                     throw new PigException("MESOS_NATIVE_LIBRARY is not set");
                 }
             }
-            
+
             // Tell Spark to use Mesos in coarse-grained mode (only affects Spark 0.6+; no impact on others)
             System.setProperty("spark.mesos.coarse", "true");
 

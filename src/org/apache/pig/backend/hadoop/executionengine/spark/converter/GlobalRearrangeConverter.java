@@ -23,6 +23,7 @@ import spark.CoGroupedRDD;
 import spark.HashPartitioner;
 import spark.RDD;
 
+@SuppressWarnings({ "serial"})
 public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlobalRearrange> {
     private static final Log LOG = LogFactory.getLog(GlobalRearrangeConverter.class);
 
@@ -39,12 +40,9 @@ public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlo
     public RDD<Tuple> convert(List<RDD<Tuple>> predecessors,
             POGlobalRearrange physicalOperator) throws IOException {
         SparkUtil.assertPredecessorSizeGreaterThan(predecessors, physicalOperator, 0);
-        int parallelism = physicalOperator.getRequestedParallelism();
-        if (parallelism <= 0) {
-            // Parallelism wasn't set in Pig, so set it to whatever Spark thinks is reasonable.
-            parallelism = predecessors.get(0).context().defaultParallelism();
-        }
-        LOG.info("Parallelism for Spark groupBy: " + parallelism);
+        int parallelism = SparkUtil.getParallelism(predecessors, physicalOperator);
+        if (LOG.isDebugEnabled())
+            LOG.info("Parallelism for Spark groupBy: " + parallelism);
         if (predecessors.size() == 1) {
             //GROUP
             return predecessors.get(0)
@@ -55,7 +53,7 @@ public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlo
         } else {
             //COGROUP
             // each pred returns (index, key, value)
-            ClassManifest<Tuple2<Object, Tuple>> tuple2ClassManifest = (ClassManifest<Tuple2<Object, Tuple>>)(Object)SparkUtil.getManifest(Tuple2.class);
+            ClassManifest<Tuple2<Object, Tuple>> tuple2ClassManifest = SparkUtil.<Object, Tuple>getTuple2Manifest();
 
             List<RDD<Tuple2<Object, Tuple>>> rddPairs = Lists.newArrayList();
             for (RDD<Tuple> rdd : predecessors) {
