@@ -45,12 +45,14 @@ public class DistinctConverter implements POConverter<Tuple, Tuple, PODistinct> 
     private static final class ToKeyValueFunction extends AbstractFunction1<Tuple,Tuple2<Tuple, Object>> implements Serializable {
         @Override
         public Tuple2<Tuple, Object> apply(Tuple t) {
-            LOG.debug("DistinctConverter.ToKeyValueFunction in "+t);
+            if (LOG.isDebugEnabled())
+                LOG.debug("DistinctConverter.ToKeyValueFunction in "+t);
             Tuple key = t;
             Object value = null; //value
             // (key, value)
             Tuple2<Tuple, Object> out = new Tuple2<Tuple, Object>(key, value);
-            LOG.debug("DistinctConverter.ToKeyValueFunction out "+out);
+            if (LOG.isDebugEnabled())
+                LOG.debug("DistinctConverter.ToKeyValueFunction out "+out);
             return out;
         }
     }

@@ -41,7 +41,8 @@ public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlo
             POGlobalRearrange physicalOperator) throws IOException {
         SparkUtil.assertPredecessorSizeGreaterThan(predecessors, physicalOperator, 0);
         int parallelism = SparkUtil.getParallelism(predecessors, physicalOperator);
-        LOG.info("Parallelism for Spark groupBy: " + parallelism);
+        if (LOG.isDebugEnabled())
+            LOG.info("Parallelism for Spark groupBy: " + parallelism);
         if (predecessors.size() == 1) {
             //GROUP
             return predecessors.get(0)
