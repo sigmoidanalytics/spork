@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
 
@@ -355,6 +356,14 @@ public class TestSpark {
         testCaching("A = LOAD 'input' using mock.Storage; " +
                 "B = LOAD 'input' using mock.Storage; " +
                 "A = JOIN A by $0, B by LOWER($0); " +
+                "CACHE A; " +
+                "STORE A INTO 'output' using mock.Storage;");
+    }
+
+    @Test
+    public void testCachingGroup() throws Exception {
+        testCaching("A = LOAD 'input' using mock.Storage; " +
+                "A = GROUP A by LOWER($0); " +
                 "CACHE A; " +
                 "STORE A INTO 'output' using mock.Storage;");
     }

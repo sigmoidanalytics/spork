@@ -1,5 +1,10 @@
 package org.apache.pig.backend.hadoop.executionengine.spark.converter;
 
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.pig.StoreFuncInterface;
@@ -11,17 +16,14 @@ import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.util.ObjectSerializer;
-import org.python.google.common.collect.Lists;
+
 import scala.Function1;
 import scala.Tuple2;
 import scala.runtime.AbstractFunction1;
 import spark.PairRDDFunctions;
 import spark.RDD;
 
-import java.io.IOException;
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
+import com.google.common.collect.Lists;
 
 /**
  * Converter that takes a POStore and stores it's content.
@@ -77,6 +79,7 @@ public class StoreConverter implements POConverter<Tuple, Tuple2<Text, Tuple>, P
 
         private static Text EMPTY_TEXT = new Text();
 
+        @Override
         public Tuple2 apply(Tuple v1) {
             return new Tuple2(EMPTY_TEXT, v1);
         }

@@ -12,7 +12,6 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOpe
 import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.data.TupleFactory;
-import org.python.google.common.collect.Lists;
 
 import scala.Tuple2;
 import scala.collection.JavaConversions;
@@ -22,6 +21,8 @@ import scala.runtime.AbstractFunction1;
 import spark.CoGroupedRDD;
 import spark.HashPartitioner;
 import spark.RDD;
+
+import com.google.common.collect.Lists;
 
 public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlobalRearrange> {
     private static final Log LOG = LogFactory.getLog(GlobalRearrangeConverter.class);
@@ -76,6 +77,7 @@ public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlo
 
     private static class GetKeyFunction extends AbstractFunction1<Tuple, Object> implements Serializable {
 
+        @Override
         public Object apply(Tuple t) {
             try {
                 LOG.debug("GetKeyFunction in "+t);
@@ -91,6 +93,7 @@ public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlo
 
     private static class GroupTupleFunction extends AbstractFunction1<Tuple2<Object, Seq<Tuple>>, Tuple> implements Serializable {
 
+        @Override
         public Tuple apply(Tuple2<Object, Seq<Tuple>> v1) {
             try {
                 LOG.debug("GroupTupleFunction in "+v1);

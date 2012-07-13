@@ -1,5 +1,10 @@
 package org.apache.pig.backend.hadoop.executionengine.spark.converter;
 
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.Job;
@@ -14,17 +19,14 @@ import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.io.FileSpec;
 import org.apache.pig.impl.plan.OperatorKey;
 import org.apache.pig.impl.util.ObjectSerializer;
-import org.python.google.common.collect.Lists;
+
 import scala.Function1;
 import scala.Tuple2;
 import scala.runtime.AbstractFunction1;
 import spark.RDD;
 import spark.SparkContext;
 
-import java.io.IOException;
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
+import com.google.common.collect.Lists;
 
 /**
  * Converter that loads data via POLoad and converts it to RRD&lt;Tuple>. Abuses the interface a bit
@@ -62,12 +64,13 @@ public class LoadConverter implements POConverter<Tuple, Tuple, POLoad> {
                 Text.class, Tuple.class, loadJobConf);
 
         // map to get just RDD<Tuple>
-        return (RDD<Tuple>)hadoopRDD.map(TO_TUPLE_FUNCTION, SparkUtil.getManifest(Tuple.class));
+        return hadoopRDD.map(TO_TUPLE_FUNCTION, SparkUtil.getManifest(Tuple.class));
     }
 
     private static class ToTupleFunction extends AbstractFunction1<Tuple2<Text, Tuple>, Tuple>
             implements Function1<Tuple2<Text, Tuple>, Tuple>, Serializable {
 
+        @Override
         public Tuple apply(Tuple2<Text, Tuple> v1) {
             return v1._2();
         }

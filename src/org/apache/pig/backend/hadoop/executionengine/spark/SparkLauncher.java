@@ -1,13 +1,14 @@
 package org.apache.pig.backend.hadoop.executionengine.spark;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.util.*;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.fs.Path;
 import org.apache.pig.PigException;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.Launcher;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRCompiler;
@@ -25,25 +26,26 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOpe
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPackage;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.util.PlanHelper;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.LimitConverter;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.POConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.CacheConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.FilterConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.ForEachConverter;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.LoadConverter;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.StoreConverter;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.LocalRearrangeConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.GlobalRearrangeConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.LimitConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.LoadConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.LocalRearrangeConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.POConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.PackageConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.StoreConverter;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.PigContext;
-import org.apache.pig.impl.io.FileLocalizer;
 import org.apache.pig.impl.plan.OperatorKey;
-import org.apache.pig.tools.pigstats.*;
-import org.python.google.common.collect.Lists;
+import org.apache.pig.tools.pigstats.PigStats;
+import org.apache.pig.tools.pigstats.SparkStats;
 
 import spark.RDD;
 import spark.SparkContext;
+
+import com.google.common.collect.Lists;
 
 /**
  * @author billg
@@ -132,7 +134,7 @@ public class SparkLauncher extends Launcher {
                     throw new PigException("MESOS_NATIVE_LIBRARY is not set");
                 }
             }
-            
+
             // Tell Spark to use Mesos in coarse-grained mode (only affects Spark 0.6+; no impact on others)
             System.setProperty("spark.mesos.coarse", "true");
 
@@ -179,7 +181,7 @@ public class SparkLauncher extends Launcher {
         }
 
         LOG.info("Converting operator " + physicalOperator.getClass().getSimpleName()+" "+physicalOperator);
-        nextRDD = (RDD<Tuple>)converter.convert(predecessorRdds, physicalOperator);
+        nextRDD = converter.convert(predecessorRdds, physicalOperator);
 
         if (POStore.class.equals(physicalOperator.getClass())) {
             return;
