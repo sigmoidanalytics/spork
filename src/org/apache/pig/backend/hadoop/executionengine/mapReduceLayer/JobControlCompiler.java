@@ -25,8 +25,10 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +44,10 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.io.WritableComparator;
+import org.apache.hadoop.mapred.Counters;
+import org.apache.hadoop.mapred.Counters.Counter;
+import org.apache.hadoop.mapred.Counters.Group;
+import org.apache.hadoop.mapred.JobClient;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.JobPriority;
 import org.apache.hadoop.mapred.jobcontrol.Job;
@@ -78,8 +84,11 @@ import org.apache.pig.data.TupleFactory;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.io.FileLocalizer;
 import org.apache.pig.impl.io.FileSpec;
+import org.apache.pig.impl.io.NullableBigDecimalWritable;
+import org.apache.pig.impl.io.NullableBigIntegerWritable;
 import org.apache.pig.impl.io.NullableBooleanWritable;
 import org.apache.pig.impl.io.NullableBytesWritable;
+import org.apache.pig.impl.io.NullableDateTimeWritable;
 import org.apache.pig.impl.io.NullableDoubleWritable;
 import org.apache.pig.impl.io.NullableFloatWritable;
 import org.apache.pig.impl.io.NullableIntWritable;
@@ -90,7 +99,6 @@ import org.apache.pig.impl.io.NullableTuple;
 import org.apache.pig.impl.io.PigNullableWritable;
 import org.apache.pig.impl.plan.DepthFirstWalker;
 import org.apache.pig.impl.plan.OperatorKey;
-import org.apache.pig.impl.plan.OperatorPlan;
 import org.apache.pig.impl.plan.VisitorException;
 import org.apache.pig.impl.util.JarManager;
 import org.apache.pig.impl.util.ObjectSerializer;
@@ -137,6 +145,11 @@ public class JobControlCompiler{
     private static final String REDUCER_ESTIMATOR_KEY = "pig.exec.reducer.estimator";
     private static final String REDUCER_ESTIMATOR_ARG_KEY =  "pig.exec.reducer.estimator.arg";
 
+    public static final String PIG_MAP_COUNTER = "pig.counters.counter_";
+    public static final String PIG_MAP_RANK_NAME = "pig.rank_";
+    public static final String PIG_MAP_SEPARATOR = "_";
+    public HashMap<String, ArrayList<Pair<String,Long>>> globalCounters = new HashMap<String, ArrayList<Pair<String,Long>>>();
+
     /**
      * We will serialize the POStore(s) present in map and reduce in lists in
      * the Hadoop Conf. In the case of Multi stores, we could deduce these from
@@ -152,6 +165,7 @@ public class JobControlCompiler{
     private Map<Job, Pair<List<POStore>, Path>> jobStoreMap;
 
     private Map<Job, MapReduceOper> jobMroMap;
+    private int counterSize;
 
     public JobControlCompiler(PigContext pigContext, Configuration conf) throws IOException {
         this.pigContext = pigContext;
@@ -314,6 +328,8 @@ public class JobControlCompiler{
             if (!completeFailedJobs.contains(job))
             {
                 MapReduceOper mro = jobMroMap.get(job);
+                if (!pigContext.inIllustrator && mro.isCounterOperation())
+                    saveCounters(job,mro.getOperationID());
                 plan.remove(mro);
             }
         }
@@ -322,6 +338,62 @@ public class JobControlCompiler{
         return sizeBefore-sizeAfter;
     }
 
+    /**
+     * Reads the global counters produced by a job on the group labeled with PIG_MAP_RANK_NAME.
+     * Then, it is calculated the cumulative sum, which consists on the sum of previous cumulative
+     * sum plus the previous global counter value.
+     * @param job with the global counters collected.
+     * @param operationID After being collected on global counters (POCounter),
+     * these values are passed via configuration file to PORank, by using the unique
+     * operation identifier
+     */
+    private void saveCounters(Job job, String operationID) {
+        Counters counters;
+        Group groupCounters;
+
+        Long previousValue = 0L;
+        Long previousSum = 0L;
+        ArrayList<Pair<String,Long>> counterPairs;
+
+        try {
+            counters = HadoopShims.getCounters(job);
+            groupCounters = counters.getGroup(getGroupName(counters.getGroupNames()));
+
+            Iterator<Counter> it = groupCounters.iterator();
+            HashMap<Integer,Long> counterList = new HashMap<Integer, Long>();
+
+            while(it.hasNext()) {
+                try{
+                    Counter c = it.next();
+                    counterList.put(Integer.valueOf(c.getDisplayName()), c.getValue());
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
+            counterSize = counterList.size();
+            counterPairs = new ArrayList<Pair<String,Long>>();
+
+            for(int i = 0; i < counterSize; i++){
+                previousSum += previousValue;
+                previousValue = counterList.get(Integer.valueOf(i));
+                counterPairs.add(new Pair<String, Long>(JobControlCompiler.PIG_MAP_COUNTER + operationID + JobControlCompiler.PIG_MAP_SEPARATOR + i, previousSum));
+            }
+
+            globalCounters.put(operationID, counterPairs);
+
+        } catch (Exception e) {
+            String msg = "Error to read counters into Rank operation counterSize "+counterSize;
+            throw new RuntimeException(msg, e);
+        }
+    }
+
+    private String getGroupName(Collection<String> collection) {
+        for (String name : collection) {
+            if (name.contains(PIG_MAP_RANK_NAME))
+                return name;
+        }
+        return null;
+    }
     /**
      * The method that creates the Job corresponding to a MapReduceOper.
      * The assumption is that
@@ -356,6 +428,11 @@ public class JobControlCompiler{
 
         Configuration conf = nwJob.getConfiguration();
 
+        ArrayList<FileSpec> inp = new ArrayList<FileSpec>();
+        ArrayList<List<OperatorKey>> inpTargets = new ArrayList<List<OperatorKey>>();
+        ArrayList<String> inpSignatureLists = new ArrayList<String>();
+        ArrayList<Long> inpLimits = new ArrayList<Long>();
+        ArrayList<POStore> storeLocations = new ArrayList<POStore>();
         Path tmpLocation = null;
 
         // add settings for pig statistics
@@ -388,22 +465,40 @@ public class JobControlCompiler{
         }
 
         try{
+
             //Process the POLoads
-            List<POLoad> lds = PlanHelper.getLoads(mro.mapPlan);
-            setLoadFuncLocation(lds, nwJob);
-            ArrayList<FileSpec> inp = getPigInputs(lds, nwJob);
+            List<POLoad> lds = PlanHelper.getPhysicalOperators(mro.mapPlan, POLoad.class);
 
-            // warning: this call should be moved with caution.
-            // order is important
-            adjustNumReducers(plan, mro, conf, nwJob);
+            if(lds!=null && lds.size()>0){
+                for (POLoad ld : lds) {
+                    LoadFunc lf = ld.getLoadFunc();
+                    lf.setLocation(ld.getLFile().getFileName(), nwJob);
 
-            ArrayList<List<OperatorKey>> inpTargets = getInpTargets(mro, lds);
-            ArrayList<String> inpSignatureLists = getInpSignatures(lds);
-            ArrayList<Long> inpLimits = getinpLimits(lds);
-            ArrayList<POStore> storeLocations = new ArrayList<POStore>();
-            if (!pigContext.inIllustrator) {
-                //Remove the POLoad from the plan
-                removePOLoads(mro, lds);
+                    //Store the inp filespecs
+                    inp.add(ld.getLFile());
+                }
+            }
+
+            adjustNumReducers(plan, mro, nwJob);
+
+            if(lds!=null && lds.size()>0){
+              for (POLoad ld : lds) {
+                    //Store the target operators for tuples read
+                    //from this input
+                    List<PhysicalOperator> ldSucs = mro.mapPlan.getSuccessors(ld);
+                    List<OperatorKey> ldSucKeys = new ArrayList<OperatorKey>();
+                    if(ldSucs!=null){
+                        for (PhysicalOperator operator2 : ldSucs) {
+                            ldSucKeys.add(operator2.getOperatorKey());
+                        }
+                    }
+                    inpTargets.add(ldSucKeys);
+                    inpSignatureLists.add(ld.getSignature());
+                    inpLimits.add(ld.getLimit());
+                    //Remove the POLoad from the plan
+                    if (!pigContext.inIllustrator)
+                        mro.mapPlan.remove(ld);
+                }
             }
 
             if (!pigContext.inIllustrator && pigContext.getExecType() != ExecType.LOCAL)
@@ -468,19 +563,19 @@ public class JobControlCompiler{
             nwJob.setInputFormatClass(PigInputFormat.class);
 
             //Process POStore and remove it from the plan
-            LinkedList<POStore> mapStores = PlanHelper.getStores(mro.mapPlan);
-            LinkedList<POStore> reduceStores = PlanHelper.getStores(mro.reducePlan);
+            LinkedList<POStore> mapStores = PlanHelper.getPhysicalOperators(mro.mapPlan, POStore.class);
+            LinkedList<POStore> reduceStores = PlanHelper.getPhysicalOperators(mro.reducePlan, POStore.class);
 
             for (POStore st: mapStores) {
                 storeLocations.add(st);
                 StoreFuncInterface sFunc = st.getStoreFunc();
-                sFunc.setStoreLocation(st.getSFile().getFileName(), new org.apache.hadoop.mapreduce.Job(nwJob.getConfiguration()));
+                sFunc.setStoreLocation(st.getSFile().getFileName(), nwJob);
             }
 
             for (POStore st: reduceStores) {
                 storeLocations.add(st);
                 StoreFuncInterface sFunc = st.getStoreFunc();
-                sFunc.setStoreLocation(st.getSFile().getFileName(), new org.apache.hadoop.mapreduce.Job(nwJob.getConfiguration()));
+                sFunc.setStoreLocation(st.getSFile().getFileName(), nwJob);
             }
 
             // the OutputFormat we report to Hadoop is always PigOutputFormat
@@ -555,7 +650,7 @@ public class JobControlCompiler{
             setupDistributedCacheForJoin(mro, pigContext, conf);
 
             // Search to see if we have any UDFs that need to pack things into the
-            // distrubted cache.
+            // distributed cache.
             setupDistributedCacheForUdfs(mro, pigContext, conf);
 
             SchemaTupleFrontend.copyAllGeneratedToDistributedCache(pigContext, conf);
@@ -680,6 +775,28 @@ public class JobControlCompiler{
                 nwJob.setGroupingComparatorClass(PigGroupingPartitionWritableComparator.class);
             }
 
+            if (mro.isCounterOperation()) {
+                if (mro.isRowNumber()) {
+                    nwJob.setMapperClass(PigMapReduceCounter.PigMapCounter.class);
+                } else {
+                    nwJob.setReducerClass(PigMapReduceCounter.PigReduceCounter.class);
+                }
+            }
+
+            if(mro.isRankOperation()) {
+                Iterator<String> operationIDs = mro.getRankOperationId().iterator();
+
+                while(operationIDs.hasNext()) {
+                    String operationID = operationIDs.next();
+                    Iterator<Pair<String, Long>> itPairs = globalCounters.get(operationID).iterator();
+                    Pair<String,Long> pair = null;
+                    while(itPairs.hasNext()) {
+                        pair = itPairs.next();
+                        conf.setLong(pair.first, pair.second);
+                    }
+                }
+            }
+
             if (!pigContext.inIllustrator)
             {
                 // unset inputs for POStore, otherwise, map/reduce plan will be unnecessarily deserialized
@@ -734,122 +851,103 @@ public class JobControlCompiler{
         }
     }
 
-    private static ArrayList<Long> getinpLimits(List<POLoad> lds) {
-        ArrayList<Long> inpLimits = new ArrayList<Long>();
-        if(lds!=null && lds.size()>0){
-            for (POLoad ld : lds) {
-                  inpLimits.add(ld.getLimit());
-              }
-          }
-        return inpLimits;
-    }
-
-    private static ArrayList<String> getInpSignatures(List<POLoad> lds) {
-        ArrayList<String> inpSignatureLists = new ArrayList<String>();
-        if(lds!=null && lds.size()>0){
-            for (POLoad ld : lds) {
-                  inpSignatureLists.add(ld.getSignature());
-              }
-          }
-        return inpSignatureLists;
-    }
-
-    private static ArrayList<List<OperatorKey>> getInpTargets(MapReduceOper mro, List<POLoad> lds) {
-        ArrayList<List<OperatorKey>> inpTargets = new ArrayList<List<OperatorKey>>();
-        if(lds!=null && lds.size()>0){
-            for (POLoad ld : lds) {
-                  //Store the target operators for tuples read
-                  //from this input
-                  List<PhysicalOperator> ldSucs = mro.mapPlan.getSuccessors(ld);
-                  List<OperatorKey> ldSucKeys = new ArrayList<OperatorKey>();
-                  if(ldSucs!=null){
-                      for (PhysicalOperator operator2 : ldSucs) {
-                          ldSucKeys.add(operator2.getOperatorKey());
-                      }
-                  }
-                  inpTargets.add(ldSucKeys);
-              }
-          }
-        return inpTargets;
-    }
-
-    private static void removePOLoads(MapReduceOper mro, List<POLoad> lds) {
-        if(lds!=null && lds.size()>0){
-            for (POLoad ld : lds) {
-                mro.mapPlan.remove(ld);
-            }
-        }
-    }
-
-    private static void setLoadFuncLocation(List<POLoad> lds, org.apache.hadoop.mapreduce.Job nwJob) throws IOException {
-        if(lds!=null && lds.size()>0){
-            for (POLoad ld : lds) {
-                LoadFunc lf = ld.getLoadFunc();
-                lf.setLocation(ld.getLFile().getFileName(), nwJob);
-            }
-        }
-    }
-
-    private static ArrayList<FileSpec> getPigInputs(List<POLoad> lds, org.apache.hadoop.mapreduce.Job nwJob) {
-        ArrayList<FileSpec> inp = new ArrayList<FileSpec>();
-        if(lds!=null && lds.size()>0){
-            for (POLoad ld : lds) {
-                //Store the inp filespecs
-                inp.add(ld.getLFile());
-            }
-        }
-        return inp;
-    }
-
-    public void adjustNumReducers(MROperPlan plan, MapReduceOper mro, Configuration conf,
+    /**
+     * Adjust the number of reducers based on the default_parallel, requested parallel and estimated
+     * parallel. For sampler jobs, we also adjust the next job in advance to get its runtime parallel as
+     * the number of partitions used in the sampler.
+     * @param plan the MR plan
+     * @param mro the MR operator
+     * @param nwJob the current job
+     * @throws IOException
+     */
+    public void adjustNumReducers(MROperPlan plan, MapReduceOper mro,
             org.apache.hadoop.mapreduce.Job nwJob) throws IOException {
-        List<PhysicalOperator> loads = mro.mapPlan.getRoots();
-        List<POLoad> lds = new ArrayList<POLoad>();
-        for (PhysicalOperator ld : loads) {
-            lds.add((POLoad)ld);
+        int jobParallelism = calculateRuntimeReducers(mro, nwJob);
+
+        if (mro.isSampler()) {
+            // We need to calculate the final number of reducers of the next job (order-by or skew-join)
+            // to generate the quantfile.
+            MapReduceOper nextMro = plan.getSuccessors(mro).get(0);
+
+            // Here we use the same conf and Job to calculate the runtime #reducers of the next job
+            // which is fine as the statistics comes from the nextMro's POLoads
+            int nPartitions = calculateRuntimeReducers(nextMro, nwJob);
+
+            // set the runtime #reducer of the next job as the #partition
+            ParallelConstantVisitor visitor =
+              new ParallelConstantVisitor(mro.reducePlan, nPartitions);
+            visitor.visit();
         }
+        log.info("Setting Parallelism to " + jobParallelism);
+
+        Configuration conf = nwJob.getConfiguration();
+
+        // set various parallelism into the job conf for later analysis, PIG-2779
+        conf.setInt("pig.info.reducers.default.parallel", pigContext.defaultParallel);
+        conf.setInt("pig.info.reducers.requested.parallel", mro.requestedParallelism);
+        conf.setInt("pig.info.reducers.estimated.parallel", mro.estimatedParallelism);
+
+        // this is for backward compatibility, and we encourage to use runtimeParallelism at runtime
+        mro.requestedParallelism = jobParallelism;
+
+        // finally set the number of reducers
+        conf.setInt("mapred.reduce.tasks", jobParallelism);
+    }
+
+    /**
+     * Calculate the runtime #reducers based on the default_parallel, requested parallel and estimated
+     * parallel, and save it to MapReduceOper's runtimeParallelism.
+     * @return the runtimeParallelism
+     * @throws IOException
+     */
+    private int calculateRuntimeReducers(MapReduceOper mro,
+            org.apache.hadoop.mapreduce.Job nwJob) throws IOException{
+        // we don't recalculate for the same job
+        if (mro.runtimeParallelism != -1) {
+            return mro.runtimeParallelism;
+        }
+
         int jobParallelism = -1;
-        int estimatedParallelism = estimateNumberOfReducers(conf, lds, nwJob);
+
         if (mro.requestedParallelism > 0) {
             jobParallelism = mro.requestedParallelism;
         } else if (pigContext.defaultParallel > 0) {
             jobParallelism = pigContext.defaultParallel;
         } else {
-            jobParallelism = estimatedParallelism;
+            mro.estimatedParallelism = estimateNumberOfReducers(nwJob, mro);
+            if (mro.estimatedParallelism > 0) {
+                jobParallelism = mro.estimatedParallelism;
+            } else {
+                // reducer estimation could return -1 if it couldn't estimate
+                log.info("Could not estimate number of reducers and no requested or default " +
+                         "parallelism set. Defaulting to 1 reducer.");
+                jobParallelism = 1;
+            }
         }
-        // Special case: Skewed Join and Order set parallelism to 1 even when no parallelism is specified.
-        if ((mro.isSkewedJoin() || mro.isGlobalSort()) && jobParallelism == 1) {
-            jobParallelism = estimatedParallelism;
-        }
-        if (mro.isSampler() && jobParallelism == 1) {
-            // Note: this is suboptimal, as the number of reducers communicated to the
-            // sampler is only based on the sampler inputs, meaning, the left side in the case
-            // of a skewed join. Ideally, we'd take into account the right side, as well.
-            ParallelConstantVisitor visitor =
-              new ParallelConstantVisitor(mro.reducePlan, estimatedParallelism);
-            visitor.visit();
-        }
-        log.info("Setting Parallelism to " + jobParallelism);
-        mro.requestedParallelism = jobParallelism;
-        conf.setInt("mapred.reduce.tasks", jobParallelism);
+
+        // save it
+        mro.runtimeParallelism = jobParallelism;
+        return jobParallelism;
     }
 
     /**
      * Looks up the estimator from REDUCER_ESTIMATOR_KEY and invokes it to find the number of
      * reducers to use. If REDUCER_ESTIMATOR_KEY isn't set, defaults to InputSizeReducerEstimator.
-     * @param conf
-     * @param lds
+     * @param job
+     * @param mapReducerOper
      * @throws IOException
      */
-    public static int estimateNumberOfReducers(Configuration conf, List<POLoad> lds,
-                                        org.apache.hadoop.mapreduce.Job job) throws IOException {
+    public static int estimateNumberOfReducers(org.apache.hadoop.mapreduce.Job job,
+                                               MapReduceOper mapReducerOper) throws IOException {
+        Configuration conf = job.getConfiguration();
+
         PigReducerEstimator estimator = conf.get(REDUCER_ESTIMATOR_KEY) == null ?
           new InputSizeReducerEstimator() :
           PigContext.instantiateObjectFromParams(conf,
                   REDUCER_ESTIMATOR_KEY, REDUCER_ESTIMATOR_ARG_KEY, PigReducerEstimator.class);
 
         log.info("Using reducer estimator: " + estimator.getClass().getName());
-        int numberOfReducers = estimator.estimateNumberOfReducers(conf, lds, job);
+        int numberOfReducers = estimator.estimateNumberOfReducers(job, mapReducerOper);
         return numberOfReducers;
     }
 
@@ -952,6 +1050,24 @@ public class JobControlCompiler{
         }
     }
 
+    public static class PigBigIntegerWritableComparator extends PigWritableComparator {
+        public PigBigIntegerWritableComparator() {
+            super(NullableBigIntegerWritable.class);
+        }
+    }
+
+    public static class PigBigDecimalWritableComparator extends PigWritableComparator {
+        public PigBigDecimalWritableComparator() {
+            super(NullableBigDecimalWritable.class);
+        }
+    }
+
+    public static class PigDateTimeWritableComparator extends PigWritableComparator {
+        public PigDateTimeWritableComparator() {
+            super(NullableDateTimeWritable.class);
+        }
+    }
+
     public static class PigCharArrayWritableComparator extends PigWritableComparator {
         public PigCharArrayWritableComparator() {
             super(NullableText.class);
@@ -1008,6 +1124,12 @@ public class JobControlCompiler{
         }
     }
 
+    public static class PigGroupingDateTimeWritableComparator extends WritableComparator {
+        public PigGroupingDateTimeWritableComparator() {
+            super(NullableDateTimeWritable.class, true);
+        }
+    }
+
     public static class PigGroupingCharArrayWritableComparator extends WritableComparator {
         public PigGroupingCharArrayWritableComparator() {
             super(NullableText.class, true);
@@ -1035,6 +1157,18 @@ public class JobControlCompiler{
     public static class PigGroupingBagWritableComparator extends WritableComparator {
         public PigGroupingBagWritableComparator() {
             super(BagFactory.getInstance().newDefaultBag().getClass(), true);
+        }
+    }
+
+    public static class PigGroupingBigIntegerWritableComparator extends WritableComparator {
+        public PigGroupingBigIntegerWritableComparator() {
+            super(NullableBigIntegerWritable.class, true);
+        }
+    }
+
+    public static class PigGroupingBigDecimalWritableComparator extends WritableComparator {
+        public PigGroupingBigDecimalWritableComparator() {
+            super(NullableBigDecimalWritable.class, true);
         }
     }
 
@@ -1083,12 +1217,24 @@ public class JobControlCompiler{
                 job.setSortComparatorClass(PigDoubleRawComparator.class);
                 break;
 
+            case DataType.DATETIME:
+                job.setSortComparatorClass(PigDateTimeRawComparator.class);
+                break;
+
             case DataType.CHARARRAY:
                 job.setSortComparatorClass(PigTextRawComparator.class);
                 break;
 
             case DataType.BYTEARRAY:
                 job.setSortComparatorClass(PigBytesRawComparator.class);
+                break;
+
+            case DataType.BIGINTEGER:
+                job.setSortComparatorClass(PigBigIntegerRawComparator.class);
+                break;
+
+            case DataType.BIGDECIMAL:
+                job.setSortComparatorClass(PigBigDecimalRawComparator.class);
                 break;
 
             case DataType.MAP:
@@ -1122,6 +1268,16 @@ public class JobControlCompiler{
             job.setGroupingComparatorClass(PigGroupingIntWritableComparator.class);
             break;
 
+        case DataType.BIGINTEGER:
+            job.setSortComparatorClass(PigBigIntegerWritableComparator.class);
+            job.setGroupingComparatorClass(PigGroupingBigIntegerWritableComparator.class);
+            break;
+
+        case DataType.BIGDECIMAL:
+            job.setSortComparatorClass(PigBigDecimalWritableComparator.class);
+            job.setGroupingComparatorClass(PigGroupingBigDecimalWritableComparator.class);
+            break;
+
         case DataType.LONG:
             job.setSortComparatorClass(PigLongWritableComparator.class);
             job.setGroupingComparatorClass(PigGroupingLongWritableComparator.class);
@@ -1135,6 +1291,11 @@ public class JobControlCompiler{
         case DataType.DOUBLE:
             job.setSortComparatorClass(PigDoubleWritableComparator.class);
             job.setGroupingComparatorClass(PigGroupingDoubleWritableComparator.class);
+            break;
+
+        case DataType.DATETIME:
+            job.setSortComparatorClass(PigDateTimeWritableComparator.class);
+            job.setGroupingComparatorClass(PigGroupingDateTimeWritableComparator.class);
             break;
 
         case DataType.CHARARRAY:

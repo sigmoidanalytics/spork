@@ -17,6 +17,9 @@
  */
 package org.apache.pig.test;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
+
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -40,17 +43,40 @@ import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.logicalLayer.FrontendException;
 import org.apache.pig.newplan.logical.relational.LogToPhyTranslationVisitor;
 import org.apache.pig.newplan.logical.relational.LogicalPlan;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
 
-import org.junit.BeforeClass;
+import org.apache.pig.test.junit.OrderedJUnit4Runner;
+import org.apache.pig.test.junit.OrderedJUnit4Runner.TestOrder;
+
+import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 
 /**
  *
  * To generate golden files, update generate to true
  *
  */
+@RunWith(OrderedJUnit4Runner.class)
+@TestOrder({
+    "testComplexForeach",
+    "testSort",
+    "testDistinct",
+    "testCogroup",
+    "testArithmetic",
+    "testComparison",
+    "testBinCond",
+    "testGenerate",
+    "testUnion",
+    "testSplit",
+    "testIsNull",
+    "testLimit",
+    "testSortInfoAsc",
+    "testSortInfoAscDesc",
+    "testSortInfoNoOrderBy1",
+    "testSortInfoNoOrderBy2",
+    "testSortInfoOrderByLimit",
+    "testSortInfoMultipleStore",
+    "testSortInfoNoOrderBySchema" })
 public class TestLogToPhyCompiler {
     File A;
     final int MAX_RANGE = 10;
@@ -61,11 +87,10 @@ public class TestLogToPhyCompiler {
     private boolean generate = false;
 
     static PigServer pigServer = null;
-    private static final int MAX_SIZE = 100000;;
-
-
-    @BeforeClass
-    public static void setUp() throws Exception {
+    private static final int MAX_SIZE = 100000;;   
+    
+    @Before
+    public void setUp() throws Exception {
     	pigServer = new PigServer( ExecType.LOCAL, new Properties() );
         pc.connect();
     }
@@ -144,6 +169,8 @@ public class TestLogToPhyCompiler {
                 "testComplexForeach");
     }
 
+ 
+    @Test
     public void testSort() throws Exception {
         checkAgainstGolden(
                 "store (order (load 'a') by $0) into 'output';",
@@ -152,7 +179,7 @@ public class TestLogToPhyCompiler {
                 "testSort");
     }
 
-
+    @Test        
     public void testDistinct() throws Exception {
         checkAgainstGolden(
                 "store( distinct (load 'a') ) into 'output';",
@@ -161,6 +188,7 @@ public class TestLogToPhyCompiler {
                 "testDistinct");
     }
 
+    @Test
     public void testCogroup() throws Exception {
         checkAgainstGolden(
               "A = cogroup (load 'a') by ($0 + $1, $0 - $1), (load 'b') by ($0 + $1, $0 - $1);" +
@@ -170,6 +198,7 @@ public class TestLogToPhyCompiler {
               "testCogroup");
     }
 
+    @Test
     public void testArithmetic() throws Exception {
         checkAgainstGolden(
                 "A = foreach (load 'A') generate $0 + $1 + 5, $0 - 5 - $1, 'hello';" +
@@ -179,6 +208,7 @@ public class TestLogToPhyCompiler {
                 "testArithmetic");
     }
 
+    @Test
     public void testComparison() throws Exception {
         checkAgainstGolden(
                 "A = filter (load 'a' using " + PigStorage.class.getName() + "(':')) by $0 + $1 > ($0 - $1) * (4 / 2);" +

@@ -42,13 +42,13 @@ public abstract class PigScriptParser
 {
 	protected boolean mInteractive;
 	protected ConsoleReader mConsoleReader;
-	
+
 	public void setInteractive(boolean interactive)
 	{
 		mInteractive = interactive;
 		token_source.interactive = interactive;
 	}
-	
+
     public int getLineNumber()
     {
         return jj_input_stream.getBeginLine();
@@ -59,31 +59,33 @@ public abstract class PigScriptParser
         mConsoleReader = c;
         token_source.consoleReader = c;
     }
-    
+
 	abstract public void prompt();
-	
+
 	abstract protected void quit();
-	
+
 	abstract protected void printAliases() throws IOException;
+
+	abstract protected void printClear();
 
 	abstract protected void processFsCommand(String[] cmdTokens) throws IOException;
 
 	abstract protected void processShCommand(String[] cmdTokens) throws IOException;
-	
+
 	abstract protected void processSQLCommand(String cmdTokens) throws IOException;
-	
+
 	abstract protected void processDescribe(String alias) throws IOException;
 
 	abstract protected void processExplain(String alias, String script, boolean isVerbose, String format, String target, List<String> params, List<String> files) throws IOException, ParseException;
-	
+
 	abstract protected void processRegister(String jar) throws IOException;
-	
+
 	abstract protected void processRegister(String path, String scriptingEngine, String namespace) throws IOException, ParseException;
 
 	abstract protected void processSet(String key, String value) throws IOException, ParseException;
-		
+
     abstract protected void processHistory(boolean withNumbers);
-    		
+
 	abstract protected void processCat(String path) throws IOException;
 
 	abstract protected void processCD(String path) throws IOException;
@@ -93,7 +95,7 @@ public abstract class PigScriptParser
 	abstract protected void processKill(String jobid) throws IOException;
 
 	abstract protected void processLS(String path) throws IOException;
-	
+
 	abstract protected void processPWD() throws IOException;
 
 	abstract protected void printHelp();
@@ -105,13 +107,13 @@ public abstract class PigScriptParser
 	abstract protected void processCopyToLocal(String src, String dst) throws IOException;
 
 	abstract protected void processCopyFromLocal(String src, String dst) throws IOException;
-	
+
 	abstract protected void processMkdir(String dir) throws IOException;
-	
+
 	abstract protected void processPig(String cmd) throws IOException;
 
 	abstract protected void processRemove(String path, String opt) throws IOException;
-	
+
 	abstract protected void processIllustrate(String alias, String script, String target, List<String> params, List<String> files) throws IOException, ParseException;
 
 	abstract protected void processScript(String script, boolean batch, List<String> params, List<String> files) throws IOException, ParseException;
@@ -141,6 +143,7 @@ SKIP : {
 
 // commands
 TOKEN: {<CAT: "cat">}
+TOKEN: {<CLEAR: "clear">}
 TOKEN: {<FS: "fs">}
 TOKEN: {<SH:"sh">}
 TOKEN: {<CD: "cd">}
@@ -148,9 +151,12 @@ TOKEN: {<COPY: "cp">}
 TOKEN: {<COPYFROMLOCAL: "copyFromLocal">}
 TOKEN: {<COPYTOLOCAL: "copyToLocal">}
 TOKEN: {<DUMP: "dump">}
+TOKEN: {<DUMP_SHORT: "\\d">}
 TOKEN: {<DESCRIBE: "describe">}
+TOKEN: {<DESCRIBE_SHORT: "\\de">}
 TOKEN: {<ALIASES: "aliases">}
 TOKEN: {<EXPLAIN: "explain">}
+TOKEN: {<EXPLAIN_SHORT: "\\e">}
 TOKEN: {<HELP: "help">}
 TOKEN: {<HISTORY: "history">}
 TOKEN: {<KILL: "kill">}
@@ -159,6 +165,7 @@ TOKEN: {<MOVE: "mv">}
 TOKEN: {<MKDIR: "mkdir">}
 TOKEN: {<PWD: "pwd">}
 TOKEN: {<QUIT: "quit">}
+TOKEN: {<QUIT_SHORT: "\\q">}
 TOKEN: {<REGISTER: "register">}
 TOKEN: {<USING: "using">}
 TOKEN: {<AS: "as"> }
@@ -166,6 +173,7 @@ TOKEN: {<REMOVE: "rm">}
 TOKEN: {<REMOVEFORCE: "rmf">}
 TOKEN: {<SET: "set">}
 TOKEN: {<ILLUSTRATE: "illustrate">}
+TOKEN: {<ILLUSTRATE_SHORT: "\\i">}
 TOKEN: {<RUN: "run">}
 TOKEN: {<EXEC: "exec">}
 TOKEN: {<PARAM: "-param">}
@@ -179,7 +187,7 @@ TOKEN: {<N: "-n">}
 // internal use commands
 TOKEN: {<SCRIPT_DONE: "scriptDone">}
 
-// Define pig command as 
+// Define pig command as
 // (1) Starting with "split"/"define"/"store"/"import" or assignment (A=) or multi-assignment (A, B, ...=) followed by
 // (2) Single statement followed by ; and newline or
 // (3) Block of statements enclosed in
@@ -224,7 +232,7 @@ TOKEN_MGR_DECLS : {
 {
     <";"> : SQL_END
 |   <("\n" | "\r" | "\r\n")> {secondary_prompt();}
-|   <(~[])> 
+|   <(~[])>
 }
 
 <SQL_END> TOKEN : {
@@ -240,6 +248,7 @@ TOKEN_MGR_DECLS : {
 |	<"store"> : PIG_START
 |	<"import"> : PIG_START
 | 	<(["a"-"z", "A"-"Z"])+(["a"-"z", "A"-"Z"] | ["0"-"9"] | "_")*(" " | "\t")*"="> : PIG_START
+|   <"=>" (" " | "\t")*> : PIG_START
 | 	< <IDENTIFIER> (" " | "\t")* ("," (" " | "\t")* <IDENTIFIER> )* (" " | "\t")* "="> : PIG_START
 |   < <IDENTIFIER> (" " | "\t")* "(" > : PIG_START
 }
@@ -256,7 +265,7 @@ TOKEN_MGR_DECLS : {
 |	<"--"> {prevState = PIG_START;} : SINGLE_LINE_COMMENT
 |	<"/*"> {prevState = PIG_START;} : MULTI_LINE_COMMENT
 |	<("\n" | "\r" | "\r\n")> {secondary_prompt();}
-|       <(~[])> 
+|       <(~[])>
 }
 
 <SINGLE_LINE_COMMENT> MORE :
@@ -290,20 +299,26 @@ TOKEN_MGR_DECLS : {
 
 <GENERATE> MORE :
 {
-    <"{"> 
+    <"{">
     {
-        bagConstantLevel++; 
+        bagConstantLevel++;
         prevState = getState(prevState);
         saveState(prevState);
         prevState = GENERATE;
     } : BAG_CONSTANT
-|	<(" " | "\t")+["A","a"]["S","s"](" " | "\t")+> 
+|	<(" " | "\t")+["A","a"]["S","s"](" " | "\t")+>
     {
         prevState = getState(prevState);
         saveState(prevState);
-        prevState = GENERATE; 
+        prevState = GENERATE;
      } : SCHEMA_DEFINITION
-|	<";"> 
+|   <"'">
+    {
+        prevState = getState(prevState);
+        saveState(prevState);
+        prevState = GENERATE;
+    } : IN_STRING
+|	<";">
     {
         prevState = getState(prevState);
         if(prevState == PIG_START) {
@@ -313,7 +328,7 @@ TOKEN_MGR_DECLS : {
         SwitchTo(prevState);
     }
 |	<("\n" | "\r" | "\r\n")> {secondary_prompt();}
-|	<(~[])> 
+|	<(~[])>
 }
 
 <SCHEMA_DEFINITION> MORE :
@@ -322,7 +337,7 @@ TOKEN_MGR_DECLS : {
 |   <")"> {tupleSchemaLevel--; if ((tupleSchemaLevel == 0) && (bagSchemaLevel == 0)) SwitchTo(prevState); }
 |   <"{"> {bagSchemaLevel++;}
 |   <"}"> {bagSchemaLevel--; if ((tupleSchemaLevel == 0) && (bagSchemaLevel == 0)) SwitchTo(prevState); }
-|	<("," | ";" )> 
+|	<("," | ";" )>
     {
         if ((tupleSchemaLevel == 0) && (bagSchemaLevel == 0)) {
             input_stream.backup(1);
@@ -386,7 +401,7 @@ TOKEN:
 |	<#INTEGER: ( <DIGIT> )+ >
 |	<#NUMBER: <INTEGER> | <FLOAT> | <FLOAT> ( ["e","E"] ([ "-","+"])? <FLOAT> )?>
 }
-
+TOKEN: {<PREVREL: "@">}
 TOKEN: {<IDENTIFIER: (<LETTER>)+(<DIGIT> | <LETTER> | <SPECIALCHAR> | "::")*>}
 TOKEN: {<PATH: (~["(", ")", ";", "\r", " ", "\t", "\n"])+>}
 TOKEN : { <QUOTEDSTRING :  "'"
@@ -410,7 +425,7 @@ void parse() throws IOException:
 }
 
 {
-	(	
+	(
 	<EOL>
 	{prompt();}
 	|
@@ -428,7 +443,7 @@ void parse() throws IOException:
 			}
 		}
 		processFsCommand(cmdTokens.toArray(new String[cmdTokens.size()]));
-	}		
+	}
 	)+
 	|
 	<SH>
@@ -445,14 +460,16 @@ void parse() throws IOException:
 			}
 		}
 		processShCommand(cmdTokens.toArray(new String[cmdTokens.size()]));
-	}		
+	}
 	)+
 	|
 	<CAT>
 	(
 	t1 = GetPath()
-	{processCat(t1.image);}		
+	{processCat(t1.image);}
 	)+
+	|
+	Clear()
 	|
 	<CD>
 	(
@@ -470,24 +487,30 @@ void parse() throws IOException:
 	<COPYFROMLOCAL>
 	t1 = GetPath()
 	t2 = GetPath()
-	{processCopyFromLocal(t1.image, t2.image);}	
+	{processCopyFromLocal(t1.image, t2.image);}
 	|
 	<COPYTOLOCAL>
 	t1 = GetPath()
 	t2 = GetPath()
-	{processCopyToLocal(t1.image, t2.image);}	
+	{processCopyToLocal(t1.image, t2.image);}
 	|
-	<DUMP>
-	t1 = <IDENTIFIER>
-	{processDump(t1.image);}
+	(<DUMP> | <DUMP_SHORT>)
+	(
+	        (t1 = <IDENTIFIER>
+                | t1 = <PREVREL>)
+		{processDump(t1.image);}
+		|
+		{processDump(null);}
+	)
 	|
     Illustrate()
 	|
-	<DESCRIBE>
+	(<DESCRIBE> | <DESCRIBE_SHORT>)
 	(
-	t1 = <IDENTIFIER>
-	{processDescribe(t1.image);}
-	|
+		(t1 = <IDENTIFIER>
+                | t1 = <PREVREL>)
+		{processDescribe(t1.image);}
+		|
 		{processDescribe(null);}
 	)
 	|
@@ -502,7 +525,7 @@ void parse() throws IOException:
 	History()
 	|
 	<KILL>
-	t1 = <IDENTIFIER>	
+	t1 = <IDENTIFIER>
 	{processKill(t1.image);}
 	|
 	<LS>
@@ -531,7 +554,7 @@ void parse() throws IOException:
 	<PWD>
 	{processPWD();}
 	|
-	<QUIT>
+	(<QUIT> | <QUIT_SHORT>)
 	{quit();}
 	|
 	<REGISTER>
@@ -543,7 +566,7 @@ void parse() throws IOException:
 			<AS> t3 = <IDENTIFIER>
 			{namespace = t3.image; }
 		]
-	]	
+	]
 	{processRegister(unquote(t1.image), engine, namespace); }
 	|
 	Script()
@@ -582,6 +605,14 @@ void parse() throws IOException:
 	)
 }
 
+void Clear():
+{
+}
+{
+	<CLEAR>
+	{printClear();}
+}
+
 void Illustrate() throws IOException:
 {
 	Token t;
@@ -593,9 +624,9 @@ void Illustrate() throws IOException:
 
 }
 {
-	<ILLUSTRATE>
+	(<ILLUSTRATE> | <ILLUSTRATE_SHORT>)
 	{
-		params = new ArrayList<String>(); 
+		params = new ArrayList<String>();
 		files = new ArrayList<String>();
 	}
 	(
@@ -616,7 +647,8 @@ void Illustrate() throws IOException:
 		{files.add(t.image);}
 	)*
 	(
-		t = <IDENTIFIER>
+		(t = <IDENTIFIER>
+                | t = <PREVREL>)
 		{alias = t.image;}
 	)?
 	{processIllustrate(alias, script, target, params, files);}
@@ -648,9 +680,9 @@ void Explain() throws IOException:
 
 }
 {
-	<EXPLAIN>
+	(<EXPLAIN> | <EXPLAIN_SHORT>)
 	{
-		params = new ArrayList<String>(); 
+		params = new ArrayList<String>();
 		files = new ArrayList<String>();
 	}
 	(
@@ -677,7 +709,8 @@ void Explain() throws IOException:
 		{files.add(t.image);}
 	)*
 	(
-		t = <IDENTIFIER>
+		(t = <IDENTIFIER>
+                | t = <PREVREL>)
 		{alias = t.image;}
 	)?
 	{processExplain(alias, script, isVerbose, format, target, params, files);}
@@ -700,7 +733,7 @@ void Script() throws IOException:
 		{batch = true;}
 	)
     	{
-		params = new ArrayList<String>(); 
+		params = new ArrayList<String>();
 		files = new ArrayList<String>();
 	}
 	(
@@ -735,7 +768,7 @@ Token GetPath() :
 }
 
 Token GetKey() :
-{	
+{
 	Token t;
 }
 {
@@ -767,6 +800,8 @@ Token GetReserved () :
 	|
 	t = <CD>
 	|
+	t = <CLEAR>
+	|
 	t = <COPY>
 	|
 	t = <COPYFROMLOCAL>
@@ -775,11 +810,21 @@ Token GetReserved () :
 	|
 	t = <DUMP>
 	|
+	t = <DUMP_SHORT>
+	|
 	t = <DESCRIBE>
+	|
+	t = <DESCRIBE_SHORT>
 	|
 	t = <ALIASES>
 	|
 	t = <EXPLAIN>
+	|
+	t = <EXPLAIN_SHORT>
+	|
+	t = <ILLUSTRATE>
+	|
+	t = <ILLUSTRATE_SHORT>
 	|
 	t = <HELP>
 	|
@@ -796,6 +841,8 @@ Token GetReserved () :
 	t = <PWD>
 	|
 	t = <QUIT>
+	|
+	t = <QUIT_SHORT>
 	|
 	t = <REGISTER>
 	|
@@ -817,8 +864,8 @@ Token GetReserved () :
 	{return t;}
 }
 
-JAVACODE 
-void handle_invalid_command(int kind) 
+JAVACODE
+void handle_invalid_command(int kind)
 {
 	throw generateParseException();  // throw the exception object.
 }

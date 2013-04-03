@@ -18,7 +18,11 @@
 package org.apache.pig;
 
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.Map;
+
+import org.joda.time.DateTime;
 
 import org.apache.pig.classification.InterfaceAudience;
 import org.apache.pig.classification.InterfaceStability;
@@ -43,14 +47,20 @@ public interface StoreCaster extends LoadCaster {
     public byte[] toBytes(Float f) throws IOException;
 
     public byte[] toBytes(Integer i) throws IOException;
-    
+
     public byte[] toBytes(Boolean b) throws IOException;
 
     public byte[] toBytes(Long l) throws IOException;
 
+    public byte[] toBytes(DateTime dt) throws IOException;
+
     public byte[] toBytes(Map<String, Object> m) throws IOException;
 
     public byte[] toBytes(Tuple t) throws IOException;
-    
+
     public byte[] toBytes(DataByteArray a) throws IOException;
+
+    public byte[] toBytes(BigInteger bi) throws IOException;
+
+    public byte[] toBytes(BigDecimal bd) throws IOException;
 }

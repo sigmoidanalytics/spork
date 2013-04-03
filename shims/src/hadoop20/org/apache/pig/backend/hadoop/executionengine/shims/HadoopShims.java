@@ -20,6 +20,10 @@ package org.apache.pig.backend.hadoop.executionengine.shims;
 import java.io.IOException;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.mapred.Counters;
+import org.apache.hadoop.mapred.JobClient;
 import org.apache.hadoop.mapred.jobcontrol.Job;
 import org.apache.hadoop.mapred.jobcontrol.JobControl;
 import org.apache.hadoop.mapreduce.JobContext;
@@ -30,7 +34,6 @@ import org.apache.hadoop.mapreduce.TaskAttemptID;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigOutputCommitter;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
 import org.apache.pig.backend.hadoop20.PigJobControl;
-import org.apache.pig.impl.PigContext;
 
 /**
  * We need to make Pig work with both hadoop 20 and hadoop 23 (PIG-2125). However,
@@ -50,7 +53,7 @@ public class HadoopShims {
 
     static public TaskAttemptContext createTaskAttemptContext(Configuration conf,
                                 TaskAttemptID taskId) {
-        TaskAttemptContext newContext = new TaskAttemptContext(new Configuration(conf),
+        TaskAttemptContext newContext = new TaskAttemptContext(conf,
             taskId);
         return newContext;
     }
@@ -58,7 +61,7 @@ public class HadoopShims {
     static public JobContext createJobContext(Configuration conf,
             JobID jobId) {
         JobContext newJobContext = new JobContext(
-                new Configuration(conf), jobId);
+                conf, jobId);
         return newJobContext;
     }
 
@@ -92,5 +95,14 @@ public class HadoopShims {
 
     public static JobControl newJobControl(String groupName, int timeToSleep) {
       return new PigJobControl(groupName, timeToSleep);
+    }
+    
+    public static long getDefaultBlockSize(FileSystem fs, Path path) {
+        return fs.getDefaultBlockSize();
+    }
+
+    public static Counters getCounters(Job job) throws IOException {
+        JobClient jobClient = job.getJobClient();
+        return jobClient.getJob(job.getAssignedJobID()).getCounters();
     }
 }

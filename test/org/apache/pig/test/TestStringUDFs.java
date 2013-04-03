@@ -19,6 +19,8 @@
 package org.apache.pig.test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 
 import java.io.IOException;
@@ -27,9 +29,11 @@ import org.apache.pig.EvalFunc;
 import org.apache.pig.builtin.INDEXOF;
 import org.apache.pig.builtin.LAST_INDEX_OF;
 import org.apache.pig.builtin.REPLACE;
+import org.apache.pig.builtin.STARTSWITH;
 import org.apache.pig.builtin.STRSPLIT;
 import org.apache.pig.builtin.SUBSTRING;
 import org.apache.pig.builtin.TRIM;
+import org.apache.pig.builtin.EqualsIgnoreCase;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.data.TupleFactory;
 import org.junit.Test;
@@ -174,4 +178,29 @@ public class TestStringUDFs {
         assertEquals("foo", splits.get(0));
         assertEquals("bar:baz", splits.get(1));
     }
+
+    @Test
+    public void testStartsWith() throws IOException {
+        STARTSWITH startsWith = new STARTSWITH();
+        Tuple testTuple1 = Util.buildTuple("foo", "bar");
+        assertFalse("String prefix should not match", startsWith.exec(testTuple1));
+        Tuple testTuple2 = Util.buildTuple("foobaz", "foo");
+        assertTrue("String prefix should match", startsWith.exec(testTuple2));
+    }
+    
+    @Test
+    public void testEqualsIgnoreCase() throws IOException {
+    	EqualsIgnoreCase equalsIgnoreCase = new EqualsIgnoreCase ();
+        Tuple testTuple = Util.buildTuple("ABC","abc");
+        assertEquals("Strings are NOT equalsIgnoreCase", "ABC".equalsIgnoreCase("abc"), equalsIgnoreCase.exec(testTuple));
+        testTuple = Util.buildTuple("ABC", "aBC");
+        assertEquals("strings are NOT equalsIgnoreCase", "ABC".equalsIgnoreCase("aBC"), equalsIgnoreCase.exec(testTuple));
+        testTuple = Util.buildTuple("abc", "abc");
+        assertEquals("strings are NOT equalsIgnoreCase", "abc".equalsIgnoreCase("abc"), equalsIgnoreCase.exec(testTuple));
+        testTuple = Util.buildTuple("abcd", "abc");
+        assertEquals("strings are NOT equalsIgnoreCase", "abcd".equalsIgnoreCase("abc"), equalsIgnoreCase.exec(testTuple));
+       
+    }
+
+
 }

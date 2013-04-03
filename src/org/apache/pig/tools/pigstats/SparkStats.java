@@ -1,5 +1,6 @@
 package org.apache.pig.tools.pigstats;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapred.JobClient;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
 
@@ -8,16 +9,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
-/**
- * @author billg
- */
 public class SparkStats extends PigStats {
     private List<OutputStats> outputStatsList = new ArrayList<OutputStats>();
     private JobGraph jobGraph = new JobGraph();
 
-    public void addOutputInfo(POStore poStore, long totalBytes, long totalRecords, boolean success) {
+    public void addOutputInfo(POStore poStore, long totalBytes, long totalRecords, boolean success, Configuration conf) {
         OutputStats outputStats = new OutputStats(poStore.getSFile().getFileName(), totalBytes, totalRecords, success);
         outputStats.setPOStore(poStore);
+        outputStats.setConf(conf);
         outputStatsList.add(outputStats);
     }
 

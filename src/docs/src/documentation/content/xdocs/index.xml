@@ -22,7 +22,7 @@
     <title>Overview </title>
   </header>
   <body>
-      <p>The Pig Documentation provides the information you need to get started using Pig.</p>  
+      <p>The Pig Documentation provides the information you need to get started using Pig. If you haven't already, download Pig now: <a href="http://pig.apache.org/releases.html#Download"/>.</p>
       
       <p>Begin with the <a href="start.html">Getting Started</a> guide which shows you how to set up Pig and how to form simple Pig Latin statements.
       When you are ready to start writing your own scripts, review the <a href="basic.html">Pig Latin Basics</a> manual to 
@@ -32,6 +32,8 @@
        The <a href="udf.html">User Defined Functions</a> manual shows you how to how to write your own functions and how to access/contribute functions using the Piggy Bank repository.</p>
        
        <p>The mechanisms featured in the <a href="cont.html">Control Structures</a> guide give you greater control over how your Pig scripts are structured and executed. The <a href="cont.html">Performance and Efficiency</a> guide provides valuable examples and suggestions for optimizing your code.</p>
+       
+       <p>Use Pig's Administration features <a href="admin.html">Administration</a> which provides properties that could be set to be used by all your users.</p>
        
        <p>Finally, use Pig's <a href="cmds.html">Shell and Utility Commands</a> to run your programs and Pig's expanded <a href="test.html">Testing and Diagnostics</a> tools to examine and/or debug your programs.</p>
       

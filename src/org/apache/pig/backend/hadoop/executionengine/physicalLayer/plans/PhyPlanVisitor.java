@@ -128,6 +128,14 @@ public class PhyPlanVisitor extends PlanVisitor<PhysicalOperator,PhysicalPlan> {
         }
     }
 
+    public void visitCounter(POCounter poCounter) throws VisitorException {
+        //do nothing
+    }
+
+    public void visitRank(PORank rank) throws VisitorException {
+        //do nothing
+    }
+
 	public void visitDistinct(PODistinct distinct) throws VisitorException {
         //do nothing
 	}

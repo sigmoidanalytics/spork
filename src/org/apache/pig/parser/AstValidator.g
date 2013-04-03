@@ -15,11 +15,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- 
+
 /**
  * Grammar file for Pig tree parser (visitor for default data type insertion).
  *
- * NOTE: THIS FILE IS BASED ON QueryParser.g, SO IF YOU CHANGE THAT FILE, YOU WILL 
+ * NOTE: THIS FILE IS BASED ON QueryParser.g, SO IF YOU CHANGE THAT FILE, YOU WILL
  *       PROBABLY NEED TO MAKE CORRESPONDING CHANGES TO THIS FILE AS WELL.
  */
 
@@ -50,7 +50,7 @@ import org.apache.commons.logging.LogFactory;
 private static Log log = LogFactory.getLog( AstValidator.class );
 
 @Override
-protected Object recoverFromMismatchedToken(IntStream input, int ttype, BitSet follow) 
+protected Object recoverFromMismatchedToken(IntStream input, int ttype, BitSet follow)
 throws RecognitionException {
     throw new MismatchedTokenException( ttype, input );
 }
@@ -64,7 +64,7 @@ throws RecognitionException {
 private void validateSchemaAliasName(Set<String> fieldNames, CommonTree node, String name)
 throws DuplicatedSchemaAliasException {
     if( fieldNames.contains( name ) ) {
-        throw new DuplicatedSchemaAliasException( input, 
+        throw new DuplicatedSchemaAliasException( input,
             new SourceLocation( (PigParserNode)node ), name );
     } else {
         fieldNames.add( name );
@@ -85,7 +85,22 @@ private void checkDuplication(int count, CommonTree node) throws ParserValidatio
     }
 }
 
-private Set<String> aliases = new HashSet<String>();
+private String lastRel = null;
+
+private String getLastRel(CommonTree node) throws UndefinedAliasException {
+    if (lastRel != null) {
+        return lastRel;
+    }
+    throw new UndefinedAliasException( input, new SourceLocation((PigParserNode)node), "@");
+}
+
+private Set<String> aliases = new HashSet<String>() {
+    @Override
+    public boolean add(String e) {
+        lastRel = e;
+        return super.add(e);
+    }
+};
 
 } // End of @members
 
@@ -127,13 +142,21 @@ parallel_clause : ^( PARALLEL INTEGER )
 
 alias returns[String name, CommonTree node]
  : IDENTIFIER
-   { 
+   {
        $name = $IDENTIFIER.text;
        $node = $IDENTIFIER;
    }
 ;
 
-op_clause : define_clause 
+previous_rel returns[String name, CommonTree node]
+ : ARROBA
+   {
+       $name = getLastRel($ARROBA);
+       $node = $ARROBA;
+   }
+;
+
+op_clause : define_clause
           | load_clause
           | group_clause
           | store_clause
@@ -142,6 +165,7 @@ op_clause : define_clause
           | limit_clause
           | sample_clause
           | order_clause
+          | rank_clause
           | cross_clause
           | join_clause
           | union_clause
@@ -165,8 +189,8 @@ cmd
 }
  : ^( EXECCOMMAND ( ship_clause { checkDuplication( ++ship, $ship_clause.start ); }
                   | cache_clause { checkDuplication( ++cache, $cache_clause.start ); }
-                  | input_clause { checkDuplication( ++in, $input_clause.start ); } 
-                  | output_clause { checkDuplication( ++out, $output_clause.start ); } 
+                  | input_clause { checkDuplication( ++in, $input_clause.start ); }
+                  | output_clause { checkDuplication( ++out, $output_clause.start ); }
                   | error_clause { checkDuplication( ++error, $error_clause.start ); }
                   )*
    )
@@ -234,6 +258,9 @@ simple_type returns [byte typev]
   | LONG { $typev = DataType.LONG; }
   | FLOAT { $typev = DataType.FLOAT; }
   | DOUBLE { $typev = DataType.DOUBLE; }
+  | BIGINTEGER { $typev = DataType.BIGINTEGER; }
+  | BIGDECIMAL { $typev = DataType.BIGDECIMAL; }
+  | DATETIME { $typev = DataType.DATETIME; }
   | CHARARRAY { $typev = DataType.CHARARRAY; }
   | BYTEARRAY { $typev = DataType.BYTEARRAY; }
 ;
@@ -261,19 +288,31 @@ func_args : func_args_string+
 ;
 
 cube_clause
-  : ^( CUBE cube_item )
+ : ^( CUBE cube_item )
 ;
 
 cube_item
-  : rel ( cube_by_clause )
+ : rel ( cube_by_clause )
 ;
 
 cube_by_clause
-    : ^( BY cube_by_expr+ )
+ : ^( BY cube_or_rollup )
 ;
 
-cube_by_expr 
-    : col_range | expr | STAR 
+cube_or_rollup
+ : cube_rollup_list+
+;
+
+cube_rollup_list
+ : ^( ( CUBE | ROLLUP ) cube_by_expr_list )
+;
+
+cube_by_expr_list
+ : cube_by_expr+
+;
+
+cube_by_expr
+ : col_range | expr | STAR
 ;
 
 group_clause
@@ -286,7 +325,7 @@ scope {
  : ^( ( GROUP | COGROUP ) group_item+ group_type? partition_clause? )
 ;
 
-group_type : QUOTEDSTRING 
+group_type : QUOTEDSTRING
 ;
 
 group_item
@@ -303,6 +342,7 @@ group_item
 ;
 
 rel : alias {  validateAliasRef( aliases, $alias.node, $alias.name ); }
+    | previous_rel { validateAliasRef( aliases, $previous_rel.node, $previous_rel.name ); }
     | op_clause parallel_clause?
 ;
 
@@ -324,7 +364,7 @@ cond : ^( OR cond cond )
      | ^( NULL expr NOT? )
      | ^( rel_op expr expr )
      | func_eval
-     | ^( BOOL_COND expr )     
+     | ^( BOOL_COND expr )
 ;
 
 func_eval: ^( FUNC_EVAL func_name real_arg* )
@@ -390,6 +430,20 @@ rel_cache_clause : ^( CACHE IDENTIFIER)
 ;
 
 sample_clause : ^( SAMPLE rel ( DOUBLENUMBER | expr ) )
+;
+
+rank_clause : ^( RANK rel ( rank_by_statement )? )
+;
+
+rank_by_statement : ^( BY rank_by_clause ( DENSE )? )
+;
+
+rank_by_clause : STAR ( ASC | DESC )?
+               | rank_col+
+;
+
+rank_col : col_range (ASC | DESC)?
+         | col_ref ( ASC | DESC )?
 ;
 
 order_clause : ^( ORDER rel order_by_clause func_clause? )
@@ -563,7 +617,7 @@ literal : scalar | map | bag | tuple
 scalar : num_scalar | QUOTEDSTRING | NULL | TRUE | FALSE
 ;
 
-num_scalar : MINUS? ( INTEGER | LONGINTEGER | FLOATNUMBER | DOUBLENUMBER )
+num_scalar : MINUS? ( INTEGER | LONGINTEGER | FLOATNUMBER | DOUBLENUMBER | BIGINTEGERNUMBER | BIGDECIMALNUMBER )
 ;
 
 map : ^( MAP_VAL keyvalue* )
@@ -590,8 +644,10 @@ eid : rel_str_op
     | FILTER
     | FOREACH
     | CUBE
+    | ROLLUP
     | MATCHES
     | ORDER
+    | RANK
     | DISTINCT
     | COGROUP
     | JOIN
@@ -622,6 +678,9 @@ eid : rel_str_op
     | LONG
     | FLOAT
     | DOUBLE
+    | BIGINTEGER
+    | BIGDECIMAL
+    | DATETIME
     | CHARARRAY
     | BYTEARRAY
     | BAG

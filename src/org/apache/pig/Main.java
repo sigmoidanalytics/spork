@@ -114,13 +114,16 @@ public class Main {
        Attributes attr=null;
        try {
             String findContainingJar = JarManager.findContainingJar(Main.class);
-            JarFile jar = new JarFile(findContainingJar);
-            final Manifest manifest = jar.getManifest();
-            final Map<String,Attributes> attrs = manifest.getEntries();
-            attr = attrs.get("org/apache/pig");
+            if (findContainingJar != null) {
+                JarFile jar = new JarFile(findContainingJar);
+                final Manifest manifest = jar.getManifest();
+                final Map<String,Attributes> attrs = manifest.getEntries();
+                attr = attrs.get("org/apache/pig");
+            } else {
+                log.info("Unable to read pigs manifest file as we are not running from a jar, version information unavailable");
+            }
         } catch (Exception e) {
-            log.warn("Unable to read pigs manifest file, version information unavailable");
-            log.warn("Exception: "+e);
+            log.warn("Unable to read pigs manifest file, version information unavailable", e);
         }
         if (attr!=null) {
             version = attr.getValue("Implementation-Version");
@@ -395,9 +398,6 @@ static int run(String args[], PigProgressNotificationListener listener) {
             pigContext.getProperties().setProperty("pig.optimizer.rules", ObjectSerializer.serialize(optimizerRules));
         }
 
-        if (properties.get("udf.import.list")!=null)
-            PigContext.initializeImportList((String)properties.get("udf.import.list"));
-
         PigContext.setClassLoader(pigContext.createCl(null));
 
         // construct the parameter substitution preprocessor
@@ -412,6 +412,11 @@ static int run(String args[], PigProgressNotificationListener listener) {
         switch (mode) {
 
         case FILE: {
+            String remainders[] = opts.getRemainingArgs();
+            if (remainders != null) {
+                pigContext.getProperties().setProperty(PigContext.PIG_CMD_ARGS_REMAINDERS,
+                        ObjectSerializer.serialize(remainders));
+            }
             FileLocalizer.FetchFileRet localFileRet = FileLocalizer.fetchFile(properties, file);
             if (localFileRet.didFetch) {
                 properties.setProperty("pig.jars.relative.to.dfs", "true");
@@ -494,6 +499,8 @@ static int run(String args[], PigProgressNotificationListener listener) {
                 if (i != 0) sb.append(' ');
                 sb.append(remainders[i]);
             }
+
+            sb.append('\n');
 
             scriptState.setScript(sb.toString());
 
@@ -867,6 +874,8 @@ public static void usage()
         System.out.println("    -F, -stop_on_failure - Aborts execution on the first failed job; default is off");
         System.out.println("    -M, -no_multiquery - Turn multiquery optimization off; default is on");
         System.out.println("    -P, -propertyFile - Path to property file");
+        System.out.println("    -printCmdDebug - Overrides anything else and prints the actual command used to run Pig, including");
+        System.out.println("                     any environment variables that are set by the pig command.");
 }
 
 public static void printProperties(){
@@ -917,11 +926,11 @@ private static String validateLogFile(String logFileName, String scriptName) {
             String scriptFileAbsPath;
             try {
                 scriptFileAbsPath = scriptFile.getCanonicalPath();
+                strippedDownScriptName = getFileFromCanonicalPath(scriptFileAbsPath);
             } catch (IOException ioe) {
                 log.warn("Could not compute canonical path to the script file " + ioe.getMessage());
-                return null;
+                strippedDownScriptName = null;
             }
-            strippedDownScriptName = getFileFromCanonicalPath(scriptFileAbsPath);
         }
     }
 

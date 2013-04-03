@@ -66,8 +66,8 @@ grpInactiveAcct = group inactiveAccounts all;
 B = GROUP A ALL using 'collected';
 
 --cube
-C = CUBE A BY (a, b);
-CC = CUBE A BY (*);
+C = CUBE A BY CUBE(a, b);
+CC = CUBE A BY ROLLUP(*);
 
 --join
 E = join A by $0, B by $0 using 'replicated';
@@ -90,3 +90,11 @@ H = union onschema A, B;
 
 --stream
 C = stream A through CMD;
+
+
+--rank
+
+R = rank A;
+R = rank A by a;
+R = rank A by a DESC;
+R = rank A by a DESC, b;

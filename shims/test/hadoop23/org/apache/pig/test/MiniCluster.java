@@ -42,6 +42,9 @@ import org.apache.pig.backend.hadoop.datastorage.ConfigurationUtil;
  * environment for Pig to run on top of the mini cluster.
  */
 public class MiniCluster extends MiniGenericCluster {
+    private static final File CONF_DIR = new File("build/classes");
+    private static final File CONF_FILE = new File(CONF_DIR, "hadoop-site.xml");
+
     protected MiniMRYarnCluster m_mr = null;
     private Configuration m_dfs_conf = null;
     private Configuration m_mr_conf = null;
@@ -56,35 +59,38 @@ public class MiniCluster extends MiniGenericCluster {
             final int dataNodes = 4;     // There will be 4 data nodes
             final int taskTrackers = 4;  // There will be 4 task tracker nodes
 
-	    // Create the configuration hadoop-site.xml file
             System.setProperty("hadoop.log.dir", "build/test/logs");
-            File conf_dir = new File("build/classes/");
-            conf_dir.mkdirs();
-            File conf_file = new File(conf_dir, "hadoop-site.xml");
-
-            conf_file.delete();
+            // Create the dir that holds hadoop-site.xml file
+            // Delete if hadoop-site.xml exists already
+            CONF_DIR.mkdirs();
+            if(CONF_FILE.exists()) {
+                CONF_FILE.delete();
+            }
 
             // Builds and starts the mini dfs and mapreduce clusters
             Configuration config = new Configuration();
+            config.set("yarn.scheduler.capacity.root.queues", "default");
+            config.set("yarn.scheduler.capacity.root.default.capacity", "100");
             m_dfs = new MiniDFSCluster(config, dataNodes, true, null);
             m_fileSys = m_dfs.getFileSystem();
             m_dfs_conf = m_dfs.getConfiguration(0);
+            
+            //Create user home directory
+            m_fileSys.mkdirs(m_fileSys.getWorkingDirectory());
 
             m_mr = new MiniMRYarnCluster("PigMiniCluster", taskTrackers);
             m_mr.init(m_dfs_conf);
-            //m_mr.init(m_dfs_conf);
             m_mr.start();
 
             // Write the necessary config info to hadoop-site.xml
-			//m_mr_conf = m_mr.getConfig();
             m_mr_conf = new Configuration(m_mr.getConfig());
 
             m_conf = m_mr_conf;
 			m_conf.set("fs.default.name", m_dfs_conf.get("fs.default.name"));
             m_conf.unset("mapreduce.job.cache.files");
 
-            //ConfigurationUtil.mergeConf(m_conf, m_dfs_conf);
-            //ConfigurationUtil.mergeConf(m_conf, m_mr_conf);
+            m_conf.setInt("mapred.io.sort.mb", 200);
+            m_conf.set("mapred.child.java.opts", "-Xmx512m");
 
             m_conf.setInt("mapred.submit.replication", 2);
             m_conf.set("dfs.datanode.address", "0.0.0.0:0");
@@ -92,23 +98,17 @@ public class MiniCluster extends MiniGenericCluster {
             m_conf.set("mapred.map.max.attempts", "2");
             m_conf.set("mapred.reduce.max.attempts", "2");
             m_conf.set("pig.jobcontrol.sleep", "100");
-            m_conf.writeXml(new FileOutputStream(conf_file));
-            m_fileSys.copyFromLocalFile(new Path(conf_file.getAbsoluteFile().toString()),
+            m_conf.writeXml(new FileOutputStream(CONF_FILE));
+            m_fileSys.copyFromLocalFile(new Path(CONF_FILE.getAbsoluteFile().toString()),
                     new Path("/pigtest/conf/hadoop-site.xml"));
             DistributedCache.addFileToClassPath(new Path("/pigtest/conf/hadoop-site.xml"), m_conf);
-//            try {
-//                Thread.sleep(1000*1000);
-//            } catch (InterruptedException e) {
-//                // TODO Auto-generated catch block
-//                e.printStackTrace();
-//            }
 
 			System.err.println("XXX: Setting fs.default.name to: " + m_dfs_conf.get("fs.default.name"));
             // Set the system properties needed by Pig
             System.setProperty("cluster", m_conf.get("mapred.job.tracker"));
             //System.setProperty("namenode", m_dfs_conf.get("fs.default.name"));
             System.setProperty("namenode", m_conf.get("fs.default.name"));
-            System.setProperty("junit.hadoop.conf", conf_dir.getPath());
+            System.setProperty("junit.hadoop.conf", CONF_DIR.getPath());
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -116,6 +116,10 @@ public class MiniCluster extends MiniGenericCluster {
 
     @Override
     protected void shutdownMiniMrClusters() {
+        // Delete hadoop-site.xml on shutDown
+        if(CONF_FILE.exists()) {
+            CONF_FILE.delete();
+        }
         if (m_mr != null) { m_mr.stop(); }
         m_mr = null;
     }

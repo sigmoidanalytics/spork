@@ -30,6 +30,7 @@ import java.io.StringWriter;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Deque;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -40,11 +41,11 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Queue;
 import java.util.Set;
-import java.util.Stack;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -77,6 +78,7 @@ import org.apache.pig.impl.streaming.StreamingCommand;
 import org.apache.pig.impl.util.LogUtils;
 import org.apache.pig.impl.util.PropertiesUtil;
 import org.apache.pig.impl.util.UDFContext;
+import org.apache.pig.impl.util.UriUtil;
 import org.apache.pig.impl.util.Utils;
 import org.apache.pig.newplan.DependencyOrderWalker;
 import org.apache.pig.newplan.Operator;
@@ -126,6 +128,8 @@ public class PigServer {
 
     public static final String PRETTY_PRINT_SCHEMA_PROPERTY = "pig.pretty.print.schema";
 
+    private static final String PIG_LOCATION_CHECK_STRICT = "pig.location.check.strict";
+
     /*
      * The data structure to support grunt shell operations.
      * The grunt shell can only work on one graph at a time.
@@ -134,7 +138,7 @@ public class PigServer {
      * on a new graph. After the nested script is done, the grunt
      * shell pops up the saved graph and continues working on it.
      */
-    protected final Stack<Graph> graphs = new Stack<Graph>();
+    protected final Deque<Graph> graphs = new LinkedList<Graph>();
 
     /*
      * The current Graph the grunt shell is working on.
@@ -196,6 +200,10 @@ public class PigServer {
         this(new PigContext(execType, properties));
     }
 
+    public PigServer(ExecType execType, Configuration conf) throws ExecException {
+        this(new PigContext(execType, conf));
+    }
+
     public PigServer(PigContext context) throws ExecException {
         this(context, true);
     }
@@ -221,8 +229,12 @@ public class PigServer {
     private void addJarsFromProperties() throws ExecException {
         //add jars from properties to extraJars
         String jar_str = pigContext.getProperties().getProperty("pig.additional.jars");
+
         if(jar_str != null){
-            for(String jar : jar_str.split(":")){
+            // Use File.pathSeparator (":" on Linux, ";" on Windows)
+            // to correctly handle path aggregates as they are represented
+            // on the Operating System.
+            for(String jar : jar_str.split(File.pathSeparator)){
                 try {
                     registerJar(jar);
                 } catch (IOException e) {
@@ -244,6 +256,14 @@ public class PigServer {
         return pigContext;
     }
 
+    /**
+     * Current DAG
+     *
+     * @return
+     */
+    public Graph getCurrentDAG() {
+        return this.currDAG;
+    }
     /**
      * Set the logging level to DEBUG.
      */
@@ -309,25 +329,53 @@ public class PigServer {
     }
 
     /**
+     * This method parses the scripts and builds the LogicalPlan. This method
+     * should be followed by {@link PigServer#executeBatch(boolean)} with
+     * argument as false. Do Not use {@link PigServer#executeBatch()} after
+     * calling this method as that will re-parse and build the script.
+     *
+     * @throws IOException
+     */
+    public void parseAndBuild() throws IOException {
+        if (currDAG == null || !isBatchOn()) {
+            int errCode = 1083;
+            String msg = "setBatchOn() must be called first.";
+            throw new FrontendException(msg, errCode, PigException.INPUT);
+        }
+        currDAG.parseQuery();
+        currDAG.buildPlan( null );
+    }
+
+    /**
      * Submits a batch of Pig commands for execution.
      *
      * @return list of jobs being executed
      * @throws IOException
      */
     public List<ExecJob> executeBatch() throws IOException {
+        return executeBatch(true);
+    }
+
+    /**
+     * Submits a batch of Pig commands for execution. Parse and build of script
+     * should be skipped if user called {@link PigServer#parseAndBuild()}
+     * before. Pass false as an argument in which case.
+     *
+     * @param parseAndBuild
+     * @return
+     * @throws IOException
+     */
+    public List<ExecJob> executeBatch(boolean parseAndBuild) throws IOException {
+        if (parseAndBuild) {
+            parseAndBuild();
+        }
+
         PigStats stats = null;
 
         if( !isMultiQuery ) {
             // ignore if multiquery is off
             stats = PigStats.get();
         } else {
-            if (currDAG == null || !isBatchOn()) {
-                int errCode = 1083;
-                String msg = "setBatchOn() must be called first.";
-                throw new FrontendException(msg, errCode, PigException.INPUT);
-            }
-            currDAG.parseQuery();
-            currDAG.buildPlan( null );
             stats = execute();
         }
 
@@ -450,6 +498,11 @@ public class PigServer {
         // compatibility with case when user passes absolute path or path
         // relative to current working directory.)
         if (name != null) {
+            if (name.isEmpty()) {
+                log.warn("Empty string specified for jar path");
+                return;
+            }
+
             URL resource = locateJarFromResources(name);
 
             if (resource == null) {
@@ -716,6 +769,9 @@ public class PigServer {
      */
     public Schema dumpSchema(String alias) throws IOException {
         try {
+            if ("@".equals(alias)) {
+                alias = getLastRel();
+            }
             LogicalRelationalOperator op = getOperatorForAlias( alias );
             LogicalSchema schema = op.getSchema();
 
@@ -747,6 +803,9 @@ public class PigServer {
      * @throws IOException
      */
     public Schema dumpSchemaNested(String alias, String nestedAlias) throws IOException {
+        if ("@".equals(alias)) {
+            alias = getLastRel();
+        }
         Operator op = getOperatorForAlias( alias );
         if( op instanceof LOForEach ) {
             LogicalSchema nestedSc = ((LOForEach)op).dumpNestedSchema(alias, nestedAlias);
@@ -920,6 +979,9 @@ public class PigServer {
 
     private PigStats storeEx(String alias, String filename, String func)
     throws IOException {
+        if ("@".equals(alias)) {
+            alias = getLastRel();
+        }
         currDAG.parseQuery();
         currDAG.buildPlan( alias );
 
@@ -1188,15 +1250,14 @@ public class PigServer {
 
     public void printHistory(boolean withNumbers) {
 
-    	List<String> sc = currDAG.getScriptCache();
+        List<String> sc = currDAG.getScriptCache();
 
-    	if(!sc.isEmpty()) {
-    		for(int i = 0 ; i < sc.size(); i++) {
-    			if(withNumbers) System.out.print((i+1)+"   ");
-    			System.out.println(sc.get(i));
-    		}
-    	}
-
+        if(!sc.isEmpty()) {
+            for(int i = 0 ; i < sc.size(); i++) {
+                if(withNumbers) System.out.print((i+1)+"   ");
+                System.out.println(sc.get(i));
+            }
+        }
     }
 
     private void buildStorePlan(String alias) throws IOException {
@@ -1289,9 +1350,21 @@ public class PigServer {
                 } catch (IOException e) {
                     throw new ExecException(e);
                 }
+            } else {
+                POStore store = output.getPOStore();
+                try {
+                    store.getStoreFunc().cleanupOnSuccess(
+                            store.getSFile().getFileName(),
+                            new Job(output.getConf()));
+                } catch (IOException e) {
+                    throw new ExecException(e);
+                } catch (AbstractMethodError nsme) {
+                    // Just swallow it.  This means we're running against an
+                    // older instance of a StoreFunc that doesn't implement
+                    // this method.
+                }
             }
         }
-
         return stats;
     }
 
@@ -1331,6 +1404,7 @@ public class PigServer {
         private final Map<LogicalRelationalOperator, LogicalPlan> aliases = new HashMap<LogicalRelationalOperator, LogicalPlan>();
 
         private Map<String, Operator> operators = new HashMap<String, Operator>();
+        private String lastRel;
 
         private final List<String> scriptCache = new ArrayList<String>();
 
@@ -1385,6 +1459,10 @@ public class PigServer {
         }
 
         void markAsExecuted() {
+        }
+
+        public LogicalPlan getLogicalPlan() {
+            return this.lp;
         }
 
         /**
@@ -1566,7 +1644,7 @@ public class PigServer {
         }
 
         public List<String> getScriptCache() {
-        	return scriptCache;
+            return scriptCache;
         }
 
         /**
@@ -1587,6 +1665,7 @@ public class PigServer {
                 QueryParserDriver parserDriver = new QueryParserDriver( pigContext, scope, fileNameMap );
                 lp = parserDriver.parse( query );
                 operators = parserDriver.getOperators();
+                lastRel = parserDriver.getLastRel();
             } catch(Exception ex) {
                 scriptCache.remove( scriptCache.size() -1 ); // remove the bad script from the cache.
                 PigException pe = LogUtils.getPigException(ex);
@@ -1595,6 +1674,10 @@ public class PigServer {
                         + (pe == null ? ex.getMessage() : pe.getMessage());
                 throw new FrontendException (msg, errCode, PigException.INPUT , ex );
             }
+        }
+
+        public String getLastRel() {
+            return lastRel;
         }
 
         private String buildQuery() {
@@ -1636,7 +1719,6 @@ public class PigServer {
         }
 
         private void postProcess() throws IOException {
-
             // The following code deals with store/load combination of
             // intermediate files. In this case we will replace the load
             // operator
@@ -1663,6 +1745,10 @@ public class PigServer {
                 }
             }
 
+            if ("true".equals(pigContext.getProperties().getProperty(PIG_LOCATION_CHECK_STRICT))) {
+                log.info("Output location strick check enabled");
+                checkDuplicateStoreLoc(storeOps);
+            }
 
             for (LOLoad load : loadOps) {
                 for (LOStore store : storeOps) {
@@ -1682,6 +1768,21 @@ public class PigServer {
             }
         }
 
+        /**
+         * This method checks whether the multiple sinks (STORE) use the same
+         * "file-based" location. If yes, throws a RuntimeException
+         *
+         * @param storeOps
+         */
+        private void checkDuplicateStoreLoc(Set<LOStore> storeOps) {
+            Set<String> uniqueStoreLoc = new HashSet<String>();
+            for(LOStore store : storeOps) {
+                String fileName = store.getFileSpec().getFileName();
+                if(!uniqueStoreLoc.add(fileName) && UriUtil.isHDFSFileOrLocalOrS3N(fileName)) {
+                    throw new RuntimeException("Script contains 2 or more STORE statements writing to same location : "+ fileName);
+                }
+            }
+        }
 
         protected Graph duplicate() {
             // There are two choices on how we duplicate the logical plan
@@ -1735,5 +1836,9 @@ public class PigServer {
      */
     public void setValidateEachStatement(boolean validateEachStatement) {
         this.validateEachStatement = validateEachStatement;
+    }
+
+    public String getLastRel() {
+        return currDAG.getLastRel();
     }
 }

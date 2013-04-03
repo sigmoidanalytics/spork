@@ -81,6 +81,9 @@ public abstract class LogicalRelationalNodesVisitor extends PlanVisitor {
     public void visit(LOSort loSort) throws FrontendException {
     }
 
+    public void visit(LORank loRank) throws FrontendException{
+    }
+
     public void visit(LODistinct loDistinct) throws FrontendException {
     }
 

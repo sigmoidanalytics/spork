@@ -40,6 +40,7 @@ import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MapReduceOpe
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigMapBase;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigMapOnly;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigMapReduce;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigMapReduceCounter;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigSplit;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.MROperPlan;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
@@ -104,6 +105,7 @@ public class LocalMapReduceSimulator {
         // jc is null only when mrp.size == 0
         boolean needFileInput;
         final ArrayList<OperatorKey> emptyInpTargets = new ArrayList<OperatorKey>();
+        pc.getProperties().setProperty("pig.illustrating", "true");
         while(mrp.size() != 0) {
             jc = jcc.compile(mrp, "Illustrator");
             if(jc == null) {
@@ -129,15 +131,15 @@ public class LocalMapReduceSimulator {
                     pack = mro.reducePlan.getRoots().get(0);
                 }
                 
-                List<POLoad> lds = PlanHelper.getLoads(mro.mapPlan);
+                List<POLoad> lds = PlanHelper.getPhysicalOperators(mro.mapPlan, POLoad.class);
                 if (!mro.mapPlan.isEmpty()) {
-                    stores = PlanHelper.getStores(mro.mapPlan);
+                    stores = PlanHelper.getPhysicalOperators(mro.mapPlan, POStore.class);
                 }
                 if (!mro.reducePlan.isEmpty()) {
                     if (stores == null)
-                        stores = PlanHelper.getStores(mro.reducePlan);
+                        stores = PlanHelper.getPhysicalOperators(mro.reducePlan, POStore.class);
                     else
-                        stores.addAll(PlanHelper.getStores(mro.reducePlan));
+                        stores.addAll(PlanHelper.getPhysicalOperators(mro.reducePlan, POStore.class));
                 }
 
                 for (POStore store : stores) {
@@ -184,13 +186,19 @@ public class LocalMapReduceSimulator {
                     split = new PigSplit(null, index, needFileInput ? emptyInpTargets : inpTargets.get(index), 0);
                     ++index;
                     Mapper<Text, Tuple, PigNullableWritable, Writable> map;
-                    
+
                     if (mro.reducePlan.isEmpty()) {
                         // map-only
                         map = new PigMapOnly.Map();
-                        ((PigMapBase) map).setMapPlan(mro.mapPlan);
                         Mapper<Text, Tuple, PigNullableWritable, Writable>.Context context = ((PigMapOnly.Map) map)
                           .getIllustratorContext(jobConf, input, intermediateData, split);
+                        if(mro.isCounterOperation()) {
+                            if(mro.isRowNumber()) {
+                                map = new PigMapReduceCounter.PigMapCounter();
+                            }
+                            context = ((PigMapReduceCounter.PigMapCounter) map).getIllustratorContext(jobConf, input, intermediateData, split);
+                        }
+                        ((PigMapBase) map).setMapPlan(mro.mapPlan);
                         map.run(context);
                     } else {
                         if ("true".equals(jobConf.get("pig.usercomparator")))
@@ -216,9 +224,15 @@ public class LocalMapReduceSimulator {
                         reduce = new PigMapReduce.ReduceWithComparator();
                     else
                         reduce = new PigMapReduce.Reduce();
-                    reduce.setReducePlan(mro.reducePlan);
                     Reducer<PigNullableWritable, NullableTuple, PigNullableWritable, Writable>.Context
                         context = reduce.getIllustratorContext(job, intermediateData, (POPackage) pack);
+
+                    if(mro.isCounterOperation()) {
+                        reduce = new PigMapReduceCounter.PigReduceCounter();
+                        context = ((PigMapReduceCounter.PigReduceCounter)reduce).getIllustratorContext(job, intermediateData, (POPackage) pack);
+                    }
+
+                    ((PigMapReduce.Reduce) reduce).setReducePlan(mro.reducePlan);
                     reduce.run(context);
                 }
                 for (PhysicalOperator key : mro.phyToMRMap.keySet())

@@ -47,7 +47,6 @@ import org.apache.pig.PigException;
 import org.apache.pig.PigWarning;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.datastorage.ConfigurationUtil;
-import org.apache.pig.backend.hadoop.executionengine.HExecutionEngine;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.MROpPlanVisitor;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.MROperPlan;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.ScalarPhyFinder;
@@ -59,6 +58,7 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.expressionOpe
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhyPlanVisitor;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POCollectedGroup;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POCounter;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POCross;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.PODistinct;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POFRJoin;
@@ -76,6 +76,7 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOpe
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPackage.PackageType;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPackageLite;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPartitionRearrange;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.PORank;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSkewedJoin;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSort;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSplit;
@@ -320,8 +321,8 @@ public class MRCompiler extends PhyPlanVisitor {
 
         // get all stores and nativeMR operators, sort them in order(operator id)
         // and compile their plans
-        List<POStore> stores = PlanHelper.getStores(plan);
-        List<PONative> nativeMRs= PlanHelper.getNativeMRs(plan);
+        List<POStore> stores = PlanHelper.getPhysicalOperators(plan, POStore.class);
+        List<PONative> nativeMRs= PlanHelper.getPhysicalOperators(plan, PONative.class);
         List<PhysicalOperator> ops;
         if (!pigContext.inIllustrator) {
             ops = new ArrayList<PhysicalOperator>(stores.size() + nativeMRs.size());
@@ -1262,12 +1263,14 @@ public class MRCompiler extends PhyPlanVisitor {
                             .instantiateFuncFromSpec(ld.getLFile()
                                     .getFuncSpec());
                             Job job = new Job(conf);
+                            loader.setUDFContextSignature(ld.getSignature());
                             loader.setLocation(location, job);
                             InputFormat inf = loader.getInputFormat();
                             List<InputSplit> splits = inf.getSplits(HadoopShims.cloneJobContext(job));
                             List<List<InputSplit>> results = MapRedUtil
-                            .getCombinePigSplits(splits, fs
-                                    .getDefaultBlockSize(), conf);
+                            .getCombinePigSplits(splits,
+                                    HadoopShims.getDefaultBlockSize(fs, path),
+                                    conf);
                             numFiles += results.size();
                         } else {
                             List<MapReduceOper> preds = MRPlan.getPredecessors(mro);
@@ -1979,12 +1982,77 @@ public class MRCompiler extends PhyPlanVisitor {
             throw new MRCompilerException(msg, errCode, PigException.BUG, e);
         }
     }
-    
+
+    /**
+     * For the counter job, it depends if it is row number or not.
+     * In case of being a row number, any previous jobs are saved
+     * and POCounter is added as a leaf on a map task.
+     * If it is not, then POCounter is added as a leaf on a reduce
+     * task (last sorting phase).
+     **/
+    @Override
+    public void visitCounter(POCounter op) throws VisitorException {
+        try{
+            if(op.isRowNumber()) {
+                List<PhysicalOperator> mpLeaves = curMROp.mapPlan.getLeaves();
+                PhysicalOperator leaf = mpLeaves.get(0);
+                if ( !curMROp.isMapDone() && !curMROp.isRankOperation() )
+                {
+                    curMROp.setIsCounterOperation(true);
+                    curMROp.setIsRowNumber(true);
+                    curMROp.setOperationID(op.getOperationID());
+                    curMROp.mapPlan.addAsLeaf(op);
+                } else {
+                    FileSpec fSpec = getTempFileSpec();
+                    MapReduceOper prevMROper = endSingleInputPlanWithStr(fSpec);
+                    MapReduceOper mrCounter = startNew(fSpec, prevMROper);
+                    mrCounter.mapPlan.addAsLeaf(op);
+                    mrCounter.setIsCounterOperation(true);
+                    mrCounter.setIsRowNumber(true);
+                    mrCounter.setOperationID(op.getOperationID());
+                    curMROp = mrCounter;
+                }
+            } else {
+                curMROp.setIsCounterOperation(true);
+                curMROp.setIsRowNumber(false);
+                curMROp.setOperationID(op.getOperationID());
+                curMROp.reducePlan.addAsLeaf(op);
+            }
+
+            phyToMROpMap.put(op, curMROp);
+        }catch(Exception e){
+            int errCode = 2034;
+            String msg = "Error compiling operator " + op.getClass().getSimpleName();
+            throw new MRCompilerException(msg, errCode, PigException.BUG, e);
+        }
+    }
+
+    /**
+     * In case of PORank, it is closed any other previous job (containing
+     * POCounter as a leaf) and PORank is added on map phase.
+     **/
+    @Override
+    public void visitRank(PORank op) throws VisitorException {
+        try{
+            FileSpec fSpec = getTempFileSpec();
+            MapReduceOper prevMROper = endSingleInputPlanWithStr(fSpec);
+
+            curMROp = startNew(fSpec, prevMROper);
+            curMROp.setOperationID(op.getOperationID());
+            curMROp.mapPlan.addAsLeaf(op);
+
+            phyToMROpMap.put(op, curMROp);
+        }catch(Exception e){
+            int errCode = 2034;
+            String msg = "Error compiling operator " + op.getClass().getSimpleName();
+            throw new MRCompilerException(msg, errCode, PigException.BUG, e);
+        }
+    }
 
     private Pair<POProject,Byte> [] getSortCols(List<PhysicalPlan> plans) throws PlanException, ExecException {
         if(plans!=null){
             @SuppressWarnings("unchecked")
-            Pair<POProject,Byte>[] ret = new Pair[plans.size()]; 
+            Pair<POProject,Byte>[] ret = new Pair[plans.size()];
             int i=-1;
             for (PhysicalPlan plan : plans) {
                 PhysicalOperator op = plan.getLeaves().get(0);
@@ -2470,28 +2538,10 @@ public class MRCompiler extends PhyPlanVisitor {
         PhysicalPlan rpep = new PhysicalPlan();
         ConstantExpression rpce = new ConstantExpression(new OperatorKey(scope,nig.getNextNodeId(scope)));
         rpce.setRequestedParallelism(rp);
-        int val = rp;
-        if(val<=0){
-            HExecutionEngine eng = pigContext.getExecutionEngine();
-            if(pigContext.getExecType() != ExecType.LOCAL){
-                try {
-                    if(val<=0)
-                        val = pigContext.defaultParallel;
-                    if (val<=0)
-                        val = eng.getJobConf().getNumReduceTasks();
-                    if (val<=0)
-                        val = 1;
-                } catch (Exception e) {
-                    int errCode = 6015;
-                    String msg = "Problem getting the default number of reduces from the Job Client.";
-                    throw new MRCompilerException(msg, errCode, PigException.REMOTE_ENVIRONMENT, e);
-                }
-            } else {
-            	val = 1; // local mode, set it to 1
-            }
-        }
-        int parallelismForSort = (rp <= 0 ? val : rp);
-        rpce.setValue(parallelismForSort);
+        
+        // We temporarily set it to rp and will adjust it at runtime, because the final degree of parallelism
+        // is unknown until we are ready to submit it. See PIG-2779.
+        rpce.setValue(rp);
         
         rpce.setResultType(DataType.INTEGER);
         rpep.add(rpce);
@@ -2545,7 +2595,7 @@ public class MRCompiler extends PhyPlanVisitor {
         mro.setReduceDone(true);
         mro.requestedParallelism = 1;
         mro.markSampler();
-        return new Pair<MapReduceOper, Integer>(mro, parallelismForSort);
+        return new Pair<MapReduceOper, Integer>(mro, rp);
     }
 
     static class LastInputStreamingOptimizer extends MROpPlanVisitor {

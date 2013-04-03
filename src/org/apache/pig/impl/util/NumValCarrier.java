@@ -18,8 +18,8 @@
 
 package org.apache.pig.impl.util;
 
-import java.util.Map;
 import java.util.HashMap;
+import java.util.Map;
 
 import org.apache.pig.data.DataType;
 
@@ -41,9 +41,12 @@ public class NumValCarrier {
         byteToStr.put(DataType.INTEGER,valCarrier);
         byteToStr.put(DataType.LONG,valCarrier);
         byteToStr.put(DataType.BOOLEAN,valCarrier);
+        byteToStr.put(DataType.DATETIME,valCarrier);
         byteToStr.put(DataType.MAP,mapCarrier);
         byteToStr.put(DataType.TUPLE,tupleCarrier);
         byteToStr.put(DataType.NULL,nullCarrier);
+        byteToStr.put(DataType.BIGINTEGER,valCarrier);
+        byteToStr.put(DataType.BIGDECIMAL,valCarrier);
     }
 
     public String makeNameFromDataType(byte type) {

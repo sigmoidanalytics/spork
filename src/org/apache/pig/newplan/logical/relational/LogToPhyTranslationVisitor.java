@@ -20,10 +20,13 @@ package org.apache.pig.newplan.logical.relational;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Stack;
+import java.util.Random;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -40,6 +43,7 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.expressionOpe
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POCache;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POCollectedGroup;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POCounter;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POCross;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.PODistinct;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POFRJoin;
@@ -54,6 +58,7 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOpe
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.PONative;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPackage;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPackage.PackageType;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.PORank;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSkewedJoin;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSort;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSplit;
@@ -92,8 +97,6 @@ import org.apache.pig.newplan.logical.expression.LogicalExpressionPlan;
 import org.apache.pig.newplan.logical.expression.ProjectExpression;
 import org.apache.pig.parser.SourceLocation;
 
-import com.google.common.collect.Lists;
-
 public class LogToPhyTranslationVisitor extends LogicalRelationalNodesVisitor {
     private static final Log LOG = LogFactory.getLog(LogToPhyTranslationVisitor.class);
 
@@ -101,12 +104,12 @@ public class LogToPhyTranslationVisitor extends LogicalRelationalNodesVisitor {
         super(plan, new DependencyOrderWalker(plan));
         currentPlan = new PhysicalPlan();
         logToPhyMap = new HashMap<Operator, PhysicalOperator>();
-        currentPlans = new Stack<PhysicalPlan>();
+        currentPlans = new LinkedList<PhysicalPlan>();
     }
 
     protected Map<Operator, PhysicalOperator> logToPhyMap;
 
-    protected Stack<PhysicalPlan> currentPlans;
+    protected Deque<PhysicalPlan> currentPlans;
 
     protected PhysicalPlan currentPlan;
 
@@ -129,7 +132,7 @@ public class LogToPhyTranslationVisitor extends LogicalRelationalNodesVisitor {
     @Override
     public void visit(LOLoad loLoad) throws FrontendException {
         String scope = DEFAULT_SCOPE;
-//        System.err.println("Entering Load");
+
         // The last parameter here is set to true as we assume all files are
         // splittable due to LoadStore Refactor
         POLoad load = new POLoad(new OperatorKey(scope, nodeGen
@@ -158,7 +161,6 @@ public class LogToPhyTranslationVisitor extends LogicalRelationalNodesVisitor {
                 throw new LogicalToPhysicalTranslatorException(msg, errCode, PigException.BUG, e);
             }
         }
-//        System.err.println("Exiting Load");
     }
 
     @Override
@@ -199,7 +201,7 @@ public class LogToPhyTranslationVisitor extends LogicalRelationalNodesVisitor {
     @Override
     public void visit(LOFilter filter) throws FrontendException {
         String scope = DEFAULT_SCOPE;
-//        System.err.println("Entering Filter");
+        //        System.err.println("Entering Filter");
         POFilter poFilter = new POFilter(new OperatorKey(scope, nodeGen
                 .getNextNodeId(scope)), filter.getRequestedParallelism());
         poFilter.addOriginalLocation(filter.getAlias(), filter.getLocation());
@@ -210,8 +212,8 @@ public class LogToPhyTranslationVisitor extends LogicalRelationalNodesVisitor {
 
         currentPlan = new PhysicalPlan();
 
-//        PlanWalker childWalker = currentWalker
-//                .spawnChildWalker(filter.getFilterPlan());
+        //        PlanWalker childWalker = currentWalker
+        //                .spawnChildWalker(filter.getFilterPlan());
         PlanWalker childWalker = new ReverseDependencyOrderWalkerWOSeenChk(filter.getFilterPlan());
         pushWalker(childWalker);
         //currentWalker.walk(this);
@@ -243,7 +245,7 @@ public class LogToPhyTranslationVisitor extends LogicalRelationalNodesVisitor {
         }
 
         translateSoftLinks(filter);
-//        System.err.println("Exiting Filter");
+        //        System.err.println("Exiting Filter");
     }
 
     @Override
@@ -304,6 +306,253 @@ public class LogToPhyTranslationVisitor extends LogicalRelationalNodesVisitor {
         }
 
         poSort.setResultType(DataType.BAG);
+    }
+
+    /**
+     * Transformation from Logical to Physical Plan involves the following steps:
+     * First, it is generated a random number which will link a POCounter within a PORank.
+     * On this way, avoiding possible collisions on parallel rank operations.
+     * Then, if it is row number mode:
+     * <pre>
+     * In case of a RANK operation (row number mode), are used two steps:
+     *   1.- Each tuple is counted sequentially on each mapper, and are produced global counters
+     *   2.- Global counters are gathered and summed, each tuple calls to the respective counter value
+     *       in order to calculate the corresponding rank value.
+     * </pre>
+     * or not:
+     * <pre>
+     * In case of a RANK BY operation, then are necessary five steps:
+     *   1.- Group by the fields involved on the rank operation: POPackage
+     *   2.- In case of multi-fields, the key (group field) is flatten: POForEach
+     *   3.- Sort operation by the fields available after flattening: POSort
+     *   4.- Each group is sequentially counted on each mapper through a global counter: POCounter
+     *   5.- Global counters are summed and passed to the rank operation: PORank
+     * </pre>
+     * @param loRank describe if the rank operation is on a row number mode
+     * or is rank by (dense or not)
+     **/
+    @Override
+    public void visit(LORank loRank) throws FrontendException {
+        String scope = DEFAULT_SCOPE;
+        PORank poRank;
+        POCounter poCounter;
+
+        Random randomGenerator = new Random();
+        Long operationID = Math.abs(randomGenerator.nextLong());
+
+        try {
+            // Physical operations for RANK operator:
+            // In case of a RANK BY operation, then are necessary five steps:
+            //   1.- Group by the fields involved on the rank operation: POPackage
+            //   2.- In case of multi-fields, the key (group field) is flatten: POForEach
+            //   3.- Sort operation by the fields available after flattening: POSort
+            //   4.- Each group is sequentially counted on each mapper through a global counter: POCounter
+            //   5.- Global counters are summed and passed to the rank operation: PORank
+            if(!loRank.isRowNumber()) {
+
+                boolean[] flags = {false};
+
+                MultiMap<Integer, LogicalExpressionPlan> expressionPlans = new MultiMap<Integer, LogicalExpressionPlan>();
+                for(int i = 0 ; i < loRank.getRankColPlans().size() ; i++)
+                    expressionPlans.put(i,loRank.getRankColPlans());
+
+                POPackage poPackage = compileToLR_GR_PackTrio(loRank, null, flags, expressionPlans);
+                poPackage.setPackageType(PackageType.GROUP);
+                translateSoftLinks(loRank);
+
+                List<Boolean> flattenLst = Arrays.asList(true, false);
+
+                PhysicalPlan fep1 = new PhysicalPlan();
+                POProject feproj1 = new POProject(new OperatorKey(scope, nodeGen.getNextNodeId(scope)), -1);
+                feproj1.addOriginalLocation(loRank.getAlias(), loRank.getLocation());
+                feproj1.setColumn(0);
+                feproj1.setResultType(poPackage.getKeyType());
+                feproj1.setStar(false);
+                feproj1.setOverloaded(false);
+                fep1.add(feproj1);
+
+
+                PhysicalPlan fep2 = new PhysicalPlan();
+                POProject feproj2 = new POProject(new OperatorKey(scope, nodeGen.getNextNodeId(scope)), -1);
+                feproj2.addOriginalLocation(loRank.getAlias(), loRank.getLocation());
+                feproj2.setColumn(1);
+                feproj2.setResultType(DataType.BAG);
+                feproj2.setStar(false);
+                feproj2.setOverloaded(false);
+                fep2.add(feproj2);
+                List<PhysicalPlan> fePlans = Arrays.asList(fep1, fep2);
+
+                POForEach poForEach = new POForEach(new OperatorKey(scope, nodeGen.getNextNodeId(scope)), -1, fePlans, flattenLst);
+
+                List<LogicalExpressionPlan> rankPlans = loRank.getRankColPlans();
+                byte[] newTypes = new byte[rankPlans.size()];
+
+                for(int i = 0; i < rankPlans.size(); i++) {
+                    LogicalExpressionPlan loep = rankPlans.get(i);
+                    Iterator<Operator> inpOpers = loep.getOperators();
+
+                    while(inpOpers.hasNext()) {
+                        Operator oper = inpOpers.next();
+                        newTypes[i] = ((ProjectExpression) oper).getType();
+                    }
+                }
+
+                List<PhysicalPlan> newPhysicalPlan = new ArrayList<PhysicalPlan>();
+                List<Boolean> newOrderPlan = new ArrayList<Boolean>();
+
+                for(int i = 0; i < loRank.getRankColPlans().size(); i++) {
+                    PhysicalPlan fep3 = new PhysicalPlan();
+                    POProject feproj3 = new POProject(new OperatorKey(scope, nodeGen.getNextNodeId(scope)), -1);
+                    feproj3.addOriginalLocation(loRank.getAlias(), loRank.getLocation());
+                    feproj3.setColumn(i);
+                    feproj3.setResultType(newTypes[i]);
+                    feproj3.setStar(false);
+                    feproj3.setOverloaded(false);
+                    fep3.add(feproj3);
+
+                    newPhysicalPlan.add(fep3);
+                    newOrderPlan.add(loRank.getAscendingCol().get(i));
+                }
+
+                POSort poSort;
+                poSort = new POSort(new OperatorKey(scope, nodeGen
+                        .getNextNodeId(scope)), -1, null,
+                        newPhysicalPlan, newOrderPlan, null);
+                poSort.addOriginalLocation(loRank.getAlias(), loRank.getLocation());
+
+
+                poCounter = new POCounter(
+                        new OperatorKey(scope, nodeGen
+                                .getNextNodeId(scope)), -1 , null,
+                                newPhysicalPlan, newOrderPlan);
+
+                poCounter.addOriginalLocation(loRank.getAlias(), loRank.getLocation());
+                poCounter.setResultType(DataType.TUPLE);
+                poCounter.setIsRowNumber(loRank.isRowNumber());
+                poCounter.setIsDenseRank(loRank.isDenseRank());
+                poCounter.setOperationID(String.valueOf(operationID));
+
+                poRank = new PORank(
+                        new OperatorKey(scope, nodeGen
+                                .getNextNodeId(scope)), -1 , null,
+                                newPhysicalPlan, newOrderPlan);
+
+                poRank.addOriginalLocation(loRank.getAlias(), loRank.getLocation());
+                poRank.setResultType(DataType.TUPLE);
+                poRank.setOperationID(String.valueOf(operationID));
+
+                List<Boolean> flattenLst2 = Arrays.asList(false, true);
+
+                PhysicalPlan fep12 = new PhysicalPlan();
+                POProject feproj12 = new POProject(new OperatorKey(scope, nodeGen.getNextNodeId(scope)), -1);
+                feproj12.addOriginalLocation(loRank.getAlias(), loRank.getLocation());
+                feproj12.setColumn(0);
+                feproj12.setResultType(DataType.LONG);
+                feproj12.setStar(false);
+                feproj12.setOverloaded(false);
+                fep12.add(feproj12);
+
+
+                PhysicalPlan fep22 = new PhysicalPlan();
+                POProject feproj22 = new POProject(new OperatorKey(scope, nodeGen.getNextNodeId(scope)), -1);
+                feproj22.addOriginalLocation(loRank.getAlias(), loRank.getLocation());
+                feproj22.setColumn(loRank.getRankColPlans().size()+1);
+                feproj22.setResultType(DataType.BAG);
+                feproj22.setStar(false);
+                feproj22.setOverloaded(false);
+                fep22.add(feproj22);
+                List<PhysicalPlan> fePlans2 = Arrays.asList(fep12, fep22);
+
+                POForEach poForEach2 = new POForEach(new OperatorKey(scope, nodeGen.getNextNodeId(scope)), -1, fePlans2, flattenLst2);
+
+                currentPlan.add(poForEach);
+                currentPlan.add(poSort);
+                currentPlan.add(poCounter);
+                currentPlan.add(poRank);
+                currentPlan.add(poForEach2);
+
+                try {
+                    currentPlan.connect(poPackage, poForEach);
+                    currentPlan.connect(poForEach, poSort);
+                    currentPlan.connect(poSort, poCounter);
+                    currentPlan.connect(poCounter, poRank);
+                    currentPlan.connect(poRank, poForEach2);
+                } catch (PlanException e) {
+                    throw new LogicalToPhysicalTranslatorException(e.getMessage(),e.getErrorCode(),e.getErrorSource(),e);
+                }
+
+                logToPhyMap.put(loRank, poForEach2);
+
+                // In case of a RANK operation, are used two steps:
+                //   1.- Each tuple is counted sequentially on each mapper, and are produced global counters
+                //   2.- Global counters are gathered and summed, each tuple calls to the respective counter value
+                //       in order to calculate the corresponding rank value.
+            } else {
+
+                List<LogicalExpressionPlan> logPlans = loRank.getRankColPlans();
+                List<PhysicalPlan> rankPlans = new ArrayList<PhysicalPlan>(logPlans.size());
+
+                // convert all the logical expression plans to physical expression plans
+                currentPlans.push(currentPlan);
+                for (LogicalExpressionPlan plan : logPlans) {
+                    currentPlan = new PhysicalPlan();
+                    PlanWalker childWalker = new ReverseDependencyOrderWalkerWOSeenChk(plan);
+                    pushWalker(childWalker);
+                    childWalker.walk(new ExpToPhyTranslationVisitor( currentWalker.getPlan(),
+                            childWalker, loRank, currentPlan, logToPhyMap));
+                    rankPlans.add(currentPlan);
+                    popWalker();
+                }
+                currentPlan = currentPlans.pop();
+
+
+
+                poCounter = new POCounter(
+                        new OperatorKey(scope, nodeGen
+                                .getNextNodeId(scope)), -1 , null,
+                                rankPlans, loRank.getAscendingCol());
+
+                poCounter.addOriginalLocation(loRank.getAlias(), loRank.getLocation());
+                poCounter.setResultType(DataType.TUPLE);
+                poCounter.setIsRowNumber(loRank.isRowNumber());
+                poCounter.setIsDenseRank(loRank.isDenseRank());
+                poCounter.setOperationID(String.valueOf(operationID));
+
+                poRank = new PORank(
+                        new OperatorKey(scope, nodeGen
+                                .getNextNodeId(scope)), -1 , null,
+                                rankPlans, loRank.getAscendingCol());
+
+                poRank.addOriginalLocation(loRank.getAlias(), loRank.getLocation());
+                poRank.setResultType(DataType.TUPLE);
+                poRank.setOperationID(String.valueOf(operationID));
+
+                currentPlan.add(poCounter);
+                currentPlan.add(poRank);
+
+                List<Operator> op = loRank.getPlan().getPredecessors(loRank);
+                PhysicalOperator from;
+
+                if(op != null) {
+                    from = logToPhyMap.get(op.get(0));
+                } else {
+                    int errCode = 2051;
+                    String msg = "Did not find a predecessor for Rank." ;
+                    throw new LogicalToPhysicalTranslatorException(msg, errCode, PigException.BUG);
+                }
+
+                currentPlan.connect(from, poCounter);
+                currentPlan.connect(poCounter, poRank);
+
+                logToPhyMap.put(loRank, poRank);
+            }
+
+        } catch (PlanException e) {
+            int errCode = 2015;
+            String msg = "Invalid physical operators in the physical plan" ;
+            throw new LogicalToPhysicalTranslatorException(msg, errCode, PigException.BUG, e);
+        }
+
     }
 
     @Override
@@ -606,8 +855,20 @@ public class LogToPhyTranslationVisitor extends LogicalRelationalNodesVisitor {
         for(boolean fl: flatten) {
             flattenList.add(fl);
         }
+        LogicalSchema logSchema = foreach.getSchema();
+        Schema schema = null;
+        if (logSchema != null) {
+            try {
+                schema = Schema.getPigSchema(new ResourceSchema(logSchema));
+            } catch (FrontendException e) {
+                throw new RuntimeException("LogicalSchema in foreach unable to be converted to Schema: " + logSchema, e);
+            }
+        }
+        if (schema != null) {
+            SchemaTupleFrontend.registerToGenerateIfPossible(schema, false, GenContext.FOREACH); //TODO may need to be appendable
+        }
         POForEach poFE = new POForEach(new OperatorKey(scope, nodeGen
-                .getNextNodeId(scope)), foreach.getRequestedParallelism(), innerPlans, flattenList);
+                .getNextNodeId(scope)), foreach.getRequestedParallelism(), innerPlans, flattenList, schema);
         poFE.addOriginalLocation(foreach.getAlias(), foreach.getLocation());
         poFE.setResultType(DataType.BAG);
         logToPhyMap.put(foreach, poFE);
@@ -679,7 +940,7 @@ public class LogToPhyTranslationVisitor extends LogicalRelationalNodesVisitor {
     @Override
     public void visit(LOStore loStore) throws FrontendException {
         String scope = DEFAULT_SCOPE;
-//        System.err.println("Entering Store");
+        //        System.err.println("Entering Store");
         POStore store = new POStore(new OperatorKey(scope, nodeGen
                 .getNextNodeId(scope)));
         store.addOriginalLocation(loStore.getAlias(), loStore.getLocation());
@@ -699,7 +960,7 @@ public class LogToPhyTranslationVisitor extends LogicalRelationalNodesVisitor {
 
         if(op != null) {
             from = logToPhyMap.get(op.get(0));
-            // TODO Implement sorting when we have a LOSort (new) and LOLimit (new) operator ready
+//             TODO Implement sorting when we have a LOSort (new) and LOLimit (new) operator ready
 //            SortInfo sortInfo = null;
 //            // if store's predecessor is limit,
 //            // check limit's predecessor
@@ -727,7 +988,7 @@ public class LogToPhyTranslationVisitor extends LogicalRelationalNodesVisitor {
             throw new LogicalToPhysicalTranslatorException(msg, errCode, PigException.BUG, e);
         }
         logToPhyMap.put(loStore, store);
-//        System.err.println("Exiting Store");
+        //        System.err.println("Exiting Store");
     }
 
     @Override
@@ -963,14 +1224,18 @@ public class LogToPhyTranslationVisitor extends LogicalRelationalNodesVisitor {
             logToPhyMap.put(loj, skj);
         }
         else if(loj.getJoinType() == LOJoin.JOINTYPE.REPLICATED) {
-            List<Schema> inputSchemas = Lists.newArrayListWithCapacity(inputs.size());
-            List<Schema> keySchemas = Lists.newArrayListWithCapacity(inputs.size());
+            Schema[] inputSchemas = new Schema[inputs.size()];
+            Schema[] keySchemas = new Schema[inputs.size()];
 
             outer: for (int i = 0; i < inputs.size(); i++) {
-                Schema toGen = Schema.getPigSchema(new ResourceSchema(((LogicalRelationalOperator)inputs.get(i)).getSchema()));
+                LogicalSchema logicalSchema = ((LogicalRelationalOperator)inputs.get(i)).getSchema();
+                if (logicalSchema == null) {
+                    continue;
+                }
+                Schema toGen = Schema.getPigSchema(new ResourceSchema(logicalSchema));
                 // This registers the value piece
                 SchemaTupleFrontend.registerToGenerateIfPossible(toGen, false, GenContext.FR_JOIN);
-                inputSchemas.add(toGen);
+                inputSchemas[i] = toGen;
 
                 Schema keyToGen = new Schema();
                 for (Byte byt : keyTypes.get(i)) {
@@ -982,7 +1247,7 @@ public class LogToPhyTranslationVisitor extends LogicalRelationalNodesVisitor {
                 }
 
                 SchemaTupleFrontend.registerToGenerateIfPossible(keyToGen, false, GenContext.FR_JOIN);
-                keySchemas.add(keyToGen);
+                keySchemas[i] = keyToGen;
             }
 
             int fragment = 0;
@@ -1425,7 +1690,7 @@ public class LogToPhyTranslationVisitor extends LogicalRelationalNodesVisitor {
     @Override
     public void visit(LOSplitOutput loSplitOutput) throws FrontendException {
         String scope = DEFAULT_SCOPE;
-//        System.err.println("Entering Filter");
+        //        System.err.println("Entering Filter");
         POFilter poFilter = new POFilter(new OperatorKey(scope, nodeGen
                 .getNextNodeId(scope)), loSplitOutput.getRequestedParallelism());
         poFilter.addOriginalLocation(loSplitOutput.getAlias(), loSplitOutput.getLocation());
@@ -1469,7 +1734,7 @@ public class LogToPhyTranslationVisitor extends LogicalRelationalNodesVisitor {
         }
 
         translateSoftLinks(loSplitOutput);
-//        System.err.println("Exiting Filter");
+        //        System.err.println("Exiting Filter");
     }
     /**
      * updates plan with check for empty bag and if bag is empty to flatten a bag

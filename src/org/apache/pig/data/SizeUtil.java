@@ -67,6 +67,9 @@ public class SizeUtil {
         case DataType.LONG:
             return 8 + 8;
 
+        case DataType.DATETIME:
+            return 8 + 2 + 8 + 6 /* one long (8) + one short (2) + 6 to round to 8 bytes */;
+
         case DataType.MAP: {
             @SuppressWarnings("unchecked")
             Map<String, Object> m = (Map<String, Object>) o;
@@ -88,6 +91,13 @@ public class SizeUtil {
         case DataType.BOOLEAN:
             // boolean takes 1 byte , +7 to round it to 8
             return 1 + 8 + 7;
+
+        //used http://javamoods.blogspot.fr/2009/03/how-big-is-bigdecimal.html as reference
+        case DataType.BIGINTEGER:
+            return 56;
+
+        case DataType.BIGDECIMAL:
+            return 32;
 
         case DataType.NULL:
             return 0;
@@ -111,7 +121,7 @@ public class SizeUtil {
 
     /**
      * Memory size of objects are rounded to multiple of 8 bytes
-     * 
+     *
      * @param i
      * @return i rounded to a equal of higher multiple of 8
      */

@@ -18,10 +18,14 @@
 package org.apache.pig.backend.hadoop.executionengine.physicalLayer;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+
+import org.joda.time.DateTime;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -100,7 +104,7 @@ public abstract class PhysicalOperator extends Operator<PhyPlanVisitor> implemen
     // Will be used by operators to report status or transmit heartbeat
     // Should be set by the backends to appropriate implementations that
     // wrap their own version of a reporter.
-    public static PigProgressable reporter;
+    private static ThreadLocal<PigProgressable> reporter = new ThreadLocal<PigProgressable>();
 
     // Will be used by operators to aggregate warning messages
     // Should be set by the backends to appropriate implementations that
@@ -123,9 +127,15 @@ public abstract class PhysicalOperator extends Operator<PhyPlanVisitor> implemen
 
     static final protected Boolean dummyBool = null;
 
+    static final protected DateTime dummyDateTime = null;
+
     static final protected Tuple dummyTuple = null;
 
     static final protected DataBag dummyBag = null;
+
+    static final protected BigInteger dummyBigInteger = null;
+
+    static final protected BigInteger dummyBigDecimal = null;
 
     static final protected Map dummyMap = null;
 
@@ -288,7 +298,6 @@ public abstract class PhysicalOperator extends Operator<PhyPlanVisitor> implemen
      * @throws ExecException
      */
     public Result processInput() throws ExecException {
-
         Result res = new Result();
         if (input == null && (inputs == null || inputs.size()==0)) {
 //            log.warn("No inputs found. Signaling End of Processing.");
@@ -297,8 +306,8 @@ public abstract class PhysicalOperator extends Operator<PhyPlanVisitor> implemen
         }
 
         //Should be removed once the model is clear
-        if(reporter!=null) {
-            reporter.progress();
+        if(getReporter()!=null) {
+            getReporter().progress();
         }
 
         if (!isInputAttached()) {
@@ -326,29 +335,39 @@ public abstract class PhysicalOperator extends Operator<PhyPlanVisitor> implemen
      */
     @SuppressWarnings("rawtypes")  // For legacy use of untemplatized Map.
     public Result getNext(Object obj, byte dataType) throws ExecException {
-        switch (dataType) {
-        case DataType.BAG:
-            return getNext((DataBag) obj);
-        case DataType.BOOLEAN:
-            return getNext((Boolean) obj);
-        case DataType.BYTEARRAY:
-            return getNext((DataByteArray) obj);
-        case DataType.CHARARRAY:
-            return getNext((String) obj);
-        case DataType.DOUBLE:
-            return getNext((Double) obj);
-        case DataType.FLOAT:
-            return getNext((Float) obj);
-        case DataType.INTEGER:
-            return getNext((Integer) obj);
-        case DataType.LONG:
-            return getNext((Long) obj);
-        case DataType.MAP:
-            return getNext((Map) obj);
-        case DataType.TUPLE:
-            return getNext((Tuple) obj);
-        default:
-            throw new ExecException("Unsupported type for getNext: " + DataType.findTypeName(dataType));
+        try {
+            switch (dataType) {
+            case DataType.BAG:
+                return getNext((DataBag) obj);
+            case DataType.BOOLEAN:
+                return getNext((Boolean) obj);
+            case DataType.BYTEARRAY:
+                return getNext((DataByteArray) obj);
+            case DataType.CHARARRAY:
+                return getNext((String) obj);
+            case DataType.DOUBLE:
+                return getNext((Double) obj);
+            case DataType.FLOAT:
+                return getNext((Float) obj);
+            case DataType.INTEGER:
+                return getNext((Integer) obj);
+            case DataType.LONG:
+                return getNext((Long) obj);
+            case DataType.BIGINTEGER:
+                return getNext((BigInteger) obj);
+            case DataType.BIGDECIMAL:
+                return getNext((BigDecimal) obj);
+            case DataType.DATETIME:
+                return getNext((DateTime) obj);
+            case DataType.MAP:
+                return getNext((Map) obj);
+            case DataType.TUPLE:
+                return getNext((Tuple) obj);
+            default:
+                throw new ExecException("Unsupported type for getNext: " + DataType.findTypeName(dataType));
+            }
+        } catch (RuntimeException e) {
+            throw new ExecException("Exception while executing " + this.toString() + ": " + e.toString(), e);
         }
     }
 
@@ -370,6 +389,12 @@ public abstract class PhysicalOperator extends Operator<PhyPlanVisitor> implemen
             return dummyFloat;
         case DataType.LONG:
             return dummyLong;
+        case DataType.BIGINTEGER:
+            return dummyBigInteger;
+        case DataType.BIGDECIMAL:
+            return dummyBigDecimal;
+        case DataType.DATETIME:
+            return dummyDateTime;
         case DataType.MAP:
             return dummyMap;
         case DataType.TUPLE:
@@ -392,6 +417,10 @@ public abstract class PhysicalOperator extends Operator<PhyPlanVisitor> implemen
     }
 
     public Result getNext(Float f) throws ExecException {
+        return res;
+    }
+
+    public Result getNext(DateTime dt) throws ExecException {
         return res;
     }
 
@@ -429,6 +458,14 @@ public abstract class PhysicalOperator extends Operator<PhyPlanVisitor> implemen
         return ret;
     }
 
+    public Result getNext(BigInteger t) throws ExecException {
+        return res;
+    }
+
+    public Result getNext(BigDecimal t) throws ExecException {
+        return res;
+    }
+
     /**
      * Reset internal state in an operator.  For use in nested pipelines
      * where operators like limit and sort may need to reset their state.
@@ -440,8 +477,18 @@ public abstract class PhysicalOperator extends Operator<PhyPlanVisitor> implemen
     public void reset() {
     }
 
+    /**
+     * @return PigProgressable stored in threadlocal
+     */
+    public static PigProgressable getReporter() {
+        return PhysicalOperator.reporter.get();
+    }
+
+    /**
+     * @param reporter PigProgressable to be stored in threadlocal
+     */
     public static void setReporter(PigProgressable reporter) {
-        PhysicalOperator.reporter = reporter;
+        PhysicalOperator.reporter.set(reporter);
     }
 
     /**

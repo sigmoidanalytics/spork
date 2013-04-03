@@ -18,6 +18,8 @@
 package org.apache.pig.backend.hadoop.hbase;
 
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.Map;
 
 import org.apache.hadoop.hbase.util.Bytes;
@@ -27,17 +29,18 @@ import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.data.DataBag;
 import org.apache.pig.data.DataByteArray;
 import org.apache.pig.data.Tuple;
+import org.joda.time.DateTime;
 
 public class HBaseBinaryConverter implements LoadStoreCaster {
 
     @Override
     public String bytesToCharArray(byte[] b) throws IOException {
-        return Bytes.toString(b);    
+        return Bytes.toString(b);
     }
 
     @Override
     public Double bytesToDouble(byte[] b) throws IOException {
-        if (Bytes.SIZEOF_DOUBLE > b.length){ 
+        if (Bytes.SIZEOF_DOUBLE > b.length){
             return Bytes.toDouble(Bytes.padHead(b, Bytes.SIZEOF_DOUBLE - b.length));
         } else {
             return Bytes.toDouble(Bytes.head(b, Bytes.SIZEOF_DOUBLE));
@@ -46,7 +49,7 @@ public class HBaseBinaryConverter implements LoadStoreCaster {
 
     @Override
     public Float bytesToFloat(byte[] b) throws IOException {
-        if (Bytes.SIZEOF_FLOAT > b.length){ 
+        if (Bytes.SIZEOF_FLOAT > b.length){
             return Bytes.toFloat(Bytes.padHead(b, Bytes.SIZEOF_FLOAT - b.length));
         } else {
             return Bytes.toFloat(Bytes.head(b, Bytes.SIZEOF_FLOAT));
@@ -55,7 +58,7 @@ public class HBaseBinaryConverter implements LoadStoreCaster {
 
     @Override
     public Integer bytesToInteger(byte[] b) throws IOException {
-        if (Bytes.SIZEOF_INT > b.length){ 
+        if (Bytes.SIZEOF_INT > b.length){
             return Bytes.toInt(Bytes.padHead(b, Bytes.SIZEOF_INT - b.length));
         } else {
             return Bytes.toInt(Bytes.head(b, Bytes.SIZEOF_INT));
@@ -64,7 +67,7 @@ public class HBaseBinaryConverter implements LoadStoreCaster {
 
     @Override
     public Long bytesToLong(byte[] b) throws IOException {
-        if (Bytes.SIZEOF_LONG > b.length){ 
+        if (Bytes.SIZEOF_LONG > b.length){
             return Bytes.toLong(Bytes.padHead(b, Bytes.SIZEOF_LONG - b.length));
         } else {
             return Bytes.toLong(Bytes.head(b, Bytes.SIZEOF_LONG));
@@ -78,6 +81,14 @@ public class HBaseBinaryConverter implements LoadStoreCaster {
         } else {
             return Bytes.toBoolean(Bytes.head(b, Bytes.SIZEOF_BOOLEAN));
         }
+    }
+
+    /**
+     * NOT IMPLEMENTED
+     */
+    @Override
+    public DateTime bytesToDateTime(byte[] b) throws IOException {
+        throw new ExecException("Can't generate a DateTime from byte[]");
     }
 
     @Override
@@ -150,6 +161,14 @@ public class HBaseBinaryConverter implements LoadStoreCaster {
      * NOT IMPLEMENTED
      */
     @Override
+    public byte[] toBytes(DateTime dt) throws IOException {
+        throw new IOException("Can't generate bytes from DateTime");
+    }
+
+    /**
+     * NOT IMPLEMENTED
+     */
+    @Override
     public byte[] toBytes(Map<String, Object> m) throws IOException {
         throw new IOException("Can't generate bytes from Map");
     }
@@ -165,5 +184,37 @@ public class HBaseBinaryConverter implements LoadStoreCaster {
     @Override
     public byte[] toBytes(DataByteArray a) throws IOException {
         return a.get();
+    }
+
+    /**
+     * Not implemented!
+     */
+    @Override
+    public BigInteger bytesToBigInteger(byte[] b) throws IOException {
+        throw new ExecException("Can't generate a BigInteger from byte[]");
+    }
+
+    /**
+     * Not implemented!
+     */
+    @Override
+    public BigDecimal bytesToBigDecimal(byte[] b) throws IOException {
+        throw new ExecException("Can't generate a BigInteger from byte[]");
+    }
+
+    /**
+     * Not implemented!
+     */
+    @Override
+    public byte[] toBytes(BigInteger bi) throws IOException {
+        throw new IOException("Can't generate bytes from BigInteger");
+    }
+
+    /**
+     * Not implemented!
+     */
+    @Override
+    public byte[] toBytes(BigDecimal bd) throws IOException {
+        throw new IOException("Can't generate bytes from BigDecimal");
     }
 }

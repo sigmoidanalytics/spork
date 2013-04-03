@@ -9,6 +9,8 @@ import java.util.Map;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.pig.PigConstants;
 import org.apache.pig.PigException;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.Launcher;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRCompiler;
@@ -44,6 +46,7 @@ import org.apache.pig.backend.hadoop.executionengine.spark.converter.SortConvert
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.SplitConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.StoreConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.UnionConverter;
+import org.apache.pig.data.SchemaTupleBackend;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.plan.OperatorKey;
@@ -74,6 +77,10 @@ public class SparkLauncher extends Launcher {
     public PigStats launchPig(PhysicalPlan physicalPlan, String grpName, PigContext pigContext) throws Exception {
         LOG.info("!!!!!!!!!!  Launching Spark (woot) !!!!!!!!!!!!");
         LOG.debug(physicalPlan);
+        Configuration c = SparkUtil.newJobConf(pigContext);
+        c.set(PigConstants.LOCAL_CODE_DIR,System.getProperty("java.io.tmpdir"));
+
+        SchemaTupleBackend.initialize(c, pigContext);
 /////////
 // stolen from MapReduceLauncher
         MRCompiler mrCompiler = new MRCompiler(physicalPlan, pigContext);
@@ -110,11 +117,10 @@ public class SparkLauncher extends Launcher {
         Map<OperatorKey, RDD<Tuple>> rdds = new HashMap<OperatorKey, RDD<Tuple>>();
 
         SparkStats stats = new SparkStats();
-
-        LinkedList<POStore> stores = PlanHelper.getStores(physicalPlan);
+        LinkedList<POStore> stores = PlanHelper.getPhysicalOperators(physicalPlan, POStore.class);
         for (POStore poStore : stores) {
             physicalToRDD(physicalPlan, poStore, rdds, convertMap);
-            stats.addOutputInfo(poStore, 1, 1, true); // TODO: use real values
+            stats.addOutputInfo(poStore, 1, 1, true, c); // TODO: use real values
         }
 
         return stats;

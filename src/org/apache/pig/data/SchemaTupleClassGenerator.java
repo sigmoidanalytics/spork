@@ -18,30 +18,23 @@
 package org.apache.pig.data;
 
 import java.io.File;
+import java.io.IOException;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
-import java.net.URI;
 import java.util.List;
-import java.util.Locale;
 import java.util.Queue;
 
-import javax.tools.Diagnostic;
-import javax.tools.DiagnosticCollector;
-import javax.tools.JavaCompiler;
-import javax.tools.JavaFileManager;
-import javax.tools.JavaFileObject;
-import javax.tools.SimpleJavaFileObject;
-import javax.tools.ToolProvider;
-
-import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.pig.PigConfiguration;
 import org.apache.pig.classification.InterfaceAudience;
 import org.apache.pig.classification.InterfaceStability;
 import org.apache.pig.impl.logicalLayer.schema.Schema;
+import org.apache.pig.impl.util.JavaCompilerHelper;
+import org.apache.pig.impl.util.ObjectSerializer;
 
 import com.google.common.collect.Lists;
 
@@ -68,28 +61,27 @@ public class SchemaTupleClassGenerator {
          * This context is used in UDF code. Currently, this is only used for
          * the inputs to UDF's.
          */
-        UDF ("pig.schematuple.udf", true, GenerateUdf.class),
+        UDF (PigConfiguration.SCHEMA_TUPLE_SHOULD_USE_IN_UDF, true, GenerateUdf.class),
         /**
-         * This context is for LoadFuncs. It is currently not used,
-         * however the intent is that when a Schema is known, the
-         * LoadFunc can return typed Tuples.
+         * This context is for POForEach. This will use the expected output of a ForEach
+         * to return a typed Tuple.
          */
-        LOAD ("pig.schematuple.load", true, GenerateLoad.class),
+        FOREACH (PigConfiguration.SCHEMA_TUPLE_SHOULD_USE_IN_FOREACH, true, GenerateForeach.class),
         /**
          * This context controls whether or not SchemaTuples will be used in FR joins.
          * Currently, they will be used in the HashMap that FR Joins construct.
          */
-        FR_JOIN ("pig.schematuple.fr_join", true, GenerateFrJoin.class),
+        FR_JOIN (PigConfiguration.SCHEMA_TUPLE_SHOULD_USE_IN_FRJOIN, true, GenerateFrJoin.class),
         /**
          * This context controls whether or not SchemaTuples will be used in merge joins.
          */
-        MERGE_JOIN ("pig.schematuple.merge_join", true, GenerateMergeJoin.class),
+        MERGE_JOIN (PigConfiguration.SCHEMA_TUPLE_SHOULD_USE_IN_MERGEJOIN, true, GenerateMergeJoin.class),
         /**
          * All registered Schemas will also be registered in one additional context.
          * This context will allow users to "force" the load of a SchemaTupleFactory
          * if one is present in any context.
          */
-        FORCE_LOAD ("pig.schematuple.force", true, GenerateForceLoad.class);
+        FORCE_LOAD (PigConfiguration.SCHEMA_TUPLE_SHOULD_ALLOW_FORCE, true, GenerateForceLoad.class);
 
         /**
          * These annotations are used to mark a given SchemaTuple with
@@ -102,7 +94,7 @@ public class SchemaTupleClassGenerator {
 
         @Retention(RetentionPolicy.RUNTIME)
         @Target(ElementType.TYPE)
-        public @interface GenerateLoad {}
+        public @interface GenerateForeach {}
 
         @Retention(RetentionPolicy.RUNTIME)
         @Target(ElementType.TYPE)
@@ -138,7 +130,7 @@ public class SchemaTupleClassGenerator {
          * Checks the generated class to see if the annotation
          * associated with this enum is present.
          * @param clazz
-         * @return
+         * @return boolean type value
          */
         @SuppressWarnings({ "unchecked", "rawtypes" })
         public boolean shouldGenerate(Class clazz) {
@@ -149,7 +141,7 @@ public class SchemaTupleClassGenerator {
          * Given a job configuration file, this checks to see
          * if the default value has been overriden.
          * @param conf
-         * @return
+         * @return boolean type value
          */
         public boolean shouldGenerate(Configuration conf) {
             String shouldString = conf.get(key);
@@ -167,12 +159,16 @@ public class SchemaTupleClassGenerator {
      */
     private static int nextGlobalClassIdentifier = 0;
 
+    protected static void resetGlobalClassIdentifier() {
+        nextGlobalClassIdentifier = 0;
+    }
+
     /**
      * This class actually generates the code for a given Schema.
-     * @param   schema
-     * @param   true or false depending on whether it should be appendable
-     * @param   identifier
-     * @param   a list of contexts in which the SchemaTuple is intended to be instantiated
+     * @param   s as Schema
+     * @param   appendable as boolean, true or false depending on whether it should be appendable
+     * @param   id as int, id means identifier
+     * @param   contexts which are a list of contexts in which the SchemaTuple is intended to be instantiated
      */
     protected static void generateSchemaTuple(Schema s, boolean appendable, int id, File codeDir, GenContext... contexts) {
         StringBuilder contextAnnotations = new StringBuilder();
@@ -230,51 +226,12 @@ public class SchemaTupleClassGenerator {
      */
     //TODO in the future, we can use ASM to generate the bytecode directly.
     private static void compileCodeString(String className, String generatedCodeString, File codeDir) {
-        JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
-        JavaFileManager fileManager = compiler.getStandardFileManager(null, null, null);
-        Iterable<? extends JavaFileObject> compilationUnits = Lists.newArrayList(new JavaSourceFromString(className, generatedCodeString));
-
-        DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<JavaFileObject>();
-
+        JavaCompilerHelper compiler = new JavaCompilerHelper(); 
         String tempDir = codeDir.getAbsolutePath();
-
-        String classPath = System.getProperty("java.class.path") + ":" + tempDir;
-        LOG.debug("Compiling SchemaTuple code with classpath: " + classPath);
-
-        List<String> optionList = Lists.newArrayList();
-        // Adds the current classpath to the compiler along with our generated code
-        optionList.add("-classpath");
-        optionList.add(classPath);
-        optionList.add("-d");
-        optionList.add(tempDir);
-
-        if (!compiler.getTask(null, fileManager, diagnostics, optionList, null, compilationUnits).call()) {
-            LOG.warn("Error compiling: " + className + ". Printing compilation errors and shutting down.");
-            for (Diagnostic<? extends JavaFileObject> diagnostic : diagnostics.getDiagnostics()) {
-                LOG.warn("Error on line " + diagnostic.getLineNumber() + ": " + diagnostic.getMessage(Locale.US));
-            }
-            throw new RuntimeException("Unable to compile code string:\n" + generatedCodeString);
-        }
-
+        compiler.addToClassPath(tempDir);
+        LOG.debug("Compiling SchemaTuple code with classpath: " + compiler.getClassPath());
+        compiler.compile(tempDir, new JavaCompilerHelper.JavaSourceFromString(className, generatedCodeString));
         LOG.info("Successfully compiled class: " + className);
-    }
-
-    /**
-     * This class allows code to be generated directly from a String, instead of having to be
-     * on disk.
-     */
-    private static class JavaSourceFromString extends SimpleJavaFileObject {
-        final String code;
-
-        JavaSourceFromString(String name, String code) {
-            super(URI.create("string:///" + name.replace('.','/') + Kind.SOURCE.extension), Kind.SOURCE);
-            this.code = code;
-        }
-
-        @Override
-        public CharSequence getCharContent(boolean ignoreEncodingErrors) {
-            return code;
-        }
     }
 
     static class CompareToSpecificString extends TypeInFunctionStringOut {
@@ -367,9 +324,12 @@ public class SchemaTupleClassGenerator {
         private File codeDir;
 
         public void prepare() {
-            String s = schema.toString();
-            s = s.substring(1, s.length() - 1);
-            s = Base64.encodeBase64URLSafeString(s.getBytes());
+            String s;
+            try {
+                s = ObjectSerializer.serialize(schema);
+            } catch (IOException e) {
+                throw new RuntimeException("Unable to serialize schema: " + schema, e);
+            }
             add("private static Schema schema = staticSchemaGen(\"" + s + "\");");
         }
 
@@ -619,6 +579,21 @@ public class SchemaTupleClassGenerator {
         }
     }
 
+    static class IsSpecificSchemaTuple extends TypeInFunctionStringOut {
+        private int id;
+
+        public IsSpecificSchemaTuple(int id) {
+            this.id = id;
+        }
+
+        public void prepare() {
+            add("@Override");
+            add("public boolean isSpecificSchemaTuple(Object o) {");
+            add("    return o instanceof SchemaTuple_" + id + ";");
+            add("}");
+        }
+    }
+
     //this has to write the null state of all the fields, not just the null bytes, though those
     //will have to be reconstructed
     static class WriteNullsString extends TypeInFunctionStringOut {
@@ -756,17 +731,25 @@ public class SchemaTupleClassGenerator {
             } else if (isLong() || isDouble()) {
                 size += 8;
             } else if (isBytearray()) {
-                s += "(pos_"+fieldPos+" == null ? 8 : SizeUtil.roundToEight(12 + pos_"+fieldPos+".length) * 8) + ";
-            } else if (isString()) {
-                s += "(pos_"+fieldPos+" == null ? 8 : SizeUtil.getPigObjMemSize(pos_"+fieldPos+")) + ";
+                size += 8; //the ptr
+                s += "(pos_"+fieldPos+" == null ? 0 : SizeUtil.roundToEight(12 + pos_"+fieldPos+".length) * 8) + ";
             } else if (isBoolean()) {
                 if (booleans++ % 8 == 0) {
                     size++; //accounts for the byte used to store boolean values
                 }
+            } else if (isDateTime()) {
+                size += 10; // 8 for long and 2 for short
             } else if (isBag()) {
-                //TODO IMPLEMENT
-            } else {
+                size += 8; //the ptr
+                s += "(pos_"+fieldPos+" == null ? 0 : pos_"+fieldPos+".getMemorySize()) + ";
+            } else if (isMap() || isString() || isBigDecimal() || isBigInteger()) {
+                size += 8; //the ptr
+                s += "(pos_"+fieldPos+" == null ? 0 : SizeUtil.getPigObjMemSize(pos_"+fieldPos+")) + ";
+            } else if (isTuple()) {
+                size += 8; //the ptr
                 s += "(pos_"+fieldPos+" == null ? 8 : pos_"+fieldPos+".getMemorySize()) + ";
+            } else {
+                throw new RuntimeException("Unsupported type found: " + fs);
             }
 
             if (isPrimitive() && primitives++ % 8 == 0) {
@@ -791,10 +774,15 @@ public class SchemaTupleClassGenerator {
             case (DataType.FLOAT): add("    return 0.0f;"); break;
             case (DataType.DOUBLE): add("    return 0.0;"); break;
             case (DataType.BOOLEAN): add("    return true;"); break;
+            case (DataType.DATETIME): add("    return new DateTime();"); break;
+            case (DataType.BIGDECIMAL): add("    return (BigDecimal)null;"); break;
+            case (DataType.BIGINTEGER): add("    return (BigInteger)null;"); break;
             case (DataType.BYTEARRAY): add("    return (byte[])null;"); break;
             case (DataType.CHARARRAY): add("    return (String)null;"); break;
             case (DataType.TUPLE): add("    return (Tuple)null;"); break;
             case (DataType.BAG): add("    return (DataBag)null;"); break;
+            case (DataType.MAP): add("    return (Map<String,Object>)null;"); break;
+            default: throw new RuntimeException("Unsupported type");
             }
             add("}");
             addBreak();
@@ -1049,6 +1037,7 @@ public class SchemaTupleClassGenerator {
             listOfFutureMethods.add(new CompareToString(id));
             listOfFutureMethods.add(new CompareToSpecificString(id, appendable));
             listOfFutureMethods.add(new SetEqualToSchemaTupleString(id));
+            listOfFutureMethods.add(new IsSpecificSchemaTuple(id));
             listOfFutureMethods.add(new TypeAwareSetString(DataType.INTEGER));
             listOfFutureMethods.add(new TypeAwareSetString(DataType.LONG));
             listOfFutureMethods.add(new TypeAwareSetString(DataType.FLOAT));
@@ -1056,8 +1045,12 @@ public class SchemaTupleClassGenerator {
             listOfFutureMethods.add(new TypeAwareSetString(DataType.BYTEARRAY));
             listOfFutureMethods.add(new TypeAwareSetString(DataType.CHARARRAY));
             listOfFutureMethods.add(new TypeAwareSetString(DataType.BOOLEAN));
+            listOfFutureMethods.add(new TypeAwareSetString(DataType.DATETIME));
+            listOfFutureMethods.add(new TypeAwareSetString(DataType.BIGDECIMAL));
+            listOfFutureMethods.add(new TypeAwareSetString(DataType.BIGINTEGER));
             listOfFutureMethods.add(new TypeAwareSetString(DataType.TUPLE));
             listOfFutureMethods.add(new TypeAwareSetString(DataType.BAG));
+            listOfFutureMethods.add(new TypeAwareSetString(DataType.MAP));
             listOfFutureMethods.add(new TypeAwareGetString(DataType.INTEGER));
             listOfFutureMethods.add(new TypeAwareGetString(DataType.LONG));
             listOfFutureMethods.add(new TypeAwareGetString(DataType.FLOAT));
@@ -1065,8 +1058,12 @@ public class SchemaTupleClassGenerator {
             listOfFutureMethods.add(new TypeAwareGetString(DataType.BYTEARRAY));
             listOfFutureMethods.add(new TypeAwareGetString(DataType.CHARARRAY));
             listOfFutureMethods.add(new TypeAwareGetString(DataType.BOOLEAN));
+            listOfFutureMethods.add(new TypeAwareGetString(DataType.DATETIME));
+            listOfFutureMethods.add(new TypeAwareGetString(DataType.BIGDECIMAL));
+            listOfFutureMethods.add(new TypeAwareGetString(DataType.BIGINTEGER));
             listOfFutureMethods.add(new TypeAwareGetString(DataType.TUPLE));
             listOfFutureMethods.add(new TypeAwareGetString(DataType.BAG));
+            listOfFutureMethods.add(new TypeAwareGetString(DataType.MAP));
             listOfFutureMethods.add(new ListSetString());
 
             for (TypeInFunctionStringOut t : listOfFutureMethods) {
@@ -1083,12 +1080,17 @@ public class SchemaTupleClassGenerator {
             StringBuilder head =
                 new StringBuilder()
                     .append("import java.util.List;\n")
+                    .append("import java.util.Map;\n")
                     .append("import java.util.Iterator;\n")
                     .append("import java.io.DataOutput;\n")
                     .append("import java.io.DataInput;\n")
                     .append("import java.io.IOException;\n")
+                    .append("import java.math.BigDecimal;\n")
+                    .append("import java.math.BigInteger;\n")
                     .append("\n")
                     .append("import com.google.common.collect.Lists;\n")
+                    .append("\n")
+                    .append("import org.joda.time.DateTime;")
                     .append("\n")
                     .append("import org.apache.pig.data.DataType;\n")
                     .append("import org.apache.pig.data.DataBag;\n")
@@ -1188,10 +1190,6 @@ public class SchemaTupleClassGenerator {
         public void prepareProcess(Schema.FieldSchema fs) {
             type = fs.type;
 
-            if (type==DataType.MAP) {
-                throw new RuntimeException("Map currently not supported by SchemaTuple");
-            }
-
             process(fieldPos, fs);
             fieldPos++;
         }
@@ -1210,6 +1208,18 @@ public class SchemaTupleClassGenerator {
 
         public boolean isDouble() {
             return type == DataType.DOUBLE;
+        }
+
+        public boolean isDateTime() {
+            return type == DataType.DATETIME;
+        }
+
+        public boolean isBigDecimal() {
+            return type == DataType.BIGDECIMAL;
+        }
+
+        public boolean isBigInteger() {
+            return type == DataType.BIGINTEGER;
         }
 
         public boolean isPrimitive() {
@@ -1236,6 +1246,10 @@ public class SchemaTupleClassGenerator {
             return type == DataType.BAG;
         }
 
+        public boolean isMap() {
+            return type == DataType.MAP;
+        }
+
         public boolean isObject() {
             return !isPrimitive();
         }
@@ -1253,8 +1267,12 @@ public class SchemaTupleClassGenerator {
                 case (DataType.BYTEARRAY): return "byte[]";
                 case (DataType.CHARARRAY): return "String";
                 case (DataType.BOOLEAN): return "boolean";
+                case (DataType.DATETIME): return "DateTime";
+                case (DataType.BIGDECIMAL): return "BigDecimal";
+                case (DataType.BIGINTEGER): return "BigInteger";
                 case (DataType.TUPLE): return "Tuple";
                 case (DataType.BAG): return "DataBag";
+                case (DataType.MAP): return "Map";
                 default: throw new RuntimeException("Can't return String for given type " + DataType.findTypeName(type));
             }
         }

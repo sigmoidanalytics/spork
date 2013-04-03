@@ -69,6 +69,8 @@
       conf="hadoop23->master"/>
     <dependency org="commons-el" name="commons-el" rev="${commons-el.version}"
       conf="compile->master"/>
+    <dependency org="commons-io" name="commons-io" rev="${commons-io.version}"
+      conf="compile->master"/>
     <dependency org="org.apache.httpcomponents" name="httpclient" rev="${httpcomponents.version}"
       conf="compile->master"/>
     <dependency org="org.apache.httpcomponents" name="httpcore" rev="${httpcomponents.version}"
@@ -87,6 +89,12 @@
       conf="hadoop23->master"/>
     <dependency org="org.mortbay.jetty" name="jetty-util" rev="${jetty-util.version}"
       conf="hadoop23->master"/>
+    <dependency org="javax.inject" name="javax.inject" rev="${javax-inject.version}"
+      conf="hadoop23->master"/>
+    <dependency org="javax.xml.bind" name="jaxb-api" rev="${jaxb-api.version}"
+      conf="hadoop23->master"/>
+    <dependency org="com.sun.xml.bind" name="jaxb-impl" rev="${jaxb-impl.version}"
+      conf="hadoop23->master"/> 
     <dependency org="com.google.inject" name="guice" rev="${guice.version}"
       conf="hadoop23->master"/>
     <dependency org="com.google.inject.extensions" name="guice-servlet" rev="${guice-servlet.version}"
@@ -152,6 +160,8 @@
       rev="${hadoop-mapreduce.version}" conf="hadoop23->master"/>
     <dependency org="org.apache.hadoop" name="hadoop-yarn-server-resourcemanager" 
       rev="${hadoop-mapreduce.version}" conf="hadoop23->master"/>
+    <dependency org="org.apache.hadoop" name="hadoop-yarn-client" 
+      rev="${hadoop-mapreduce.version}" conf="hadoop23->master"/>
     <dependency org="org.apache.hadoop" name="hadoop-mapreduce-client-hs" 
       rev="${hadoop-mapreduce.version}" conf="hadoop23->master"/>
     <dependency org="org.mortbay.jetty" name="jetty" rev="${jetty.version}"
@@ -164,7 +174,7 @@
       conf="compile->master;test->master"/>
     <dependency org="commons-cli" name="commons-cli" rev="${commons-cli.version}"
       conf="compile->master;checkstyle->master"/>
-    
+
     <dependency org="org.apache.avro" name="avro" rev="${avro.version}"
       conf="compile->default;checkstyle->master"/>
     <dependency org="com.googlecode.json-simple" name="json-simple" rev="${json-simple.version}"
@@ -172,8 +182,10 @@
 
     <dependency org="jdiff" name="jdiff" rev="${jdiff.version}"
       conf="jdiff->default"/>
-    <dependency org="xerces" name="xerces" rev="${xerces.version}"
-      conf="jdiff->default"/>
+    <dependency org="xalan" name="xalan" rev="${xalan.version}"
+      conf="test->default"/>
+    <dependency org="xerces" name="xercesImpl" rev="${xerces.version}"
+      conf="jdiff->default;test->default"/>
     <dependency org="com.jcraft" name="jsch" rev="${jsch.version}"
       conf="compile->master"/>
     <dependency org="jline" name="jline" rev="${jline.version}"
@@ -181,16 +193,20 @@
     <dependency org="net.java.dev.javacc" name="javacc" rev="${javacc.version}"
       conf="compile->master"/>
     <dependency org="junit" name="junit" rev="${junit.version}"
-      conf="compile->master"/>
+      conf="test->master"/>
     <dependency org="com.google.code.p.arat" name="rat-lib" rev="${rats-lib.version}"
       conf="releaseaudit->default"/>
+    <dependency org="org.codehaus.groovy" name="groovy-all" rev="${groovy.version}"
+      conf="compile->master"/>
     <dependency org="org.codehaus.jackson" name="jackson-mapper-asl" rev="${jackson.version}"
       conf="compile->master"/>
     <dependency org="org.codehaus.jackson" name="jackson-core-asl" rev="${jackson.version}"
       conf="compile->master"/>
+    <dependency org="org.fusesource.jansi" name="jansi" rev="${jansi.version}"
+      conf="compile->master"/>
     <dependency org="joda-time" name="joda-time" rev="${joda-time.version}" conf="compile->master"/>
     <dependency org="commons-lang" name="commons-lang" rev="${commons-lang.version}"
-  	  conf="compile->master"/>
+      conf="compile->master"/>
     <dependency org="com.google.guava" name="guava" rev="${guava.version}" conf="compile->master" />
     <dependency org="org.python" name="jython-standalone" rev="${jython.version}" conf="compile->master"/>
     <dependency org="rhino" name="js" rev="${rhino.version}" conf="compile->master"/>
@@ -198,7 +214,7 @@
     <dependency org="org.antlr" name="antlr-runtime" rev="${antlr.version}" conf="compile->default"/>
     <dependency org="org.antlr" name="ST4" rev="${stringtemplate.version}" conf="compile->default"/>
     <dependency org="org.apache.zookeeper" name="zookeeper" rev="${zookeeper.version}" conf="compile->master"/>
-    <dependency org="org.jboss.netty" name="netty" rev="3.2.2.Final" conf="compile->master"/>
+    <dependency org="org.jboss.netty" name="netty" rev="3.2.2.Final" conf="test->master"/>
     <dependency org="dk.brics.automaton" name="automaton" rev="1.11-8" conf="compile->default"/>
 
     <dependency org="org.jruby" name="jruby-complete" rev="${jruby.version}" conf="compile->master"/>
@@ -211,20 +227,29 @@
       <exclude org="org.apache.ant" module="ant" />
       <exclude org="org.slf4j" module="slf4j"/>
       <exclude org="org.slf4j" module="slf4j-api"/>
-      <exclude org="org.slf4j" module="log4j12"/>
       <exclude org="org.slf4j" module="slf4j-log4j12" />
+      <exclude org="org.slf4j" module="log4j12"/>
+      <exclude org="org.slf4j" module="log4j-over-slf4j"/>
       <exclude org="stax" module="stax-api" />
       <exclude org="javax.xml.bind" module="jaxb-api" />
       <exclude org="javax.ws.rs" module="jsr311-api" />
-      <exclude org="com.google.protobuf" module="protobuf-java"/>
       <exclude org="tomcat" module="jasper-runtime"/>
       <exclude org="tomcat" module="jasper-compiler"/>
-      <exclude org="org.slf4j" module="log4j-over-slf4j"/>
+      <exclude org="com.google.protobuf" module="protobuf-java"/>
       <exclude org="com.sun.jersey" module="jersey-core"/>
       <exclude org="com.sun.jersey" module="jersey-server"/>
       <exclude org="com.sun.jersey" module="jersey-json"/>
       <exclude org="asm" module="asm"/>
     </dependency>
+
+    <!-- for TestHBaseStorage -->
+    <dependency org="com.github.stephenc.high-scale-lib" name="high-scale-lib" rev="${high-scale-lib.version}"
+       conf="test->default"/>
+    <dependency org="com.google.protobuf" name="protobuf-java" rev="${protobuf-java.version}"
+       conf="test->default"/>
+    <dependency org="com.yammer.metrics" name="metrics-core" rev="${metrics-core.version}"
+       conf="test->default"/>
+
     <!-- for piggybank -->
     <dependency org="hsqldb" name="hsqldb" rev="${hsqldb.version}"
       conf="test->default" />
@@ -234,11 +259,12 @@
     <dependency org="org.vafer" name="jdeb" rev="${jdeb.version}"
       conf="compile->master">
     </dependency>
-    
+
     <dependency org="org.mockito" name="mockito-all" rev="${mockito.version}" conf="compile->default"/>
 
-    <dependency org="org.spark-project" name="spark-core_2.9.1" rev="0.5.1-SNAPSHOT" conf="compile"/>
+    <dependency org="org.spark-project" name="spark-core_2.9.1" rev="0.6.0-SNAPSHOT" conf="compile"/>
     <dependency org="org.scala-lang" name="scala-library" rev="2.9.1" conf="compile"/>
 
     </dependencies>
 </ivy-module>
+

@@ -34,6 +34,11 @@ public enum ExecType implements Serializable {
     MAPREDUCE,
     SPARK;
 
+    /**
+     * Given a string, determine the exec type.
+     * @param execString accepted values are 'local', 'mapreduce', 'mapred', and 'spark'
+     * @return exectype as ExecType
+     */
     public static ExecType fromString(String execString) throws PigException {
         if (execString.equals("mapred")) {
             return MAPREDUCE;
