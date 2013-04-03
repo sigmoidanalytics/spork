@@ -18,6 +18,8 @@ SPARK_JARS (comma delimited)
 MESOS_NATIVE_LIBRARY (don't need this for local spark mode)
 SPARK_MAX_CPUS (32 by default)
 
+and start pig in Spark mode: 'pig -x spark myscript.pig'
+
 Caching: we added a new Pig operator, CACHE (as in " foo = foreach bar do_stuff; cache foo; ....) .
 In Pig mode, this is a no-op. In Spark mode, this caches data in memory for all the in-memory Spark benefits.
 This may or may not work, we rolled it in about 45 minutes and didn't look back..
