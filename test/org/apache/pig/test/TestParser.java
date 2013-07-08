@@ -59,7 +59,6 @@ public class TestParser {
         }
     }
 
-    @Override
     @After
     public void tearDown() throws Exception {
         pigServer.shutdown();
