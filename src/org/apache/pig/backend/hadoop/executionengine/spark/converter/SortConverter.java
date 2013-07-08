@@ -13,8 +13,6 @@ import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.data.Tuple;
 
 import scala.Tuple2;
-//import scala.collection.Iterator;
-import scala.collection.JavaConversions;
 import scala.math.Ordered;
 import scala.runtime.AbstractFunction1;
 
