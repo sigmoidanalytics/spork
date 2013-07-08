@@ -262,7 +262,7 @@
 
     <dependency org="org.mockito" name="mockito-all" rev="${mockito.version}" conf="compile->default"/>
 
-    <dependency org="org.spark-project" name="spark-core_2.9.3" rev="0.7.2" conf="compile->default"/>
+    <dependency org="org.spark-project" name="spark-core_2.9.3" rev="0.8.0-SNAPSHOT" conf="compile->default"/>
     <dependency org="org.scala-lang" name="scala-library" rev="2.9.3" conf="compile"/>
 
     </dependencies>
