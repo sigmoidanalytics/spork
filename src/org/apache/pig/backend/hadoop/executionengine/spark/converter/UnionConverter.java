@@ -8,9 +8,9 @@ import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.data.Tuple;
 
 import scala.collection.JavaConversions;
+import spark.rdd.UnionRDD;
 import spark.RDD;
 import spark.SparkContext;
-import spark.UnionRDD;
 
 public class UnionConverter implements POConverter<Tuple, Tuple, POUnion> {
 

@@ -18,7 +18,7 @@ import scala.collection.JavaConversions;
 import scala.collection.Seq;
 import scala.reflect.ClassManifest;
 import scala.runtime.AbstractFunction1;
-import spark.CoGroupedRDD;
+import spark.rdd.CoGroupedRDD;
 import spark.HashPartitioner;
 import spark.RDD;
 
