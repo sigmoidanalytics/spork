@@ -26,7 +26,7 @@ public class ForEachConverter implements POConverter<Tuple, Tuple, POForEach> {
         SparkUtil.assertPredecessorSize(predecessors, physicalOperator, 1);
         RDD<Tuple> rdd = predecessors.get(0);
         ForEachFunction forEachFunction = new ForEachFunction(physicalOperator);
-        return rdd.mapPartitions(forEachFunction, false, SparkUtil.getManifest(Tuple.class));
+        return rdd.mapPartitions(forEachFunction, true, SparkUtil.getManifest(Tuple.class));
     }
 
     private static class ForEachFunction extends Function<Iterator<Tuple>, Iterator<Tuple>>
