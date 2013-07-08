@@ -27,7 +27,6 @@ Testing of this would be appreciated :)
 
 TODO: extensive testing for correctness and perf, esp. in Mesos
 TODO: support for more operators, such as RANK, CUBE, etc.
-TODO: upgrade to a more modern version of Spark (currently works with 0.6.0.. )
 
 Please let us know if you are playing with this, have patches, etc. Email dev@pig.apache.org 
 or find @J_, @billgraham, @squarecog, @jco, or @matei_zaharia on Twitter.
