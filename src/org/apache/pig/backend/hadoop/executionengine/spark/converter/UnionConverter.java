@@ -10,7 +10,7 @@ import org.apache.pig.data.Tuple;
 import scala.collection.JavaConversions;
 import spark.RDD;
 import spark.SparkContext;
-import spark.UnionRDD;
+import spark.rdd.UnionRDD;
 
 public class UnionConverter implements POConverter<Tuple, Tuple, POUnion> {
 
