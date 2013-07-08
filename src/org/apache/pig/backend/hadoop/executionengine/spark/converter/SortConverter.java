@@ -2,7 +2,6 @@ package org.apache.pig.backend.hadoop.executionengine.spark.converter;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 
@@ -13,7 +12,6 @@ import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.data.Tuple;
 
 import scala.Tuple2;
-import scala.math.Ordered;
 import scala.runtime.AbstractFunction1;
 
 import spark.api.java.JavaRDD;
@@ -69,47 +67,6 @@ public class SortConverter implements POConverter<Tuple, Tuple, POSort> {
         public Iterable<Tuple> call(Iterator<Tuple2<Tuple, Object>> input) {
             return new Tuple2TransformIterable(input);
         }
-    }
-
-    private static class OrderedTuple implements Ordered<Tuple>, Serializable {
-        private final Tuple tuple;
-        private final Comparator<Tuple> comparator;
-
-        public OrderedTuple(Tuple tuple, Comparator<Tuple> comparator) {
-            this.tuple = tuple;
-            this.comparator = comparator;
-        }
-
-        @Override
-        public boolean $greater(Tuple o) {
-            return compareTo(o) > 0;
-        }
-
-        @Override
-        public boolean $greater$eq(Tuple o) {
-            return compareTo(o) >= 0;
-        }
-
-        @Override
-        public boolean $less(Tuple o) {
-            return compareTo(o) < 0;
-        }
-
-        @Override
-        public boolean $less$eq(Tuple o) {
-            return compareTo(o) <= 0;
-        }
-
-        @Override
-        public int compare(Tuple o) {
-            return compareTo(o);
-        }
-
-        @Override
-        public int compareTo(Tuple o) {
-            return comparator.compare(tuple, o);
-        }
-
     }
 
     private static class ToKeyValueFunction extends AbstractFunction1<Tuple,Tuple2<Tuple, Object>> implements Serializable {
