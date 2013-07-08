@@ -3,6 +3,7 @@ package org.apache.pig.backend.hadoop.executionengine.spark.converter;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
 
 import org.apache.commons.logging.Log;
@@ -12,18 +13,21 @@ import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.data.Tuple;
 
 import scala.Tuple2;
-import scala.collection.Iterator;
+//import scala.collection.Iterator;
 import scala.collection.JavaConversions;
 import scala.math.Ordered;
 import scala.runtime.AbstractFunction1;
-import spark.OrderedRDDFunctions;
+
+import spark.api.java.JavaRDD;
+import spark.api.java.JavaPairRDD;
+import spark.api.java.function.FlatMapFunction;
 import spark.RDD;
 
 @SuppressWarnings("serial")
 public class SortConverter implements POConverter<Tuple, Tuple, POSort> {
     private static final Log LOG = LogFactory.getLog(SortConverter.class);
 
-    private static final ToValueFuction TO_VALUE_FUCTION = new ToValueFuction();
+    private static final FlatMapFunction<Iterator<Tuple2<Tuple, Object>>, Tuple> TO_VALUE_FUNCTION = new ToValueFunction();
 
     @Override
     public RDD<Tuple> convert(List<RDD<Tuple>> predecessors, POSort sortOperator)
@@ -33,39 +37,39 @@ public class SortConverter implements POConverter<Tuple, Tuple, POSort> {
         RDD<Tuple2<Tuple, Object>> rddPair =
                 rdd.map(new ToKeyValueFunction(),
                         SparkUtil.<Tuple, Object>getTuple2Manifest());
-        RDD<Tuple2<Tuple, Object>> sorted =
-                new OrderedRDDFunctions<Tuple, Object>(
-                        rddPair,
-                        new SortFunction(sortOperator.getmComparator()),
-                        SparkUtil.getManifest(Tuple.class),
-                        SparkUtil.getManifest(Object.class)
-                ).sortByKey(true);
-        return sorted.mapPartitions(TO_VALUE_FUCTION, SparkUtil.getManifest(Tuple.class));
+
+        JavaPairRDD<Tuple, Object> r = new JavaPairRDD<Tuple, Object>(rddPair, SparkUtil.getManifest(Tuple.class),
+                                                        SparkUtil.getManifest(Object.class));
+
+        JavaPairRDD<Tuple, Object> sorted = r.sortByKey(sortOperator.getmComparator(), true);
+        JavaRDD<Tuple> mapped = sorted.mapPartitions(TO_VALUE_FUNCTION);
+
+        return mapped.rdd();
     }
 
-    private static class SortFunction extends AbstractFunction1<Tuple, Ordered<Tuple>> implements Serializable {
-        private final Comparator<Tuple> comparator;
+    private static class ToValueFunction extends FlatMapFunction<Iterator<Tuple2<Tuple, Object>>, Tuple> implements Serializable {
 
-        public SortFunction(Comparator<Tuple> comparator) {
-            this.comparator = comparator;
+        private class Tuple2TransformIterable implements Iterable<Tuple> {
+
+          Iterator<Tuple2<Tuple, Object>> in;
+
+          Tuple2TransformIterable(Iterator<Tuple2<Tuple, Object>> input) {
+            in = input;
+          }
+
+          public Iterator<Tuple> iterator() {
+            return new IteratorTransform<Tuple2<Tuple, Object>, Tuple>(in) {
+              @Override
+              protected Tuple transform(Tuple2<Tuple, Object> next) {
+                return next._1();
+              }
+            };
+          }
         }
 
         @Override
-        public Ordered<Tuple> apply(Tuple tuple) {
-            return new OrderedTuple(tuple, comparator);
-        }
-
-    }
-
-    private static class ToValueFuction extends AbstractFunction1<Iterator<Tuple2<Tuple, Object>>, Iterator<Tuple>> implements Serializable {
-        @Override
-        public Iterator<Tuple> apply(Iterator<Tuple2<Tuple, Object>> input) {
-            return JavaConversions.asScalaIterator(new IteratorTransform<Tuple2<Tuple, Object>, Tuple>(JavaConversions.asJavaIterator(input)) {
-                @Override
-                protected Tuple transform(Tuple2<Tuple, Object> next) {
-                    return next._1();
-                }
-            });
+        public Iterable<Tuple> call(Iterator<Tuple2<Tuple, Object>> input) {
+            return new Tuple2TransformIterable(input);
         }
     }
 

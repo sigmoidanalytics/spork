@@ -11,7 +11,7 @@ import org.apache.pig.data.Tuple;
 
 import scala.collection.Iterator;
 import scala.collection.JavaConversions;
-import scala.runtime.AbstractFunction1;
+import spark.api.java.function.Function;
 import spark.RDD;
 
 /**
@@ -26,10 +26,10 @@ public class ForEachConverter implements POConverter<Tuple, Tuple, POForEach> {
         SparkUtil.assertPredecessorSize(predecessors, physicalOperator, 1);
         RDD<Tuple> rdd = predecessors.get(0);
         ForEachFunction forEachFunction = new ForEachFunction(physicalOperator);
-        return rdd.mapPartitions(forEachFunction, SparkUtil.getManifest(Tuple.class));
+        return rdd.mapPartitions(forEachFunction, false, SparkUtil.getManifest(Tuple.class));
     }
 
-    private static class ForEachFunction extends AbstractFunction1<Iterator<Tuple>, Iterator<Tuple>>
+    private static class ForEachFunction extends Function<Iterator<Tuple>, Iterator<Tuple>>
             implements Serializable {
 
         private POForEach poForEach;
@@ -38,7 +38,7 @@ public class ForEachConverter implements POConverter<Tuple, Tuple, POForEach> {
             this.poForEach = poForEach;
         }
 
-        public Iterator<Tuple> apply(Iterator<Tuple> i) {
+        public Iterator<Tuple> call(Iterator<Tuple> i) {
             final java.util.Iterator<Tuple> input = JavaConversions.asJavaIterator(i);
             Iterator<Tuple> output = JavaConversions.asScalaIterator(new POOutputConsumerIterator(input) {
                 protected void attach(Tuple tuple) {
