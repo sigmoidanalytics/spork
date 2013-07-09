@@ -327,7 +327,7 @@
 
     <path id="test.classpath">
         <!-- need to put this first, otherwise junit-3 testcases can break -->
-        <pathelement location="${ivy.lib.dir}/junit-3.8.1.jar"/>
+        <pathelement location="${ivy.lib.dir}/junit-4.11.jar"/>
         <pathelement location="${lib.dir}/spark/mesos-*.jar"/>
         
         <pathelement location="${build.classes}"/>
