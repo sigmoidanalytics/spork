@@ -41,14 +41,15 @@ import org.apache.hadoop.mapred.jobcontrol.JobControl;
 import org.apache.pig.ExecType;
 import org.apache.pig.PigConfiguration;
 import org.apache.pig.PigException;
-import org.apache.pig.PigWarning;
 import org.apache.pig.PigRunner.ReturnCode;
+import org.apache.pig.PigWarning;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.datastorage.ConfigurationUtil;
 import org.apache.pig.backend.hadoop.executionengine.HExecutionEngine;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRCompiler.LastInputStreamingOptimizer;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.DotMRPrinter;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.EndOfAllInputSetter;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.MRIntermediateDataVisitor;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.MROperPlan;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.MRPrinter;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.POPackageAnnotator;
@@ -57,11 +58,12 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOpe
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
 import org.apache.pig.backend.hadoop.executionengine.shims.HadoopShims;
 import org.apache.pig.impl.PigContext;
+import org.apache.pig.impl.io.FileLocalizer;
 import org.apache.pig.impl.io.FileSpec;
 import org.apache.pig.impl.plan.CompilationMessageCollector;
+import org.apache.pig.impl.plan.CompilationMessageCollector.MessageType;
 import org.apache.pig.impl.plan.PlanException;
 import org.apache.pig.impl.plan.VisitorException;
-import org.apache.pig.impl.plan.CompilationMessageCollector.MessageType;
 import org.apache.pig.impl.util.ConfigurationValidator;
 import org.apache.pig.impl.util.LogUtils;
 import org.apache.pig.impl.util.UDFContext;
@@ -155,6 +157,11 @@ public class MapReduceLauncher extends Launcher{
         
         // start collecting statistics
         PigStatsUtil.startCollection(pc, jobClient, jcc, mrp); 
+        
+        // Find all the intermediate data stores. The plan will be destroyed during compile/execution
+        // so this needs to be done before.
+        MRIntermediateDataVisitor intermediateVisitor = new MRIntermediateDataVisitor(mrp);
+        intermediateVisitor.visit();
         
         List<Job> failedJobs = new LinkedList<Job>();
         List<NativeMapReduceOper> failedNativeMR = new LinkedList<NativeMapReduceOper>();
@@ -275,113 +282,120 @@ public class MapReduceLauncher extends Launcher{
             //All the setup done, now lets launch the jobs.
             jcThread.start();
             
-            // a flag whether to warn failure during the loop below, so users can notice failure earlier.
-            boolean warn_failure = true;
-            
-            // Now wait, till we are finished.
-            while(!jc.allFinished()){
-
-              try { jcThread.join(sleepTime); }
-            	catch (InterruptedException e) {}
-
-            	List<Job> jobsAssignedIdInThisRun = new ArrayList<Job>();
-
-            	for(Job job : jobsWithoutIds){
-            		if (job.getAssignedJobID() != null){
-
-            			jobsAssignedIdInThisRun.add(job);
-            			log.info("HadoopJobId: "+job.getAssignedJobID());
-            			
-                        // display the aliases being processed
-                        MapReduceOper mro = jcc.getJobMroMap().get(job);
-                        if (mro != null) {
-                            String alias = ScriptState.get().getAlias(mro);
-                            log.info("Processing aliases " + alias);
-                            String aliasLocation = ScriptState.get().getAliasLocation(mro);
-                            log.info("detailed locations: " + aliasLocation);
-                        }
-
-                        
-            			if(jobTrackerLoc != null){
-            				log.info("More information at: http://"+ jobTrackerLoc+
-            						"/jobdetails.jsp?jobid="+job.getAssignedJobID());
-            			}  
-
-                        // update statistics for this job so jobId is set
-                        PigStatsUtil.addJobStats(job);
-            			ScriptState.get().emitJobStartedNotification(
-                                job.getAssignedJobID().toString());                        
-            		}
-            		else{
-            			// This job is not assigned an id yet.
-            		}
-            	}
-            	jobsWithoutIds.removeAll(jobsAssignedIdInThisRun);
-
-            	double prog = (numMRJobsCompl+calculateProgress(jc, jobClient))/totalMRJobs;
-            	if (notifyProgress(prog, lastProg)) {
-                    lastProg = prog;
-                }
-
-            	// collect job stats by frequently polling of completed jobs (PIG-1829)
-            	PigStatsUtil.accumulateStats(jc);
-            	
-                // if stop_on_failure is enabled, we need to stop immediately when any job has failed
-                checkStopOnFailure(stop_on_failure);
-                // otherwise, we just display a warning message if there's any failure
-                if (warn_failure && !jc.getFailedJobs().isEmpty()) {
-                    // we don't warn again for this group of jobs
-                    warn_failure = false;
-                    log.warn("Ooops! Some job has failed! Specify -stop_on_failure if you "
-                            + "want Pig to stop immediately on failure.");
-                }
-            }
-            
-            //check for the jobControlException first
-            //if the job controller fails before launching the jobs then there are
-            //no jobs to check for failure
-            if (jobControlException != null) {
-                if (jobControlException instanceof PigException) {
-                    if (jobControlExceptionStackTrace != null) {
-                        LogUtils.writeLog("Error message from job controller",
-                                jobControlExceptionStackTrace, pc
-                                        .getProperties().getProperty(
-                                                "pig.logfile"), log);
-                    }
-                    throw jobControlException;
-                } else {
-                    int errCode = 2117;
-                    String msg = "Unexpected error when launching map reduce job.";
-                    throw new ExecException(msg, errCode, PigException.BUG,
-                            jobControlException);
-                }
-            }
-            
-            if (!jc.getFailedJobs().isEmpty() ) {
-                // stop if stop_on_failure is enabled
-                checkStopOnFailure(stop_on_failure);
+            try {
+                // a flag whether to warn failure during the loop below, so users can notice failure earlier.
+                boolean warn_failure = true;
                 
-                // If we only have one store and that job fail, then we sure 
-                // that the job completely fail, and we shall stop dependent jobs
-                for (Job job : jc.getFailedJobs()) {
-                    completeFailedJobsInThisRun.add(job);
-                    log.info("job " + job.getAssignedJobID() + " has failed! Stop running all dependent jobs"); 
+                // Now wait, till we are finished.
+                while(!jc.allFinished()){
+    
+                  try { jcThread.join(sleepTime); }
+                	catch (InterruptedException e) {}
+    
+                	List<Job> jobsAssignedIdInThisRun = new ArrayList<Job>();
+    
+                	for(Job job : jobsWithoutIds){
+                		if (job.getAssignedJobID() != null){
+    
+                			jobsAssignedIdInThisRun.add(job);
+                			log.info("HadoopJobId: "+job.getAssignedJobID());
+                			
+                            // display the aliases being processed
+                            MapReduceOper mro = jcc.getJobMroMap().get(job);
+                            if (mro != null) {
+                                String alias = ScriptState.get().getAlias(mro);
+                                log.info("Processing aliases " + alias);
+                                String aliasLocation = ScriptState.get().getAliasLocation(mro);
+                                log.info("detailed locations: " + aliasLocation);
+                            }
+    
+                            
+                			if(jobTrackerLoc != null){
+                				log.info("More information at: http://"+ jobTrackerLoc+
+                						"/jobdetails.jsp?jobid="+job.getAssignedJobID());
+                			}  
+    
+                            // update statistics for this job so jobId is set
+                            PigStatsUtil.addJobStats(job);
+                			ScriptState.get().emitJobStartedNotification(
+                                    job.getAssignedJobID().toString());                        
+                		}
+                		else{
+                			// This job is not assigned an id yet.
+                		}
+                	}
+                	jobsWithoutIds.removeAll(jobsAssignedIdInThisRun);
+    
+                	double prog = (numMRJobsCompl+calculateProgress(jc, jobClient))/totalMRJobs;
+                	if (notifyProgress(prog, lastProg)) {
+                        lastProg = prog;
+                    }
+    
+                	// collect job stats by frequently polling of completed jobs (PIG-1829)
+                	PigStatsUtil.accumulateStats(jc);
+                	
+                    // if stop_on_failure is enabled, we need to stop immediately when any job has failed
+                    checkStopOnFailure(stop_on_failure);
+                    // otherwise, we just display a warning message if there's any failure
+                    if (warn_failure && !jc.getFailedJobs().isEmpty()) {
+                        // we don't warn again for this group of jobs
+                        warn_failure = false;
+                        log.warn("Ooops! Some job has failed! Specify -stop_on_failure if you "
+                                + "want Pig to stop immediately on failure.");
+                    }
                 }
-                failedJobs.addAll(jc.getFailedJobs());
-            }
-            
-            int removedMROp = jcc.updateMROpPlan(completeFailedJobsInThisRun);
-            
-            numMRJobsCompl += removedMROp;
+                
+                //check for the jobControlException first
+                //if the job controller fails before launching the jobs then there are
+                //no jobs to check for failure
+                if (jobControlException != null) {
+                    if (jobControlException instanceof PigException) {
+                        if (jobControlExceptionStackTrace != null) {
+                            LogUtils.writeLog("Error message from job controller",
+                                    jobControlExceptionStackTrace, pc
+                                            .getProperties().getProperty(
+                                                    "pig.logfile"), log);
+                        }
+                        throw jobControlException;
+                    } else {
+                        int errCode = 2117;
+                        String msg = "Unexpected error when launching map reduce job.";
+                        throw new ExecException(msg, errCode, PigException.BUG,
+                                jobControlException);
+                    }
+                }
+                
+                if (!jc.getFailedJobs().isEmpty() ) {
+                    // stop if stop_on_failure is enabled
+                    checkStopOnFailure(stop_on_failure);
+                    
+                    // If we only have one store and that job fail, then we sure 
+                    // that the job completely fail, and we shall stop dependent jobs
+                    for (Job job : jc.getFailedJobs()) {
+                        completeFailedJobsInThisRun.add(job);
+                        log.info("job " + job.getAssignedJobID() + " has failed! Stop running all dependent jobs"); 
+                    }
+                    failedJobs.addAll(jc.getFailedJobs());
+                }
+                
+                int removedMROp = jcc.updateMROpPlan(completeFailedJobsInThisRun);
+                
+                numMRJobsCompl += removedMROp;
+    
+                List<Job> jobs = jc.getSuccessfulJobs();
+                jcc.moveResults(jobs);
+                succJobs.addAll(jobs);
+                            
+                // collecting final statistics
+                PigStatsUtil.accumulateStats(jc);
 
-            List<Job> jobs = jc.getSuccessfulJobs();
-            jcc.moveResults(jobs);
-            succJobs.addAll(jobs);
-                        
-            // collecting final statistics
-            PigStatsUtil.accumulateStats(jc);
-
-            jc.stop(); 
+        	}
+        	catch (Exception e) {
+        		throw e;
+        	}
+        	finally {
+            jc.stop();
+        	}
         }
 
         ScriptState.get().emitProgressUpdatedNotification(100);
@@ -393,7 +407,12 @@ public class MapReduceLauncher extends Launcher{
         if(failedNativeMR.size() > 0){
             failed = true;
         }
-        
+
+        // Clean up all the intermediate data
+        for (String path : intermediateVisitor.getIntermediate()) {
+            FileLocalizer.delete(path, pc);
+        }
+
         // Look to see if any jobs failed.  If so, we need to report that.
         if (failedJobs != null && failedJobs.size() > 0) {
             

@@ -780,17 +780,45 @@ cond[LogicalExpressionPlan exprPlan] returns[LogicalExpression expr]
        $expr = new RegexExpression( $exprPlan, $e1.expr, $e2.expr );
        $expr.setLocation( new SourceLocation( (PigParserNode)$STR_OP_MATCHES ) );
    }
+ | in_eval[$exprPlan]
+   {
+       $expr = $in_eval.expr;
+   }
  | func_eval[$exprPlan]
    {
        $expr = $func_eval.expr;
    }
  | ^( BOOL_COND e1 = expr[$exprPlan] )
    {
-   	   $expr = $e1.expr;
+       $expr = $e1.expr;
        $expr.setLocation( new SourceLocation( (PigParserNode)$BOOL_COND ) );
    }
 ;
 
+in_eval[LogicalExpressionPlan plan] returns[LogicalExpression expr]
+@init {
+    List<LogicalExpression> exprs = new ArrayList<LogicalExpression>();
+}
+ : ^( IN ( expr[$plan] { exprs.add($expr.expr); } )+ )
+    {
+        // Convert IN tree to nested or expressions. Please also see
+        // QueryParser.g for how IN tree is constructed from IN expression.
+        EqualExpression firstBoolExpr = new EqualExpression(plan, exprs.get(0), exprs.get(1));
+        if (exprs.size() == 2) {
+            $expr = firstBoolExpr;
+        } else {
+            OrExpression currOrExpr = null;
+            OrExpression prevOrExpr = null;
+            for (int i = 2; i < exprs.size(); i = i + 2) {
+                EqualExpression boolExpr = new EqualExpression(plan, exprs.get(i), exprs.get(i+1));
+                currOrExpr = new OrExpression( $plan, prevOrExpr == null ? firstBoolExpr : prevOrExpr, boolExpr );
+                prevOrExpr = currOrExpr;
+            }
+            $expr = currOrExpr;
+        }
+        $expr.setLocation( new SourceLocation( (PigParserNode)$in_eval.start ) );
+    }
+;
 
 func_eval[LogicalExpressionPlan plan] returns[LogicalExpression expr]
 @init {
@@ -800,6 +828,11 @@ func_eval[LogicalExpressionPlan plan] returns[LogicalExpression expr]
    {
        SourceLocation loc = new SourceLocation( (PigParserNode)$func_name.start );
        $expr = builder.buildUDF( loc, $plan, $func_name.funcName, args );
+   }
+ | ^( INVOKER_FUNC_EVAL package_name=IDENTIFIER function_name=IDENTIFIER is_static=IDENTIFIER ( real_arg[$plan] { args.add( $real_arg.expr ); } )* )
+   {
+       SourceLocation loc = new SourceLocation( (PigParserNode)$function_name );
+       $expr = builder.buildInvokerUDF( loc, $plan, $package_name.text, $function_name.text, Boolean.parseBoolean($is_static.text), args );
    }
 ;
 
@@ -990,6 +1023,14 @@ projectable_expr[LogicalExpressionPlan plan] returns[LogicalExpression expr]
    {
        $expr = $bin_expr.expr;
    }
+ | case_expr[$plan]
+   {
+       $expr = $case_expr.expr;
+   }
+ | case_cond[$plan]
+   {
+       $expr = $case_cond.expr;
+   }
 ;
 
 dot_proj returns[List<Object> cols]
@@ -1037,6 +1078,59 @@ bin_expr[LogicalExpressionPlan plan] returns[LogicalExpression expr]
        $expr = new BinCondExpression( $plan, $cond.expr, $e1.expr, $e2.expr );
        $expr.setLocation( new SourceLocation( (PigParserNode)$bin_expr.start ) );
    }
+;
+
+case_expr[LogicalExpressionPlan plan] returns[LogicalExpression expr]
+@init {
+    List<LogicalExpression> exprs = new ArrayList<LogicalExpression>();
+}
+ : ^( CASE_EXPR ( expr[$plan] { exprs.add($expr.expr); } )+ )
+    {
+        // Convert CASE tree to nested bincond expressions. Please also see
+        // QueryParser.g for how CASE tree is constructed from case statement.
+        boolean hasElse = exprs.size() \% 3 == 1;
+        LogicalExpression elseExpr = hasElse ? exprs.get(exprs.size()-1)
+                                             : new ConstantExpression($plan, null);
+
+        int numWhenBranches = exprs.size() / 3;
+        BinCondExpression prevBinCondExpr = null;
+        BinCondExpression currBinCondExpr = null;
+        for (int i = 0; i < numWhenBranches; i++) {
+            currBinCondExpr = new BinCondExpression( $plan,
+                new EqualExpression( $plan, exprs.get(3*i), exprs.get(3*i+1) ), exprs.get(3*i+2),
+                prevBinCondExpr == null ? elseExpr : prevBinCondExpr);
+            prevBinCondExpr = currBinCondExpr;
+        }
+        $expr = currBinCondExpr;
+        $expr.setLocation( new SourceLocation( (PigParserNode)$case_expr.start ) );
+    }
+;
+
+case_cond[LogicalExpressionPlan plan] returns[LogicalExpression expr]
+@init {
+    List<LogicalExpression> conds = new ArrayList<LogicalExpression>();
+    List<LogicalExpression> exprs = new ArrayList<LogicalExpression>();
+}
+ : ^( CASE_COND ^( WHEN ( cond[$plan] { conds.add($cond.expr); } )+ )
+                ^( THEN ( expr[$plan] { exprs.add($expr.expr); } )+ ) )
+    {
+        // Convert CASE tree to nested bincond expressions. Please also see
+        // QueryParser.g for how CASE tree is constructed from case statement.
+        boolean hasElse = exprs.size() != conds.size();
+        LogicalExpression elseExpr = hasElse ? exprs.get(exprs.size() - 1)
+                                             : new ConstantExpression($plan, null);
+        int numWhenBranches = conds.size();
+        BinCondExpression prevBinCondExpr = null;
+        BinCondExpression currBinCondExpr = null;
+        for (int i = 0; i < numWhenBranches; i++) {
+            currBinCondExpr = new BinCondExpression( $plan,
+                conds.get(i), exprs.get(i),
+                prevBinCondExpr == null ? elseExpr : prevBinCondExpr);
+            prevBinCondExpr = currBinCondExpr;
+        }
+        $expr = currBinCondExpr;
+        $expr.setLocation( new SourceLocation( (PigParserNode)$case_cond.start ) );
+    }
 ;
 
 limit_clause returns[String alias]

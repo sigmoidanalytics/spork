@@ -439,6 +439,25 @@ public class TestMacroExpansion {
         
         verify(macro + script, expected);
     }
+
+    @Test
+    public void splitOtherwiseTest() throws Exception {
+        String macro = "define group_and_count (A,key) returns B {\n" +
+            "SPLIT $A INTO $B IF $key<7, Y IF $key==5, Z OTHERWISE;\n" +
+            "};\n";
+
+        String script =
+            "alpha = load 'users' as (f1:int);\n" +
+            "gamma = group_and_count (alpha, f1);\n" +
+            "store gamma into 'byuser';\n";
+
+        String expected =
+            "alpha = load 'users' as f1:int;\n" +
+            "SPLIT alpha INTO gamma IF f1 < 7, macro_group_and_count_Y_0 IF f1 == 5, macro_group_and_count_Z_0 OTHERWISE;\n" +
+            "store gamma INTO 'byuser';\n";
+
+        verify(macro + script, expected);
+    }
     
     @Test
     public void mapreduceTest() throws Exception {
@@ -969,6 +988,25 @@ public class TestMacroExpansion {
         validateFailure(macro + script, expectedErr);
     }
     
+    //duplicate arguments passed in macro
+    @Test
+    public void negativeTest10() throws Throwable {
+        String macro = "define simple_macro(in_relation, min_gpa, min_gpa) returns c {\n" +
+            "b = filter $in_relation by age >= $min_gpa;\n" +
+            "$c = foreach b generate user, zip;\n" +
+            "};\n";
+
+        String script =
+            "alpha = load 'users' as (user, age, zip);\n" +
+            "gamma = simple_macro (alpha, age, age);\n" +
+            "store gamma into 'byuser';\n";
+
+        String expectedErr = "Reason:  Duplicated arguments names are passed in macro:" +
+            " number of arguments: 3 number of distinct arguments: 2";
+
+        validateFailure(macro + script, expectedErr);
+    }
+
     @Test // macro doesn't contain return alias
     public void checkReturnAliasTest1() throws Throwable {
         String macro = "define group_and_count_1 (A,C) returns B {\n" +

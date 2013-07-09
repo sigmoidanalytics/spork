@@ -44,7 +44,7 @@ public class LocalRearrangeConverter implements POConverter<Tuple, Tuple, POLoca
             try {
                 physicalOperator.setInputs(null);
                 physicalOperator.attachInput(t);
-                result = physicalOperator.getNext((Tuple)null);
+                result = physicalOperator.getNextTuple();
 
                 if (result == null) {
                     throw new RuntimeException("Null response found for LocalRearange on tuple: " + t);

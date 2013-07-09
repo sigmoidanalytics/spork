@@ -86,8 +86,8 @@ public class TestLogToPhyCompiler {
 
     private boolean generate = false;
 
-    static PigServer pigServer = null;
-    private static final int MAX_SIZE = 100000;;   
+    PigServer pigServer = null;
+    private static final int MAX_SIZE = 100000;;
     
     @Before
     public void setUp() throws Exception {
@@ -110,6 +110,7 @@ public class TestLogToPhyCompiler {
         pp.explain(baos);
         baos.write('\n');
         String compiledPlan = baos.toString();
+        compiledPlan = Util.standardizeNewline(compiledPlan);
         compiledPlan = removedUnaffectingChanges(compiledPlan);
 
         generateGolden(goldenFile, compiledPlan);
@@ -132,6 +133,7 @@ public class TestLogToPhyCompiler {
         int len = fis.read(b);
         fis.close();
         String goldenPlan = new String(b, 0, len);
+        goldenPlan = Util.standardizeNewline(goldenPlan);
         goldenPlan = removedUnaffectingChanges(goldenPlan);
         return goldenPlan;
     }
@@ -153,7 +155,8 @@ public class TestLogToPhyCompiler {
         System.out.println();
         System.out.println(compiledPlan);
         System.out.println("-------------" + testName);
-        assertEquals(compiledPlan, goldenPlan);
+
+        assertEquals(goldenPlan, compiledPlan);
     }
 
     @Test // Commented out due to PIG-2020
@@ -265,7 +268,9 @@ public class TestLogToPhyCompiler {
         //System.out.println("Length of first plan = " + len + " of second = " + test);
         String goldenPlan1 = new String(b1, 0, len);
         String goldenPlan2 = new String(b2, 0, len);
+        goldenPlan1 = Util.standardizeNewline(goldenPlan1);
         goldenPlan1 = removedUnaffectingChanges(goldenPlan1);
+        goldenPlan2 = Util.standardizeNewline(goldenPlan2);
         goldenPlan2 = removedUnaffectingChanges(goldenPlan2);
 
         System.out.println();
@@ -319,7 +324,9 @@ public class TestLogToPhyCompiler {
         //System.out.println("Length of first plan = " + len + " of second = " + test + " Length of compiled plan = " + compiledPlan.length());
         String goldenPlan1 = new String(b1, 0, len);
         String goldenPlan2 = new String(b2, 0, len);
+        goldenPlan1 = Util.standardizeNewline(goldenPlan1);
         goldenPlan1 = removedUnaffectingChanges(goldenPlan1);
+        goldenPlan2 = Util.standardizeNewline(goldenPlan2);
         goldenPlan2 = removedUnaffectingChanges(goldenPlan2);
 
         System.out.println();

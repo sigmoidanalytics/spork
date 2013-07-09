@@ -281,8 +281,13 @@ cond
     | ^( NOT { sb.append(" ").append($NOT.text).append(" ("); } cond { sb.append(")"); } )
     | ^( NULL expr { sb.append(" IS "); } (NOT { sb.append($NOT.text).append(" "); } )?  { sb.append($NULL.text); } )
     | ^( rel_op expr { sb.append(" ").append($rel_op.result).append(" "); } expr )
+    | in_eval
     | func_eval
     | ^( BOOL_COND expr )
+;
+
+in_eval
+    : ^( IN { sb.append(" " + $IN.text + "("); } expr ( { sb.append(", "); } expr )+ { sb.append(") "); } )
 ;
 
 func_eval
@@ -326,7 +331,7 @@ var_expr
 ;
 
 projectable_expr
-    : func_eval | col_ref | bin_expr
+    : func_eval | col_ref | bin_expr | case_expr | case_cond
 ;
 
 dot_proj
@@ -356,6 +361,16 @@ pound_proj
 
 bin_expr
     : ^( BIN_EXPR { sb.append(" ("); } cond { sb.append(" ? "); } expr { sb.append(" : "); } expr { sb.append(") "); } )
+;
+
+case_expr
+    : ^( CASE_EXPR { sb.append(" CASE ("); } expr ( { sb.append(", "); } expr )+ { sb.append(") "); } )
+;
+
+case_cond
+    : ^( CASE_COND { sb.append(" CASE ("); }
+        ^( WHEN cond ( { sb.append(", "); } cond )* { sb.append(", "); } )
+        ^( THEN expr ( { sb.append(", "); } expr )* { sb.append(") "); } ) )
 ;
 
 limit_clause
@@ -530,7 +545,7 @@ mr_clause
 
 split_clause
     : ^( SPLIT  { sb.append($SPLIT.text).append(" "); }
-        rel { sb.append(" INTO "); } split_branch ( { sb.append(", "); } split_branch )* split_otherwise? )
+        rel { sb.append(" INTO "); } split_branch ( { sb.append(", "); } split_branch )* ( { sb.append(", "); } split_otherwise )? )
 ;
 
 split_branch
@@ -538,7 +553,7 @@ split_branch
 ;
 
 split_otherwise
-    : ^( OTHERWISE { sb.append($OTHERWISE.text).append(" "); } alias )
+    : ^( OTHERWISE alias { sb.append(" " + $OTHERWISE.text); } )
 ;
 
 col_ref : alias_col_ref | dollar_col_ref
@@ -670,10 +685,12 @@ eid : rel_str_op
     | LEFT      { sb.append($LEFT.text); }
     | RIGHT     { sb.append($RIGHT.text); }
     | FULL      { sb.append($FULL.text); }
-    | IDENTIFIER    { sb.append($IDENTIFIER.text); }
-    | TOBAG    { sb.append("TOBAG"); }
-    | TOMAP    { sb.append("TOMAP"); }
-    | TOTUPLE    { sb.append("TOTUPLE"); }
+    | IDENTIFIER { sb.append($IDENTIFIER.text); }
+    | TOBAG      { sb.append($TOBAG.text); }
+    | TOMAP      { sb.append($TOMAP.text); }
+    | TOTUPLE    { sb.append($TOTUPLE.text); }
+    | IN         { sb.append($IN.text); }
+    | CASE       { sb.append($CASE.text); }
 ;
 
 // relational operator
