@@ -57,7 +57,7 @@ public class POCache extends PhysicalOperator {
      * limit, return EOP; Otherwise, return the tuple
      */
     @Override
-    public Result getNext(Tuple t) throws ExecException {
+    public Result getNextTuple() throws ExecException {
         return processInput();
     }
 

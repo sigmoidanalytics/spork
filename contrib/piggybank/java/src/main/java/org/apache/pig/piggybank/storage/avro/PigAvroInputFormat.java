@@ -39,7 +39,9 @@ import org.apache.hadoop.mapreduce.lib.input.FileSplit;
  */
 public class PigAvroInputFormat extends FileInputFormat<NullWritable, Writable> {
 
-    private Schema schema = null;  /* avro schema */
+    private Schema readerSchema = null;  /* avro schema */
+    /* establish is multiple_schema flag is used to pass this to the RecordReader*/
+    private boolean useMultipleSchemas = false;
     private boolean ignoreBadFiles = false; /* whether ignore corrupted files during load */
 
     /* if multiple avro record schemas are merged, this map associates each input
@@ -56,16 +58,18 @@ public class PigAvroInputFormat extends FileInputFormat<NullWritable, Writable> 
 
     /**
      * constructor called by AvroStorage to pass in schema and ignoreBadFiles.
-     * @param schema input data schema
+     * @param readerSchema reader schema
      * @param ignoreBadFiles whether ignore corrupted files during load
      * @param schemaToMergedSchemaMap map that associates each input record
      * with a remapping of its fields relative to the merged schema
      */
-    public PigAvroInputFormat(Schema schema, boolean ignoreBadFiles,
-            Map<Path, Map<Integer, Integer>> schemaToMergedSchemaMap) {
-        this.schema = schema;
+    public PigAvroInputFormat(Schema readerSchema, boolean ignoreBadFiles,
+            Map<Path, Map<Integer, Integer>> schemaToMergedSchemaMap,
+            boolean useMultipleSchemas) {
+        this.readerSchema = readerSchema;
         this.ignoreBadFiles = ignoreBadFiles;
         this.schemaToMergedSchemaMap = schemaToMergedSchemaMap;
+        this.useMultipleSchemas = useMultipleSchemas;
     }
 
     /**
@@ -78,8 +82,8 @@ public class PigAvroInputFormat extends FileInputFormat<NullWritable, Writable> 
     createRecordReader(InputSplit split, TaskAttemptContext context)
     throws IOException,  InterruptedException {
         context.setStatus(split.toString());
-        return new PigAvroRecordReader(context, (FileSplit) split, schema,
-                ignoreBadFiles, schemaToMergedSchemaMap);
+        return new PigAvroRecordReader(context, (FileSplit) split, readerSchema,
+                ignoreBadFiles, schemaToMergedSchemaMap, useMultipleSchemas);
     }
 
 }

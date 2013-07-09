@@ -215,7 +215,7 @@ public class TestHelper {
         int numActTuples = -1;
         DataBag bagAct = DefaultBagFactory.getInstance().newDefaultBag();
         Result resAct = null;
-        while((resAct = ldAct.getNext(t)).returnStatus!=POStatus.STATUS_EOP){
+        while((resAct = ldAct.getNextTuple()).returnStatus!=POStatus.STATUS_EOP){
             ++numActTuples;
             bagAct.add(trimTuple((Tuple)resAct.result));
         }
@@ -223,7 +223,7 @@ public class TestHelper {
         int numExpTuples = -1;
         DataBag bagExp = DefaultBagFactory.getInstance().newDefaultBag();
         Result resExp = null;
-        while((resExp = ldExp.getNext(t)).returnStatus!=POStatus.STATUS_EOP){
+        while((resExp = ldExp.getNextTuple()).returnStatus!=POStatus.STATUS_EOP){
             ++numExpTuples;
             bagExp.add(trimTuple((Tuple)resExp.result));
         }
@@ -452,5 +452,26 @@ public class TestHelper {
 
         return logMessages;
     }
+
+    public static String sortStringList(String text, String delimiter1, String delimiter2, String separator){
+        Pattern pattern = Pattern.compile(String.format("(\\%s.*?\\%s)", delimiter1, delimiter2));
+        Matcher matcher = pattern.matcher(text);
+        String sortedString = text;
+
+        while (matcher.find()) {
+            // split and sort the list
+            String value = matcher.group(1);
+            value = value.substring(1,value.length()-1);
+            String[] sortedList = value.split(separator);
+            Arrays.sort(sortedList);
+
+            // pretty-print the output and replace the unsorted string with the sorted one
+            String sorted = Arrays.asList(sortedList).toString().replaceAll("(^.|.$)", "").replace(", ", separator);
+            sorted = String.format("%s%s%s", delimiter1, sorted, delimiter2);
+            sortedString = sortedString.replace(matcher.group(1), sorted);
+        }   
+
+        return sortedString;
+    }   
 
 }

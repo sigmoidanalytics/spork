@@ -31,7 +31,7 @@ import org.joda.time.DateTime;
 
 /**
  * <p>
- * ToUnixTime converts the DateTime to the number of milliseconds that have passed
+ * ToMilliSeconds converts the DateTime to the number of milliseconds that have passed
  * since January 1, 1970 00:00:00.000 GMT.
  * </p>
  * <ul>
@@ -73,7 +73,7 @@ public class ToMilliSeconds extends EvalFunc<Long> {
     @Override
     public Long exec(Tuple input) throws IOException
     {
-        if (input == null || input.size() < 1) {
+        if (input == null || input.size() < 1 || input.get(0) == null) {
             return null;
         }
 

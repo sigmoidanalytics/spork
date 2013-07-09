@@ -47,7 +47,7 @@ public class ForEachConverter implements POConverter<Tuple, Tuple, POForEach> {
                 }
 
                 protected Result getNextResult() throws ExecException {
-                    return poForEach.getNext((Tuple)null);
+                    return poForEach.getNextTuple();
                 }
             });
             return output;

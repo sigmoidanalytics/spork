@@ -25,6 +25,11 @@
 #
 #     PIG_CLASSPATH Extra Java CLASSPATH entries.
 #
+#     PIG_USER_CLASSPATH_FIRST If set, add user provided classpath entries to
+#                              the top of classpath instead of appending them.
+#                              Default is unset, i.e. the classpath entries are
+#                              placed normally at the end of a pre-defined classpath.
+#
 #     HADOOP_HOME/HADOOP_PREFIX     Environment HADOOP_HOME/HADOOP_PREFIX(0.20.205)
 #
 #     HADOOP_CONF_DIR     Hadoop conf dir
@@ -36,8 +41,11 @@
 #
 #     PIG_CONF_DIR    Alternate conf dir. Default is ${PIG_HOME}/conf.
 #
+#     HBASE_HOME       Optionally, the HBase installation directory.
+#                      Defaults to ${PIG_HOME}/share/hbase
+#
 #     HBASE_CONF_DIR - Optionally, the HBase configuration to run against
-#                      when using HBaseStorage
+#                      when using HBaseStorage. Defaults to ${HBASE_HOME}/conf
 
 cygwin=false
 case "`uname`" in
@@ -184,11 +192,16 @@ if [ "$includeHCatalog" == "true" ]; then
   CLASSPATH=${CLASSPATH}:$ADDITIONAL_CLASSPATHS:$HIVE_HOME/conf
 fi
 
-# add user-specified CLASSPATH
+# Add user-specified CLASSPATH entries via PIG_CLASSPATH
+# If PIG_USER_CLASSPATH_FIRST is set, prepend the entries
 if [ "$PIG_CLASSPATH" != "" ]; then
+  if [ "$PIG_USER_CLASSPATH_FIRST" == "" ]; then
     CLASSPATH=${CLASSPATH}:${PIG_CLASSPATH}
+  else
+    CLASSPATH=${PIG_CLASSPATH}:${CLASSPATH}
+  fi
 fi
- 
+
 # add HADOOP_CONF_DIR
 if [ "$HADOOP_CONF_DIR" != "" ]; then
     CLASSPATH=${CLASSPATH}:${HADOOP_CONF_DIR}
@@ -269,8 +282,17 @@ if [ -z "$HADOOP_BIN" ]; then
     fi
 fi
 
-# if using HBase, likely want to include HBase config
-HBASE_CONF_DIR=${HBASE_CONF_DIR:-/etc/hbase}
+# if using HBase, likely want to include HBase jars and config
+HBH=${HBASE_HOME:-"${PIG_HOME}/share/hbase"}
+if [ -d "${HBH}" ]; then
+    for f in ${HBH}/hbase-*.jar; do
+        CLASSPATH=${CLASSPATH}:$f
+    done
+    for f in ${HBH}/lib/*.jar; do
+        CLASSPATH=${CLASSPATH}:$f
+    done
+    HBASE_CONF_DIR=${HBASE_CONF_DIR:-"${HBH}/conf"}
+fi
 if [ -n "$HBASE_CONF_DIR" ] && [ -d "$HBASE_CONF_DIR" ]; then
     CLASSPATH=$HBASE_CONF_DIR:$CLASSPATH
 fi
@@ -283,14 +305,6 @@ fi
 ZKH=${ZOOKEEPER_HOME:-"${PIG_HOME}/share/zookeeper"}
 if [ -d "$ZKH" ] ; then
     for f in ${ZKH}/zookeeper-*.jar; do
-        CLASSPATH=${CLASSPATH}:$f
-    done
-fi
-
-# locate HBase
-HBH=${HBASE_HOME:-"${PIG_HOME}/share/hbase"}
-if [ -d "$HBH" ]; then
-    for f in ${HBH}/hbase-*.jar; do
         CLASSPATH=${CLASSPATH}:$f
     done
 fi

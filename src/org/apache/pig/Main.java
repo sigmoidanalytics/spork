@@ -61,6 +61,7 @@ import org.apache.pig.backend.hadoop.datastorage.ConfigurationUtil;
 import org.apache.pig.classification.InterfaceAudience;
 import org.apache.pig.classification.InterfaceStability;
 import org.apache.pig.impl.PigContext;
+import org.apache.pig.impl.PigImplConstants;
 import org.apache.pig.impl.io.FileLocalizer;
 import org.apache.pig.impl.util.JarManager;
 import org.apache.pig.impl.util.LogUtils;
@@ -186,7 +187,7 @@ static int run(String args[], PigProgressNotificationListener listener) {
         boolean embedded = false;
         List<String> params = new ArrayList<String>();
         List<String> paramFiles = new ArrayList<String>();
-        HashSet<String> optimizerRules = new HashSet<String>();
+        HashSet<String> disabledOptimizerRules = new HashSet<String>();
 
         CmdLineParser opts = new CmdLineParser(pigArgs);
         opts.registerOpt('4', "log4jconf", CmdLineParser.ValueExpected.REQUIRED);
@@ -316,7 +317,7 @@ static int run(String args[], PigProgressNotificationListener listener) {
                 break;
 
             case 't':
-            	optimizerRules.add(opts.getValStr());
+                disabledOptimizerRules.add(opts.getValStr());
                 break;
 
             case 'v':
@@ -391,12 +392,11 @@ static int run(String args[], PigProgressNotificationListener listener) {
 
         if( ! Boolean.valueOf(properties.getProperty(PROP_FILT_SIMPL_OPT, "false"))){
             //turn off if the user has not explicitly turned on this optimization
-            optimizerRules.add("FilterLogicExpressionSimplifier");
+            disabledOptimizerRules.add("FilterLogicExpressionSimplifier");
         }
 
-        if(optimizerRules.size() > 0) {
-            pigContext.getProperties().setProperty("pig.optimizer.rules", ObjectSerializer.serialize(optimizerRules));
-        }
+        pigContext.getProperties().setProperty(PigImplConstants.PIG_OPTIMIZER_RULES_KEY,
+                ObjectSerializer.serialize(disabledOptimizerRules));
 
         PigContext.setClassLoader(pigContext.createCl(null));
 
@@ -914,6 +914,8 @@ public static void printProperties(){
         System.out.println("        pig.additional.jars=<colon seperated list of jars>. Used in place of register command.");
         System.out.println("        udf.import.list=<comma seperated list of imports>. Used to avoid package names in UDF.");
         System.out.println("        stop.on.failure=true|false; default is false. Set to true to terminate on the first error.");
+        System.out.println("        pig.datetime.default.tz=<UTC time offset>. e.g. +08:00. Default is the default timezone of the host.");
+        System.out.println("            Determines the timezone used to handle datetime datatype and UDFs. ");
 	System.out.println("Additionally, any Hadoop property can be specified.");
 }
 

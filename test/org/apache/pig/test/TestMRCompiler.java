@@ -123,7 +123,8 @@ import org.junit.runner.RunWith;
     "testSortedDistinctInForeach",
     "testUDFInMergedCoGroup",
     "testUDFInMergedJoin",
-    "testSchemaInStoreForDistinctLimit" })
+    "testSchemaInStoreForDistinctLimit",
+    "testStorerLimit"})
 public class TestMRCompiler {
     static MiniCluster cluster = MiniCluster.buildCluster();
 
@@ -1124,7 +1125,10 @@ public class TestMRCompiler {
         System.out.println("Golden");
         System.out.println("<<<" + goldenPlan + ">>>");
         System.out.println("-------------");
-        assertEquals(TestHelper.sortUDFs(removeSignature(goldenPlan)), TestHelper.sortUDFs(removeSignature(compiledPlan)));
+        
+        String goldenPlanClean = Util.standardizeNewline(goldenPlan);
+        String compiledPlanClean = Util.standardizeNewline(compiledPlan);
+        assertEquals(TestHelper.sortUDFs(removeSignature(goldenPlanClean)), TestHelper.sortUDFs(removeSignature(compiledPlanClean)));
     }
 
     /**
@@ -1207,5 +1211,26 @@ public class TestMRCompiler {
                 store.getSchema(),
                 Utils.getSchemaFromString("a : int,b :float ,c : int")
         );
+    }
+    
+    //PIG-2146
+    @Test
+    public void testStorerLimit() throws Exception {
+        // test if the POStore in the 1st mr plan 
+        // use the right StoreFunc
+        String query = "a = load 'input1';" +
+            "b = limit a 10;" +
+            "store b into 'output' using " + PigStorageNoDefCtor.class.getName() + "(',');";
+
+        PhysicalPlan pp = Util.buildPp(pigServer, query);
+        MROperPlan mrPlan = Util.buildMRPlan(pp, pc);
+        
+        LimitAdjuster la = new LimitAdjuster(mrPlan, pc);
+        la.visit();
+        la.adjust();
+        
+        MapReduceOper firstMrOper = mrPlan.getRoots().get(0);
+        POStore store = (POStore)firstMrOper.reducePlan.getLeaves().get(0);
+        assertEquals(store.getStoreFunc().getClass().getName(), "org.apache.pig.impl.io.InterStorage");
     }
 }

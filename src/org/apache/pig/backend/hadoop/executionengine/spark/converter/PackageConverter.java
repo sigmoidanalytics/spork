@@ -80,7 +80,7 @@ public class PackageConverter implements POConverter<Tuple, Tuple, POPackage> {
                 };
                 physicalOperator.setInputs(null);
                 physicalOperator.attachInput(key, iterator);
-                result = physicalOperator.getNext((Tuple)null);
+                result = physicalOperator.getNextTuple();
             } catch (ExecException e) {
                 throw new RuntimeException("Couldn't do Package on tuple: " + t, e);
             }
