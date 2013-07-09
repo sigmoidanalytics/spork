@@ -201,7 +201,7 @@ public class POSplit extends PhysicalOperator {
     }
    
     @Override
-    public Result getNext(Tuple t) throws ExecException {
+    public Result getNextTuple() throws ExecException {
 
         if (this.parentPlan.endOfAllInput) {
             
@@ -213,7 +213,8 @@ public class POSplit extends PhysicalOperator {
             
             Result inp = processInput();
             
-            if (inp.returnStatus == POStatus.STATUS_EOP) {
+            if (inp.returnStatus == POStatus.STATUS_EOP
+                || inp.returnStatus == POStatus.STATUS_ERR ) {
                 return inp;
             }
          
@@ -251,7 +252,7 @@ public class POSplit extends PhysicalOperator {
         
         while (true) {
             
-            res = leaf.getNext(dummyTuple);
+            res = leaf.getNextTuple();
             
             if (res.returnStatus == POStatus.STATUS_OK) {                
                 break;
@@ -296,7 +297,7 @@ public class POSplit extends PhysicalOperator {
             }
             PhysicalOperator leaf = myPlans.get(idx).getLeaves().get(0);
             
-            res = leaf.getNext(dummyTuple);
+            res = leaf.getNextTuple();
            
             if (res.returnStatus == POStatus.STATUS_EOP)  {
                 processedSet.set(idx++);        

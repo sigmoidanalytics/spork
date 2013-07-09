@@ -277,6 +277,19 @@ public class Util {
     }
 
     /**
+     * Helper to convert \r\n to \n for cross-platform string
+     * matching with checked-in baselines.
+     *
+     * @param origPath original string
+     * @return String  newline-standardized string
+     * @throws IOException
+     */
+    static public String standardizeNewline(String origPath)
+    {
+       return origPath.replaceAll("\r\n", "\n");
+    }
+
+    /**
      * Helper to create a temporary file with given input data for use in test cases.
      *
      * @param tmpFilenamePrefix file-name prefix
@@ -1210,7 +1223,7 @@ public class Util {
 
     public static boolean isHadoop2_0() {
         String version = org.apache.hadoop.util.VersionInfo.getVersion();
-        if (version.matches("\\b2\\.0\\..+"))
+        if (version.matches("\\b2\\.\\d\\..+"))
             return true;
         return false;
     }

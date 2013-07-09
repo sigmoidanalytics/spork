@@ -75,7 +75,7 @@ public class TestPathPartitioner extends TestCase {
 	PathPartitioner partitioner = new PathPartitioner();
 
 	Map<String, String> map = partitioner
-		.getPathPartitionKeyValues(partition3.getAbsolutePath());
+		.getPathPartitionKeyValues(partition3.getAbsolutePath().replaceAll("\\\\", "/"));
 
 	String[] keys = map.keySet().toArray(new String[] {});
 
@@ -100,6 +100,29 @@ public class TestPathPartitioner extends TestCase {
 	assertEquals("year", keyArr[0]);
 	assertEquals("month", keyArr[1]);
 	assertEquals("day", keyArr[2]);
+
+    }
+    
+    @Test
+    public void testGetKeysForEmptyDir() throws Exception {
+
+        File baseDir = createDir(null, "testPathPartitioner-testGetKeys-" + System.currentTimeMillis());
+
+        File partition1 = createDir(baseDir, "year=2010");
+        File partition2 = createDir(partition1, "month=01");
+        File emptyPartition = createDir(partition2, "day=01");
+
+        PathPartitioner pathPartitioner = new PathPartitioner();
+        Set<String> keys = pathPartitioner.getPartitionKeys(baseDir.getAbsolutePath(), conf);
+
+        assertNotNull(keys);
+        assertEquals(3, keys.size());
+
+        String[] keyArr = keys.toArray(new String[] {});
+
+        assertEquals("year", keyArr[0]);
+        assertEquals("month", keyArr[1]);
+        assertEquals("day", keyArr[2]);
 
     }
 

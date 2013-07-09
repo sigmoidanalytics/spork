@@ -45,6 +45,7 @@
   <property name="driver.src" value="${basedir}/drivers"/>
   <property name="deployer.src" value="${basedir}/deployers"/>
   <property name="conf.src" value="${basedir}/conf"/>
+  <property name="resource.src" value="${basedir}/resource"/>
   <property name="tool.src" value="${basedir}/tools"/>
 
   <property name="harness.dir" value="${basedir}/../harness"/>
@@ -105,7 +106,7 @@
     </not>
   </condition>
 
-  <condition property="hcat.bin" value="/usr/local/hcat/bin/hcat">
+  <condition property="hcat.bin" value="hcat">
     <not>
       <isset property="hcat.bin"/>
     </not>
@@ -160,6 +161,10 @@
 
     <copy todir="${tar.dir}/conf">
       <fileset dir="${conf.src}"/>
+    </copy>
+
+    <copy todir="${tar.dir}/resource">
+      <fileset dir="${resource.src}"/>
     </copy>
 
     <copy todir="${tar.dir}/libexec/PigTest">
@@ -254,8 +259,9 @@
     <property name="fork.factor.conf.file" value="1"/>
     <property name="hadoop.mapred.local.dir" value="/tmp/hadoop/mapred/local"/>
     <property name="e2e.debug" value="false"/>
+    <property name="harness.use.python" value="false"/>
 
-    <exec executable="./test_harness.pl" dir="${test.location}" failonerror="true">
+    <exec executable="perl" dir="${test.location}" failonerror="true">
       <env key="HARNESS_ROOT" value="."/>
       <env key="HADOOP_VERSION" value="${hadoopversion}"/>
       <env key="PH_LOCAL" value="${harness.PH_LOCAL}"/>
@@ -264,6 +270,7 @@
       <env key="PH_PIG" value="${pig.dir}"/>
       <env key="PH_OLDPIG" value="${harness.old.pig}"/>
       <env key="HADOOP_CONF_DIR" value="${harness.cluster.conf}"/>
+      <env key="PIG_USE_PYTHON" value="${harness.use.python}"/>
       <env key="PH_CLUSTER_BIN" value="${harness.cluster.bin}"/>
       <env key="PH_JYTHON_JAR" value="${jython.jar}"/>
       <env key="PH_JRUBY_JAR" value="${jruby.jar}"/>
@@ -286,6 +293,7 @@
       <env key="HADOOP_MAPRED_LOCAL_DIR" value="${hadoop.mapred.local.dir}"/>
       <env key="E2E_DEBUG" value="${e2e.debug}"/>
 
+      <arg value="./test_harness.pl"/>
       <arg line="${tests.to.run}"/>
       <arg value="${test.location}/tests/cmdline.conf"/>
       <arg value="${test.location}/tests/multiquery.conf"/>
@@ -314,7 +322,7 @@
   </target>
 
   <target name="deploy-base" depends="property-check, tar, init-test">
-    <exec executable="./test_harness.pl" dir="${test.location}" failonerror="true">
+    <exec executable="perl" dir="${test.location}" failonerror="true">
       <env key="HARNESS_ROOT" value="."/>
       <env key="PH_LOCAL" value="${harness.PH_LOCAL}"/>
       <env key="PH_OUT" value="${harness.PH_OUT}"/>
@@ -329,6 +337,7 @@
       <env key="HARNESS_CONF" value="${harness.conf.file}"/>
       <env key="HADOOP_HOME" value="${harness.hadoop.home}"/>
 
+      <arg value="./test_harness.pl"/>
       <arg value="-deploycfg"/>
       <arg value="${deploy.conf}"/>
       <arg value="${deploy.opt}"/>

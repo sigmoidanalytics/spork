@@ -53,7 +53,6 @@ import org.apache.pig.impl.plan.VisitorException;
 import org.apache.pig.impl.util.CastUtils;
 import org.apache.pig.impl.util.LogUtils;
 import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
 
 /**
  * This is just a cast that converts DataByteArray into either String or
@@ -96,6 +95,12 @@ public class POCast extends ExpressionOperator {
         }
     }
 
+    private Result error() {
+        Result res = new Result();
+        res.returnStatus = POStatus.STATUS_ERR;
+        return res;
+    }
+
     public void setFuncSpec(FuncSpec lf) throws IOException {
         this.funcSpec = lf;
         instantiateFunc();
@@ -123,25 +128,19 @@ public class POCast extends ExpressionOperator {
     }
 
     @Override
-    public Result getNext(BigInteger v) throws ExecException {
+    public Result getNextBigInteger() throws ExecException {
         PhysicalOperator in = inputs.get(0);
         Byte resultType = in.getResultType();
         switch (resultType) {
-        case DataType.BAG: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
-
-        case DataType.TUPLE: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
+        case DataType.BAG:
+        case DataType.TUPLE:
+        case DataType.MAP:
+        case DataType.DATETIME:
+            return error();
 
         case DataType.BYTEARRAY: {
-            DataByteArray dba = null;
-            Result res = in.getNext(dba);
+            DataByteArray dba;
+            Result res = in.getNextDataByteArray();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 try {
                     dba = (DataByteArray) res.result;
@@ -177,15 +176,8 @@ public class POCast extends ExpressionOperator {
             return res;
         }
 
-        case DataType.MAP: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
-
         case DataType.BOOLEAN: {
-            Boolean b = null;
-            Result res = in.getNext(b);
+            Result res = in.getNextBoolean();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 if ((Boolean) res.result) {
                     res.result = BigInteger.ONE;
@@ -196,8 +188,7 @@ public class POCast extends ExpressionOperator {
             return res;
         }
         case DataType.INTEGER: {
-            Integer i = null;
-            Result res = in.getNext(i);
+            Result res = in.getNextInteger();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = BigInteger.valueOf(((Integer) res.result).longValue());
             }
@@ -205,8 +196,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.DOUBLE: {
-            Double d = null;
-            Result res = in.getNext(d);
+            Result res = in.getNextDouble();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = BigInteger.valueOf(((Double) res.result).longValue());
             }
@@ -214,8 +204,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.LONG: {
-            Long l = null;
-            Result res = in.getNext(l);
+            Result res = in.getNextLong();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = BigInteger.valueOf(((Long) res.result).longValue());
             }
@@ -223,8 +212,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.FLOAT: {
-            Float f = null;
-            Result res = in.getNext(f);
+            Result res = in.getNextFloat();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = BigInteger.valueOf(((Float) res.result).longValue());
             }
@@ -232,8 +220,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.CHARARRAY: {
-            String str = null;
-            Result res = in.getNext(str);
+            Result res = in.getNextString();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = new BigInteger((String)res.result);
             }
@@ -241,53 +228,36 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.BIGINTEGER: {
-            Result res = in.getNext(v);
-            return res;
+            return in.getNextBigInteger();
         }
 
         case DataType.BIGDECIMAL: {
-            BigDecimal bd = null;
-            Result res = in.getNext(bd);
+            Result res = in.getNextBigDecimal();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = ((BigDecimal)res.result).toBigInteger();
             }
             return res;
         }
 
-        case DataType.DATETIME: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
         }
 
-
-        }
-
-        Result res = new Result();
-        res.returnStatus = POStatus.STATUS_ERR;
-        return res;
+        return error();
     }
 
     @Override
-    public Result getNext(BigDecimal v) throws ExecException {
+    public Result getNextBigDecimal() throws ExecException {
         PhysicalOperator in = inputs.get(0);
         Byte resultType = in.getResultType();
         switch (resultType) {
-        case DataType.BAG: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
-
-        case DataType.TUPLE: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
+        case DataType.BAG:
+        case DataType.TUPLE:
+        case DataType.MAP:
+        case DataType.DATETIME:
+            return error();
 
         case DataType.BYTEARRAY: {
-            DataByteArray dba = null;
-            Result res = in.getNext(dba);
+            DataByteArray dba;
+            Result res = in.getNextDataByteArray();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 try {
                     dba = (DataByteArray) res.result;
@@ -322,15 +292,8 @@ public class POCast extends ExpressionOperator {
             return res;
         }
 
-        case DataType.MAP: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
-
         case DataType.BOOLEAN: {
-            Boolean b = null;
-            Result res = in.getNext(b);
+            Result res = in.getNextBoolean();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 if ((Boolean) res.result) {
                     res.result = BigDecimal.ONE;
@@ -341,8 +304,7 @@ public class POCast extends ExpressionOperator {
             return res;
         }
         case DataType.INTEGER: {
-            Integer i = null;
-            Result res = in.getNext(i);
+            Result res = in.getNextInteger();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = BigDecimal.valueOf(((Integer) res.result).longValue());
             }
@@ -350,8 +312,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.DOUBLE: {
-            Double d = null;
-            Result res = in.getNext(d);
+            Result res = in.getNextDouble();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = BigDecimal.valueOf(((Double) res.result).doubleValue());
             }
@@ -359,8 +320,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.LONG: {
-            Long l = null;
-            Result res = in.getNext(l);
+            Result res = in.getNextLong();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = BigDecimal.valueOf(((Long) res.result).longValue());
             }
@@ -368,8 +328,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.FLOAT: {
-            Float f = null;
-            Result res = in.getNext(f);
+            Result res = in.getNextFloat();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = BigDecimal.valueOf(((Float) res.result).doubleValue());
             }
@@ -377,8 +336,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.CHARARRAY: {
-            String str = null;
-            Result res = in.getNext(str);
+            Result res = in.getNextString();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = new BigDecimal((String)res.result);
             }
@@ -386,64 +344,35 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.BIGINTEGER: {
-            BigDecimal bd = null;
-            Result res = in.getNext(bd);
+            Result res = in.getNextBigInteger();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = new BigDecimal((BigInteger)res.result);
             }
             return res;
         }
 
-        case DataType.BIGDECIMAL: {
-            Result res = in.getNext(v);
-            return res;
-        }
-
-        case DataType.DATETIME: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
+        case DataType.BIGDECIMAL:
+            return in.getNextBigDecimal();
 
         }
 
-        Result res = new Result();
-        res.returnStatus = POStatus.STATUS_ERR;
-        return res;
+        return error();
     }
 
     @Override
-    public Result getNext(Boolean b) throws ExecException {
+    public Result getNextBoolean() throws ExecException {
         PhysicalOperator in = inputs.get(0);
         Byte resultType = in.getResultType();
         switch (resultType) {
-        case DataType.BAG: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
-
-        case DataType.TUPLE: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
-
-        case DataType.MAP: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
-
-        case DataType.DATETIME: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
+        case DataType.BAG:
+        case DataType.TUPLE:
+        case DataType.MAP:
+        case DataType.DATETIME:
+            return error();
 
         case DataType.BYTEARRAY: {
-            DataByteArray dba = null;
-            Result res = in.getNext(dba);
+            DataByteArray dba;
+            Result res = in.getNextDataByteArray();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 try {
                     dba = (DataByteArray) res.result;
@@ -479,22 +408,19 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.CHARARRAY: {
-            String str = null;
-            Result res = in.getNext(str);
+            Result res = in.getNextString();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = CastUtils.stringToBoolean((String)res.result);
             }
             return res;
         }
 
-        case DataType.BOOLEAN: {
-            Result res = in.getNext(b);
-            return res;
-        }
+        case DataType.BOOLEAN:
+            return in.getNextBoolean();
 
         case DataType.INTEGER: {
             Integer i = null;
-            Result res = in.getNext(i);
+            Result res = in.getNextInteger();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = Boolean.valueOf(((Integer) res.result).intValue() != 0);
             }
@@ -502,8 +428,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.LONG: {
-            Long l = null;
-            Result res = in.getNext(l);
+            Result res = in.getNextLong();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = Boolean.valueOf(((Long) res.result).longValue() != 0L);
             }
@@ -511,8 +436,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.FLOAT: {
-            Float f = null;
-            Result res = in.getNext(f);
+            Result res = in.getNextFloat();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = Boolean.valueOf(((Float) res.result).floatValue() != 0.0F);
             }
@@ -520,8 +444,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.DOUBLE: {
-            Double d = null;
-            Result res = in.getNext(d);
+            Result res = in.getNextDouble();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = Boolean.valueOf(((Double) res.result).doubleValue() != 0.0);
             }
@@ -530,7 +453,7 @@ public class POCast extends ExpressionOperator {
 
         case DataType.BIGINTEGER: {
             BigInteger bi = null;
-            Result res = in.getNext(bi);
+            Result res = in.getNextBigInteger();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = Boolean.valueOf(!BigInteger.ZERO.equals((BigInteger)res.result));
             }
@@ -539,7 +462,7 @@ public class POCast extends ExpressionOperator {
 
         case DataType.BIGDECIMAL: {
             BigDecimal bd = null;
-            Result res = in.getNext(bd);
+            Result res = in.getNextBigDecimal();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = Boolean.valueOf(!BigDecimal.ZERO.equals((BigDecimal)res.result));
             }
@@ -548,31 +471,22 @@ public class POCast extends ExpressionOperator {
 
         }
 
-        Result res = new Result();
-        res.returnStatus = POStatus.STATUS_ERR;
-        return res;
+        return error();
     }
 
     @Override
-    public Result getNext(Integer i) throws ExecException {
+    public Result getNextInteger() throws ExecException {
         PhysicalOperator in = inputs.get(0);
         Byte resultType = in.getResultType();
         switch (resultType) {
-        case DataType.BAG: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
-
-        case DataType.TUPLE: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
+        case DataType.BAG:
+        case DataType.TUPLE:
+        case DataType.MAP:
+            return error();
 
         case DataType.BYTEARRAY: {
-            DataByteArray dba = null;
-            Result res = in.getNext(dba);
+            DataByteArray dba;
+            Result res = in.getNextDataByteArray();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 try {
                     dba = (DataByteArray) res.result;
@@ -607,15 +521,8 @@ public class POCast extends ExpressionOperator {
             return res;
         }
 
-        case DataType.MAP: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
-
         case DataType.BOOLEAN: {
-            Boolean b = null;
-            Result res = in.getNext(b);
+            Result res = in.getNextBoolean();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 if ((Boolean) res.result) {
                     res.result = Integer.valueOf(1);
@@ -626,13 +533,13 @@ public class POCast extends ExpressionOperator {
             return res;
         }
         case DataType.INTEGER: {
-            Result res = in.getNext(i);
+            Result res = in.getNextInteger();
             return res;
         }
 
         case DataType.DOUBLE: {
             Double d = null;
-            Result res = in.getNext(d);
+            Result res = in.getNextDouble();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 // res.result = DataType.toInteger(res.result);
                 res.result = Integer.valueOf(((Double) res.result).intValue());
@@ -641,8 +548,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.LONG: {
-            Long l = null;
-            Result res = in.getNext(l);
+            Result res = in.getNextLong();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = Integer.valueOf(((Long) res.result).intValue());
             }
@@ -650,8 +556,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.FLOAT: {
-            Float f = null;
-            Result res = in.getNext(f);
+            Result res = in.getNextFloat();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = Integer.valueOf(((Float) res.result).intValue());
             }
@@ -659,8 +564,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.DATETIME: {
-            DateTime dt = null;
-            Result res = in.getNext(dt);
+            Result res = in.getNextDateTime();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = Integer.valueOf(Long.valueOf(((DateTime) res.result).getMillis()).intValue());
             }
@@ -668,8 +572,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.CHARARRAY: {
-            String str = null;
-            Result res = in.getNext(str);
+            Result res = in.getNextString();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = CastUtils.stringToInteger((String)res.result);
             }
@@ -677,8 +580,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.BIGINTEGER: {
-            BigInteger bi = null;
-            Result res = in.getNext(bi);
+            Result res = in.getNextBigInteger();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = Integer.valueOf(((BigInteger)res.result).intValue());
             }
@@ -686,8 +588,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.BIGDECIMAL: {
-            BigDecimal bd = null;
-            Result res = in.getNext(bd);
+            Result res = in.getNextBigDecimal();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = Integer.valueOf(((BigDecimal)res.result).intValue());
             }
@@ -696,37 +597,22 @@ public class POCast extends ExpressionOperator {
 
         }
 
-        Result res = new Result();
-        res.returnStatus = POStatus.STATUS_ERR;
-        return res;
+        return error();
     }
 
     @Override
-    public Result getNext(Long l) throws ExecException {
+    public Result getNextLong() throws ExecException {
         PhysicalOperator in = inputs.get(0);
         Byte resultType = in.getResultType();
         switch (resultType) {
-        case DataType.BAG: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
-
-        case DataType.TUPLE: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
-
-        case DataType.MAP: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
+        case DataType.BAG:
+        case DataType.TUPLE:
+        case DataType.MAP:
+            return error();
 
         case DataType.BYTEARRAY: {
-            DataByteArray dba = null;
-            Result res = in.getNext(dba);
+            DataByteArray dba;
+            Result res = in.getNextDataByteArray();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 try {
                     dba = (DataByteArray) res.result;
@@ -762,8 +648,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.BOOLEAN: {
-            Boolean b = null;
-            Result res = in.getNext(b);
+            Result res = in.getNextBoolean();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 if ((Boolean) res.result) {
                     res.result = Long.valueOf(1);
@@ -774,8 +659,7 @@ public class POCast extends ExpressionOperator {
             return res;
         }
         case DataType.INTEGER: {
-            Integer dummyI = null;
-            Result res = in.getNext(dummyI);
+            Result res = in.getNextInteger();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = Long.valueOf(((Integer) res.result).longValue());
             }
@@ -783,8 +667,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.DOUBLE: {
-            Double d = null;
-            Result res = in.getNext(d);
+            Result res = in.getNextDouble();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 // res.result = DataType.toInteger(res.result);
                 res.result = Long.valueOf(((Double) res.result).longValue());
@@ -792,14 +675,11 @@ public class POCast extends ExpressionOperator {
             return res;
         }
 
-        case DataType.LONG: {
-            Result res = in.getNext(l);
-            return res;
-        }
+        case DataType.LONG:
+            return in.getNextLong();
 
         case DataType.FLOAT: {
-            Float f = null;
-            Result res = in.getNext(f);
+            Result res = in.getNextFloat();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = Long.valueOf(((Float) res.result).longValue());
             }
@@ -807,8 +687,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.DATETIME: {
-            DateTime dt = null;
-            Result res = in.getNext(dt);
+            Result res = in.getNextDateTime();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = Long.valueOf(((DateTime) res.result).getMillis());
             }
@@ -816,8 +695,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.CHARARRAY: {
-            String str = null;
-            Result res = in.getNext(str);
+            Result res = in.getNextString();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = CastUtils.stringToLong((String)res.result);
             }
@@ -825,8 +703,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.BIGINTEGER: {
-            BigInteger bi = null;
-            Result res = in.getNext(bi);
+            Result res = in.getNextBigInteger();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = Long.valueOf(((BigInteger)res.result).longValue());
             }
@@ -834,8 +711,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.BIGDECIMAL: {
-            BigDecimal bd = null;
-            Result res = in.getNext(bd);
+            Result res = in.getNextBigDecimal();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = Long.valueOf(((BigDecimal)res.result).longValue());
             }
@@ -844,37 +720,22 @@ public class POCast extends ExpressionOperator {
 
         }
 
-        Result res = new Result();
-        res.returnStatus = POStatus.STATUS_ERR;
-        return res;
+        return error();
     }
 
     @Override
-    public Result getNext(Double d) throws ExecException {
+    public Result getNextDouble() throws ExecException {
         PhysicalOperator in = inputs.get(0);
         Byte resultType = in.getResultType();
         switch (resultType) {
-        case DataType.BAG: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
-
-        case DataType.TUPLE: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
-
-        case DataType.MAP: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
+        case DataType.BAG:
+        case DataType.TUPLE:
+        case DataType.MAP:
+            return error();
 
         case DataType.BYTEARRAY: {
-            DataByteArray dba = null;
-            Result res = in.getNext(dba);
+            DataByteArray dba;
+            Result res = in.getNextDataByteArray();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 try {
                     dba = (DataByteArray) res.result;
@@ -910,8 +771,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.BOOLEAN: {
-            Boolean b = null;
-            Result res = in.getNext(b);
+            Result res = in.getNextBoolean();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 if ((Boolean) res.result) {
                     res.result = new Double(1);
@@ -922,22 +782,18 @@ public class POCast extends ExpressionOperator {
             return res;
         }
         case DataType.INTEGER: {
-            Integer dummyI = null;
-            Result res = in.getNext(dummyI);
+            Result res = in.getNextInteger();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = new Double(((Integer) res.result).doubleValue());
             }
             return res;
         }
 
-        case DataType.DOUBLE: {
-            Result res = in.getNext(d);
-            return res;
-        }
+        case DataType.DOUBLE:
+            return in.getNextDouble();
 
         case DataType.LONG: {
-            Long l = null;
-            Result res = in.getNext(l);
+            Result res = in.getNextLong();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = new Double(((Long) res.result).doubleValue());
             }
@@ -945,8 +801,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.FLOAT: {
-            Float f = null;
-            Result res = in.getNext(f);
+            Result res = in.getNextFloat();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = new Double(((Float) res.result).doubleValue());
             }
@@ -954,8 +809,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.DATETIME: {
-            DateTime dt = null;
-            Result res = in.getNext(dt);
+            Result res = in.getNextDateTime();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = new Double(Long.valueOf(((DateTime) res.result).getMillis()).doubleValue());
             }
@@ -963,8 +817,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.CHARARRAY: {
-            String str = null;
-            Result res = in.getNext(str);
+            Result res = in.getNextString();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = CastUtils.stringToDouble((String)res.result);
             }
@@ -972,8 +825,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.BIGINTEGER: {
-            BigInteger bi = null;
-            Result res = in.getNext(bi);
+            Result res = in.getNextBigInteger();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = Double.valueOf(((BigInteger)res.result).doubleValue());
             }
@@ -981,8 +833,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.BIGDECIMAL: {
-            BigDecimal bd = null;
-            Result res = in.getNext(bd);
+            Result res = in.getNextBigDecimal();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = Double.valueOf(((BigDecimal)res.result).doubleValue());
             }
@@ -991,37 +842,22 @@ public class POCast extends ExpressionOperator {
 
         }
 
-        Result res = new Result();
-        res.returnStatus = POStatus.STATUS_ERR;
-        return res;
+        return error();
     }
 
     @Override
-    public Result getNext(Float f) throws ExecException {
+    public Result getNextFloat() throws ExecException {
         PhysicalOperator in = inputs.get(0);
         Byte resultType = in.getResultType();
         switch (resultType) {
-        case DataType.BAG: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
-
-        case DataType.TUPLE: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
-
-        case DataType.MAP: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
+        case DataType.BAG:
+        case DataType.TUPLE:
+        case DataType.MAP:
+            return error();
 
         case DataType.BYTEARRAY: {
-            DataByteArray dba = null;
-            Result res = in.getNext(dba);
+            DataByteArray dba;
+            Result res = in.getNextDataByteArray();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 try {
                     dba = (DataByteArray) res.result;
@@ -1057,8 +893,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.BOOLEAN: {
-            Boolean b = null;
-            Result res = in.getNext(b);
+            Result res = in.getNextBoolean();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 if ((Boolean) res.result) {
                     res.result = new Float(1);
@@ -1069,8 +904,7 @@ public class POCast extends ExpressionOperator {
             return res;
         }
         case DataType.INTEGER: {
-            Integer dummyI = null;
-            Result res = in.getNext(dummyI);
+            Result res = in.getNextInteger();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = new Float(((Integer) res.result).floatValue());
             }
@@ -1078,8 +912,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.DOUBLE: {
-            Double d = null;
-            Result res = in.getNext(d);
+            Result res = in.getNextDouble();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 // res.result = DataType.toInteger(res.result);
                 res.result = new Float(((Double) res.result).floatValue());
@@ -1088,8 +921,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.LONG: {
-            Long l = null;
-            Result res = in.getNext(l);
+            Result res = in.getNextLong();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = new Float(((Long) res.result).floatValue());
             }
@@ -1097,13 +929,12 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.FLOAT: {
-            Result res = in.getNext(f);
-            return res;
+            return in.getNextFloat();
         }
 
         case DataType.DATETIME: {
             DateTime dt = null;
-            Result res = in.getNext(dt);
+            Result res = in.getNextDateTime();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = new Float(Long.valueOf(((DateTime) res.result).getMillis()).floatValue());
             }
@@ -1111,8 +942,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.CHARARRAY: {
-            String str = null;
-            Result res = in.getNext(str);
+            Result res = in.getNextString();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = CastUtils.stringToFloat((String)res.result);
             }
@@ -1120,8 +950,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.BIGINTEGER: {
-            BigInteger bi = null;
-            Result res = in.getNext(bi);
+            Result res = in.getNextBigInteger();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = Float.valueOf(((BigInteger)res.result).floatValue());
             }
@@ -1129,8 +958,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.BIGDECIMAL: {
-            BigDecimal bd = null;
-            Result res = in.getNext(bd);
+            Result res = in.getNextBigDecimal();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = Float.valueOf(((BigDecimal)res.result).floatValue());
             }
@@ -1139,37 +967,22 @@ public class POCast extends ExpressionOperator {
 
         }
 
-        Result res = new Result();
-        res.returnStatus = POStatus.STATUS_ERR;
-        return res;
+        return error();
     }
 
     @Override
-    public Result getNext(DateTime dt) throws ExecException {
+    public Result getNextDateTime() throws ExecException {
         PhysicalOperator in = inputs.get(0);
         Byte resultType = in.getResultType();
         switch (resultType) {
-        case DataType.BAG: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
-
-        case DataType.TUPLE: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
-
-        case DataType.MAP: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
+        case DataType.BAG:
+        case DataType.TUPLE:
+        case DataType.MAP:
+            return error();
 
         case DataType.BYTEARRAY: {
-            DataByteArray dba = null;
-            Result res = in.getNext(dba);
+            DataByteArray dba;
+            Result res = in.getNextDataByteArray();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 try {
                     dba = (DataByteArray) res.result;
@@ -1206,8 +1019,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.INTEGER: {
-            Integer dummyI = null;
-            Result res = in.getNext(dummyI);
+            Result res = in.getNextInteger();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = new DateTime(((Integer) res.result).longValue());
             }
@@ -1215,8 +1027,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.DOUBLE: {
-            Double d = null;
-            Result res = in.getNext(d);
+            Result res = in.getNextDouble();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = new DateTime(((Double) res.result).longValue());
             }
@@ -1224,8 +1035,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.LONG: {
-            Long l = null;
-            Result res = in.getNext(l);
+            Result res = in.getNextLong();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = new DateTime(((Long) res.result).longValue());
             }
@@ -1233,8 +1043,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.FLOAT: {
-            Float f = null;
-            Result res = in.getNext(f);
+            Result res = in.getNextFloat();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = new DateTime(((Float) res.result).longValue());
             }
@@ -1242,8 +1051,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.BIGINTEGER: {
-            BigInteger dummy = null;
-            Result res = in.getNext(dummy);
+            Result res = in.getNextBigInteger();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = new DateTime(((BigInteger) res.result).longValue());
             }
@@ -1251,66 +1059,42 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.BIGDECIMAL: {
-            BigDecimal dummy = null;
-            Result res = in.getNext(dummy);
+            Result res = in.getNextBigDecimal();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = new DateTime(((BigDecimal) res.result).longValue());
             }
             return res;
         }
 
-        case DataType.DATETIME: {
-            Result res = in.getNext(dt);
-            return res;
-        }
+        case DataType.DATETIME:
+            return in.getNextDateTime();
 
         case DataType.CHARARRAY: {
-            String str = null;
-            Result res = in.getNext(str);
+            Result res = in.getNextString();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
-                DateTimeZone dtz = ToDate.extractDateTimeZone((String) res.result);
-                if (dtz == null) {
-                    res.result = new DateTime((String) res.result);
-                } else {
-                    res.result = new DateTime((String) res.result, dtz);
-                }
+                res.result = ToDate.extractDateTime((String) res.result);
             }
             return res;
         }
 
         }
 
-        Result res = new Result();
-        res.returnStatus = POStatus.STATUS_ERR;
-        return res;
+        return error();
     }
 
     @Override
-    public Result getNext(String str) throws ExecException {
+    public Result getNextString() throws ExecException {
         PhysicalOperator in = inputs.get(0);
         Byte resultType = in.getResultType();
         switch (resultType) {
-        case DataType.BAG: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
-
-        case DataType.TUPLE: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
-
-        case DataType.MAP: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
+        case DataType.BAG:
+        case DataType.TUPLE:
+        case DataType.MAP:
+            return error();
 
         case DataType.BYTEARRAY: {
-            DataByteArray dba = null;
-            Result res = in.getNext(dba);
+            DataByteArray dba;
+            Result res = in.getNextDataByteArray();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 try {
                     dba = (DataByteArray) res.result;
@@ -1347,8 +1131,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.BOOLEAN: {
-            Boolean b = null;
-            Result res = in.getNext(b);
+            Result res = in.getNextBoolean();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 if ((Boolean) res.result) {
                     //res.result = "1";
@@ -1361,8 +1144,7 @@ public class POCast extends ExpressionOperator {
             return res;
         }
         case DataType.INTEGER: {
-            Integer dummyI = null;
-            Result res = in.getNext(dummyI);
+            Result res = in.getNextInteger();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = ((Integer) res.result).toString();
             }
@@ -1370,8 +1152,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.DOUBLE: {
-            Double d = null;
-            Result res = in.getNext(d);
+            Result res = in.getNextDouble();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 // res.result = DataType.toInteger(res.result);
                 res.result = ((Double) res.result).toString();
@@ -1380,8 +1161,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.LONG: {
-            Long l = null;
-            Result res = in.getNext(l);
+            Result res = in.getNextLong();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = ((Long) res.result).toString();
             }
@@ -1389,8 +1169,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.FLOAT: {
-            Float f = null;
-            Result res = in.getNext(f);
+            Result res = in.getNextFloat();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = ((Float) res.result).toString();
             }
@@ -1398,22 +1177,19 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.DATETIME: {
-            DateTime dt = null;
-            Result res = in.getNext(dt);
+            Result res = in.getNextDateTime();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = ((DateTime) res.result).toString();
             }
             return res;
         }
 
-        case DataType.CHARARRAY: {
-            Result res = in.getNext(str);
-            return res;
-        }
+        case DataType.CHARARRAY:
+            return in.getNextString();
 
         case DataType.BIGINTEGER: {
             BigInteger bi = null;
-            Result res = in.getNext(bi);
+            Result res = in.getNextBigInteger();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = ((BigInteger)res.result).toString();
             }
@@ -1421,8 +1197,7 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.BIGDECIMAL: {
-            BigDecimal bd = null;
-            Result res = in.getNext(bd);
+            Result res = in.getNextBigDecimal();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 res.result = ((BigDecimal)res.result).toString();
             }
@@ -1431,20 +1206,18 @@ public class POCast extends ExpressionOperator {
 
         }
 
-        Result res = new Result();
-        res.returnStatus = POStatus.STATUS_ERR;
-        return res;
+        return error();
     }
 
     @Override
-    public Result getNext(Tuple t) throws ExecException {
+    public Result getNextTuple() throws ExecException {
         PhysicalOperator in = inputs.get(0);
         Byte castToType = DataType.TUPLE;
         Byte resultType = in.getResultType();
         switch (resultType) {
 
         case DataType.TUPLE: {
-            Result res = in.getNext(t);
+            Result res = in.getNextTuple();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 try {
                     res.result = convertWithSchema(res.result, fieldSchema);
@@ -1460,8 +1233,8 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.BYTEARRAY: {
-            DataByteArray dba = null;
-            Result res = in.getNext(dba);
+            DataByteArray dba;
+            Result res = in.getNextDataByteArray();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 // res.result = new
                 // String(((DataByteArray)res.result).toString());
@@ -1509,37 +1282,20 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.BAG:
-
         case DataType.MAP:
-
         case DataType.INTEGER:
-
         case DataType.DOUBLE:
-
         case DataType.LONG:
-
         case DataType.FLOAT:
-
         case DataType.CHARARRAY:
-
         case DataType.BOOLEAN:
-
         case DataType.BIGINTEGER:
-
         case DataType.BIGDECIMAL:
-
-        case DataType.DATETIME: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
+        case DataType.DATETIME:
+            return error();
         }
 
-        }
-
-        Result res = new Result();
-        res.returnStatus = POStatus.STATUS_ERR;
-        return res;
-
+        return error();
     }
 
     @SuppressWarnings({ "unchecked", "deprecation" })
@@ -1895,12 +1651,7 @@ public class POCast extends ExpressionOperator {
                 result = (DateTime)obj;
                 break;
             case DataType.CHARARRAY:
-                DateTimeZone dtz = ToDate.extractDateTimeZone((String) obj);
-                if (dtz == null) {
-                    result = new DateTime((String) obj);
-                } else {
-                    result = new DateTime((String) obj, dtz);
-                }
+                result = ToDate.extractDateTime((String) obj);
                 break;
             case DataType.BIGINTEGER:
                 result = new DateTime(((BigInteger)obj).longValue());
@@ -2057,14 +1808,14 @@ public class POCast extends ExpressionOperator {
     }
 
     @Override
-    public Result getNext(DataBag bag) throws ExecException {
+    public Result getNextDataBag() throws ExecException {
         PhysicalOperator in = inputs.get(0);
         Byte castToType = DataType.BAG;
         Byte resultType = in.getResultType();
         switch (resultType) {
 
         case DataType.BAG: {
-            res = in.getNext(bag);
+            res = in.getNextDataBag();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 try {
                     res.result = convertWithSchema(res.result, fieldSchema);
@@ -2080,8 +1831,8 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.BYTEARRAY: {
-            DataByteArray dba = null;
-            Result res = in.getNext(dba);
+            DataByteArray dba;
+            Result res = in.getNextDataByteArray();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 // res.result = new
                 // String(((DataByteArray)res.result).toString());
@@ -2129,48 +1880,33 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.TUPLE:
-
         case DataType.MAP:
-
         case DataType.INTEGER:
-
         case DataType.DOUBLE:
-
         case DataType.LONG:
-
         case DataType.FLOAT:
-
         case DataType.DATETIME:
-
         case DataType.CHARARRAY:
-
         case DataType.BOOLEAN:
-
         case DataType.BIGINTEGER:
-
-        case DataType.BIGDECIMAL: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
+        case DataType.BIGDECIMAL:
+            return error();
 
         }
 
-        Result res = new Result();
-        res.returnStatus = POStatus.STATUS_ERR;
-        return res;
+        return error();
     }
 
     @SuppressWarnings("deprecation")
     @Override
-    public Result getNext(Map m) throws ExecException {
+    public Result getNextMap() throws ExecException {
         PhysicalOperator in = inputs.get(0);
         Byte castToType = DataType.MAP;
         Byte resultType = in.getResultType();
         switch (resultType) {
 
         case DataType.MAP: {
-            Result res = in.getNext(m);
+            Result res = in.getNextMap();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 try {
                     res.result = convertWithSchema(res.result, fieldSchema);
@@ -2186,8 +1922,8 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.BYTEARRAY: {
-            DataByteArray dba = null;
-            Result res = in.getNext(dba);
+            DataByteArray dba;
+            Result res = in.getNextDataByteArray();
             if (res.returnStatus == POStatus.STATUS_OK && res.result != null) {
                 // res.result = new
                 // String(((DataByteArray)res.result).toString());
@@ -2242,43 +1978,26 @@ public class POCast extends ExpressionOperator {
         }
 
         case DataType.TUPLE:
-
         case DataType.BAG:
-
         case DataType.INTEGER:
-
         case DataType.DOUBLE:
-
         case DataType.LONG:
-
         case DataType.DATETIME:
-
         case DataType.FLOAT:
-
         case DataType.CHARARRAY:
-
         case DataType.BOOLEAN:
-
         case DataType.BIGINTEGER:
-
-        case DataType.BIGDECIMAL: {
-            Result res = new Result();
-            res.returnStatus = POStatus.STATUS_ERR;
-            return res;
-        }
+        case DataType.BIGDECIMAL:
+            return error();
 
         }
 
-        Result res = new Result();
-        res.returnStatus = POStatus.STATUS_ERR;
-        return res;
+        return error();
     }
 
     @Override
-    public Result getNext(DataByteArray dba) throws ExecException {
-        Result res = new Result();
-        res.returnStatus = POStatus.STATUS_ERR;
-        return res;
+    public Result getNextDataByteArray() throws ExecException {
+        return error();
     }
 
     private void readObject(ObjectInputStream is) throws IOException,

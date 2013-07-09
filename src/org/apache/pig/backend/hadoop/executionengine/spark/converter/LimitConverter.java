@@ -47,7 +47,7 @@ public class LimitConverter implements POConverter<Tuple, Tuple, POLimit> {
                 }
 
                 protected Result getNextResult() throws ExecException {
-                    return poLimit.getNext((Tuple)null);
+                    return poLimit.getNextTuple();
                 }
             });
         }

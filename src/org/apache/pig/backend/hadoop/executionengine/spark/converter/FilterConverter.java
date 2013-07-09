@@ -43,7 +43,7 @@ public class FilterConverter implements POConverter<Tuple, Tuple, POFilter> {
             try {
                 poFilter.setInputs(null);
                 poFilter.attachInput(v1);
-                result = poFilter.getNext(v1);
+                result = poFilter.getNextTuple();
             } catch (ExecException e) {
                 throw new RuntimeException("Couldn't filter tuple", e);
             }

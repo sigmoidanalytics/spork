@@ -69,6 +69,7 @@
     <property name="artifact.pig.jar" value="${final.name}.jar"/>
     <property name="artifact.pig-h2.jar" value="${final.name}-h2.jar"/>
     <property name="artifact.pig-withouthadoop.jar" value="${final.name}-withouthadoop.jar"/>
+    <property name="artifact.pig-withouthadoop-h2.jar" value="${final.name}-withouthadoop-h2.jar"/>
     <property name="artifact.pig-withdependencies.jar" value="${final.name}-withdependencies.jar"/>
     <property name="artifact.pig-sources.jar" value="${final.name}-sources.jar"/>
     <property name="artifact.pig-javadoc.jar" value="${final.name}-javadoc.jar"/>
@@ -78,6 +79,7 @@
     <property name="output.jarfile.withdependencies" value="${build.dir}/${artifact.pig-withdependencies.jar}" />
     <property name="output.stage.jarfile.withdependencies" value="${build.dir}/${final.name}-withdependencies.stage.jar" />
     <property name="output.jarfile.withouthadoop" value="${build.dir}/${artifact.pig-withouthadoop.jar}" />
+    <property name="output.jarfile.withouthadoop-h2" value="${build.dir}/${artifact.pig-withouthadoop-h2.jar}" />
     <property name="output.jarfile.core" value="${build.dir}/${artifact.pig.jar}" />
     <property name="output.jarfile.core-h2" value="${build.dir}/${artifact.pig-h2.jar}" />
     <property name="output.jarfile.sources" value="${build.dir}/${artifact.pig-sources.jar}" />
@@ -114,6 +116,9 @@
 
     <!-- e2e test properties -->
     <property name="test.e2e.dir" value="${basedir}/test/e2e/pig"/>
+
+    <!-- pigmix properties -->
+    <property name="pigmix.dir" value="${basedir}/test/perf/pigmix"/>
 
     <!-- parser properties -->
     <property name="src.gen.query.parser.dir" value="${src.gen.dir}/org/apache/pig/impl/logicalLayer/parser" />
@@ -300,6 +305,10 @@
     <!-- setup the classpath -->
     <path id="classpath">
         <path refid="compile.classpath"/>
+        <fileset dir="${lib.dir}/spark">
+          <include name="**.*jar"/>
+        </fileset>
+        
         <fileset dir="${lib.dir}" includes="*.jar"/>
         <fileset file="${ivy.lib.dir}/${zookeeper.jarfile}"/>
         <fileset dir="${ivy.lib.dir}" includes="*.jar"/>
@@ -313,6 +322,8 @@
     <path id="test.classpath">
         <!-- need to put this first, otherwise junit-3 testcases can break -->
         <pathelement location="${ivy.lib.dir}/junit-3.8.1.jar"/>
+        <pathelement location="${lib.dir}/spark/mesos-*.jar"/>
+        
         <pathelement location="${build.classes}"/>
         <pathelement location="${test.src.dir}"/>
         <pathelement location="${piggybank.jarfile}"/>
@@ -330,6 +341,27 @@
             <include name="guava-${guava.version}.jar"/>
             <include name="automaton-${automaton.version}.jar"/>
             <include name="jansi-${jansi.version}.jar"/>
+            <include name="avro-${avro.version}.jar"/>     
+            <include name="avro-mapred-${avro.version}.jar"/>     
+            <include name="trevni-core-${avro.version}.jar"/>     
+            <include name="trevni-avro-${avro.version}.jar"/>
+            <include name="snappy-java-${snappy.version}.jar"/>
+            <include name="asm*.jar"/>
+
+            <!-- SPORK -->
+            <include name="spark-core*.jar" />
+            <include name="scala-library*.jar" />
+            <include name="jetty*7.5.3*.jar" />
+            <include name="fastutil*.jar" />
+            <include name="protobuf*.jar" />
+            <include name="asm*.jar" />
+            <include name="slf4j*.jar" />
+            <include name="servlet-api*.jar" />
+            <include name="compress-lzf*.jar" />
+            <include name="mesos*.jar"/>
+            
+            <!-- /SPORK -->
+
         </patternset>
     </fileset>
 
@@ -342,11 +374,11 @@
             <include name="junit-${junit.version}.jar"/>
             <include name="jsch-${jsch.version}.jar"/>
             <include name="protobuf-java-${protobuf-java.version}.jar"/>
-            <include name="avro-${avro.version}.jar"/>
             <include name="commons*.jar"/>
             <include name="log4j*.jar"/>
             <include name="slf4j*.jar"/>
             <include name="jsp-api*.jar"/>
+
             <!-- SPORK -->
             <include name="spark-core*.jar" />
             <include name="scala-library*.jar" />
@@ -357,7 +389,16 @@
             <include name="slf4j*.jar" />
             <include name="servlet-api*.jar" />
             <include name="compress-lzf*.jar" />
+            <include name="mesos-*.jar"/>
             <!-- /SPORK -->
+
+            <include name="avro-${avro.version}.jar"/>
+            <include name="avro-mapred-${avro.version}.jar"/>    
+            <include name="trevni-core-${avro.version}.jar"/>    
+            <include name="trevni-avro-${avro.version}.jar"/>
+            <include name="snappy-java-${snappy.version}.jar"/>
+            <include name="asm*.jar"/>
+
         </patternset>
     </fileset>
 
@@ -533,7 +574,7 @@
         <echo>*** To compile with all warnings enabled, supply -Dall.warnings=1 on command line ***</echo>
         <echo>*** Else, you will only be warned about deprecations ***</echo>
         <compileSources sources="${test.src.dir};${src.shims.test.dir}"
-            excludes="**/PigTestLoader.java **/resources/**" dist="${test.build.classes}" cp="test.classpath" warnings="${javac.args.warnings}" />
+            excludes="**/PigTestLoader.java **/resources/** perf/**" dist="${test.build.classes}" cp="test.classpath" warnings="${javac.args.warnings}" />
         <copy file="${basedir}/test/hbase-site.xml" tofile="${test.build.classes}/hbase-site.xml"/>
 
         <ivy:cachepath pathid="mr-apps-test-ivy.classpath" conf="test" />
@@ -588,7 +629,7 @@
         </javadoc>
     </target>
 
-    <target name="javadoc-all" depends="jar-withouthadoop, ivy-javadoc" description="Create documentation including all contrib projects">
+    <target name="javadoc-all" depends="jar-withouthadoop, piggybank, zebra, ivy-javadoc" description="Create documentation including all contrib projects">
         <mkdir dir="${build.javadoc}" />
         <javadoc overview="${src.dir}/overview.html" packagenames="org.apache.pig*,org.apache.hadoop.zebra*" destdir="${build.javadoc}" author="true" version="true" use="true" windowtitle="${Name} ${version} API" doctitle="${Name} ${version} API" bottom="Copyright &amp;copy; ${year} The Apache Software Foundation">
             <packageset dir="${src.dir}" />
@@ -598,6 +639,7 @@
             <classpath>
                 <path refid="javadoc-classpath" />
                 <pathelement path="${output.jarfile.withdependencies}" />
+                <pathelement path="${piggybank.jarfile}"/>
                 <fileset dir="build">
                     <include name="**/zebra-*-dev.jar"/>
                 </fileset>
@@ -711,14 +753,18 @@
         <propertyreset name="src.shims.dir" value="${basedir}/shims/src/hadoop${hadoopversion}" />
         <antcall target="clean" inheritRefs="true" inheritall="true"/>
         <antcall target="jar" inheritRefs="true" inheritall="true"/>
+        <antcall target="jar-withouthadoop" inheritRefs="true" inheritall="true"/>
         <!-- Move and rename pig jar for Hadoop2/23 to a different location before compiling for Hadoop1/20 -->
         <move file="${output.jarfile.core}" tofile="${basedir}/${artifact.pig-h2.jar}"/>
+        <move file="${output.jarfile.withouthadoop}" tofile="${basedir}/${artifact.pig-withouthadoop-h2.jar}"/>
         <antcall target="clean" inheritRefs="true" inheritall="true"/>
         <propertyreset name="hadoopversion" value="20" />
         <propertyreset name="isHadoop" value="" />
         <propertyreset name="src.shims.dir" value="${basedir}/shims/src/hadoop${hadoopversion}" />
         <antcall target="jar" inheritRefs="true" inheritall="true"/>
+        <antcall target="jar-withouthadoop" inheritRefs="true" inheritall="true"/>
         <move file="${basedir}/${artifact.pig-h2.jar}" tofile="${output.jarfile.core-h2}"/>
+        <move file="${basedir}/${artifact.pig-withouthadoop-h2.jar}" tofile="${output.jarfile.withouthadoop-h2}"/>
     </target>
 
     <!-- ================================================================== -->
@@ -900,6 +946,14 @@
         <ant dir="${test.e2e.dir}" target="deploy-local"/>
     </target>
 
+    <target name="pigmix-deploy" depends="jar, jar-withouthadoop" description="deploy end-to-end tests to existing cluster">
+        <ant dir="${pigmix.dir}" target="deploy"/>
+    </target>
+
+    <target name="pigmix" depends="jar, jar-withouthadoop, piggybank" description="run end-to-end tests">
+        <ant dir="${pigmix.dir}" target="test"/>
+    </target>
+
     <!-- ================================================================== -->
     <!-- Pigunit                                                            -->
     <!-- ================================================================== -->
@@ -922,7 +976,7 @@
     <!-- ================================================================== -->
     <!-- Distribution                                                       -->
     <!-- ================================================================== -->
-    <target name="package" depends="docs, api-report, jar" description="Create a Pig tar release">
+    <target name="package" depends="docs, api-report, jar, piggybank" description="Create a Pig tar release">
         <mkdir dir="${tar.dist.dir}" />
         <mkdir dir="${tar.dist.dir}/lib" />
         <mkdir dir="${tar.dist.dir}/conf" />
@@ -1622,6 +1676,10 @@
 
      <target name="piggybank" depends="jar">
          <ant antfile="contrib/piggybank/java/build.xml" inheritAll="false"/>
+     </target>
+
+     <target name="zebra" depends="jar">
+         <ant antfile="contrib/zebra/build.xml" inheritAll="false"/>
      </target>
 
      <import file="./build-site.xml" optional="true"/>
