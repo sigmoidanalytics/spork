@@ -41,7 +41,6 @@ public class TestSpark {
         properties.put("io.sort.mb", "1");
 
         PigServer pigServer = new PigServer(MODE, properties);
-
         return pigServer;
     }
 
@@ -63,6 +62,7 @@ public class TestSpark {
         assertEquals(
                 Arrays.asList(tuple("test1"), tuple("test2")),
                 data.get("output"));
+        pigServer.shutdown();
     }
 
     @Test
@@ -83,6 +83,7 @@ public class TestSpark {
         }
 
         assertEquals(Arrays.asList(tuple("test1"), tuple("test2")), resultList);
+        pigServer.shutdown();
     }
 
     @Test
@@ -103,6 +104,8 @@ public class TestSpark {
                         tuple("key1", bag(tuple("foo", "key1", "test1"), tuple("bar", "key1", "test2"))),
                         tuple("key2", bag(tuple("baz", "key2", "test3")))),
                         sortByIndex(data.get("output"), 0));
+
+        pigServer.shutdown();
     }
 
     @Test
@@ -124,6 +127,8 @@ public class TestSpark {
                 Arrays.asList(
                         tuple(3l,bag(tuple("key1","foo",2l),tuple("key1","bar",2l),tuple("key2","baz",1l)))),
                 sortByIndex(data.get("output"), 0));
+
+        pigServer.shutdown();
     }
 
     private List<Tuple> sortByIndex(List<Tuple> out, final int i) {
@@ -160,6 +165,8 @@ public class TestSpark {
         assertEquals(
                 Arrays.asList(tuple("test1"), tuple("test1"), tuple("test2")),
                 data.get("output"));
+
+        pigServer.shutdown();
     }
 
     @Test
@@ -179,6 +186,8 @@ public class TestSpark {
         assertEquals(
                 Arrays.asList(tuple(2l), tuple(1l)),
                 data.get("output"));
+
+        pigServer.shutdown();
     }
 
     @Test
@@ -195,6 +204,8 @@ public class TestSpark {
         assertEquals(
                 Arrays.asList(),
                 data.get("output"));
+
+        pigServer.shutdown();
     }
 
     @Test
@@ -213,6 +224,8 @@ public class TestSpark {
         assertEquals(
                 Arrays.asList(tuple(1l), tuple(2l), tuple(3l)),
                 data.get("output"));
+
+        pigServer.shutdown();
     }
 
 
@@ -231,6 +244,8 @@ public class TestSpark {
         assertEquals(
                 Arrays.asList(tuple("1"), tuple("2"), tuple("3"), tuple("4"), tuple("5"), tuple("6")),
                 data.get("output"));
+
+        pigServer.shutdown();
     }
 
     @Test
@@ -249,6 +264,8 @@ public class TestSpark {
         assertEquals(
                 Arrays.asList(tuple("foo"), tuple("bar"), tuple("bat")),
                 data.get("output"));
+
+        pigServer.shutdown();
     }
 
     @Test
@@ -268,6 +285,8 @@ public class TestSpark {
         assertEquals(
                 Arrays.asList(tuple("1"), tuple("1")),
                 data.get("output"));
+
+        pigServer.shutdown();
     }
 
     @Test
@@ -287,6 +306,8 @@ public class TestSpark {
         assertEquals(
                 Arrays.asList(tuple("1"), tuple("2"), tuple("3")),
                 sortByIndex(data.get("output"), 0));
+
+        pigServer.shutdown();
     }
 
     @Test
@@ -318,6 +339,8 @@ public class TestSpark {
                         tuple("2", 1, "bar")
                         ),
                 sortByIndex(data.get("output2"), 0));
+
+        pigServer.shutdown();
     }
 
     @Test
@@ -352,6 +375,7 @@ public class TestSpark {
                         tuple("2", 3, "bar")
                         ),
                 sortByIndex(data.get("output2"),1));
+        pigServer.shutdown();
     }
 
     @Test
@@ -384,6 +408,8 @@ public class TestSpark {
                         tuple("2", 1, "bar")
                         ),
                 sortByIndex(data.get("output2"), 0));
+
+        pigServer.shutdown();
     }
 
     @Test
@@ -408,6 +434,8 @@ public class TestSpark {
                         tuple("1", 4, "foo")
                         ),
                 data.get("output"));
+
+        pigServer.shutdown();
     }
 
     @Test
@@ -427,6 +455,8 @@ public class TestSpark {
         assertEquals(
                 Arrays.asList(tuple("1"), tuple("2")),
                 data.get("output"));
+
+        pigServer.shutdown();
     }
 
     @Test
@@ -460,6 +490,8 @@ public class TestSpark {
                         tuple("7"),
                         tuple("8")),
                 data.get("output"));
+
+        pigServer.shutdown();
     }
 
     @Test
@@ -496,6 +528,8 @@ public class TestSpark {
                         tuple("7"),
                         tuple("8")),
                 sortByIndex(data.get("output"),0));
+
+        pigServer.shutdown();
     }
 
     @Test
@@ -524,6 +558,8 @@ public class TestSpark {
                         tuple(3,bag(tuple("foo", 3,"c")),bag())
                         ),
                         sortByIndex(data.get("output"), 0));
+
+        pigServer.shutdown();
     }
 
     @Test
@@ -559,6 +595,8 @@ public class TestSpark {
                         tuple(4,bag(),bag(),bag(),bag(tuple("boz", 4, "i")))
                         ),
                 sortByIndex(data.get("output"), 0));
+
+        pigServer.shutdown();
     }
 
     @Test
@@ -589,6 +627,8 @@ public class TestSpark {
                         tuple(2, "b", 2, "f")
                         ),
                         data.get("output"));
+
+        pigServer.shutdown();
     }
 
     @Test
@@ -688,6 +728,8 @@ public class TestSpark {
         Assert.assertFalse(
                 originalOutput.equals(
                         data.get("output")));
+
+        pigServer.shutdown();
     }
 
     /**
@@ -722,5 +764,7 @@ public class TestSpark {
         assertEquals(
                 originalOutput,
                 data.get("output"));
+
+        pigServer.shutdown();
     }
 }

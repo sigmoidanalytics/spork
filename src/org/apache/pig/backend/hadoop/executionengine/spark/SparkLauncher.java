@@ -140,7 +140,7 @@ public class SparkLauncher extends Launcher {
             String[] sparkJars = sparkJarsSetting == null ? new String[]{} : sparkJarsSetting.split(",");
 
             // TODO: Don't hardcode this JAR
-            List<String> jars = Lists.asList("build/pig-0.12.0-SNAPSHOT-withdependencies.jar", sparkJars);
+            List<String> jars = Lists.asList("build/pig-0.12.0-SNAPSHOT-withouthadoop.jar", sparkJars);
 
             if (!master.startsWith("local")) {
                 // Check that we have the Mesos native library and Spark home are set
