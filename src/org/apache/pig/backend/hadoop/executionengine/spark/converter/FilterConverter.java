@@ -11,7 +11,7 @@ import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.data.Tuple;
 
 import scala.runtime.AbstractFunction1;
-import spark.RDD;
+import org.apache.spark.rdd.RDD;
 
 /**
  * Converter that converts an RDD to a filtered RRD using POFilter

@@ -14,10 +14,10 @@ import org.apache.pig.data.Tuple;
 import scala.Tuple2;
 import scala.runtime.AbstractFunction1;
 
-import spark.api.java.JavaRDD;
-import spark.api.java.JavaPairRDD;
-import spark.api.java.function.FlatMapFunction;
-import spark.RDD;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.function.FlatMapFunction;
+import org.apache.spark.rdd.RDD;
 
 @SuppressWarnings("serial")
 public class SortConverter implements POConverter<Tuple, Tuple, POSort> {

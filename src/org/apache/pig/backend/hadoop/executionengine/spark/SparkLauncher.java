@@ -55,9 +55,9 @@ import org.apache.pig.impl.plan.OperatorKey;
 import org.apache.pig.tools.pigstats.PigStats;
 import org.apache.pig.tools.pigstats.SparkStats;
 
-import spark.RDD;
-import spark.SparkContext;
-import spark.api.java.JavaSparkContext;
+import org.apache.spark.rdd.RDD;
+import org.apache.spark.SparkContext;
+import org.apache.spark.api.java.JavaSparkContext;
 
 /**
  * @author billg

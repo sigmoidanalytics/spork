@@ -11,8 +11,8 @@ import org.apache.pig.data.Tuple;
 
 import scala.collection.Iterator;
 import scala.collection.JavaConversions;
-import spark.api.java.function.Function;
-import spark.RDD;
+import org.apache.spark.api.java.function.Function;
+import org.apache.spark.rdd.RDD;
 
 /**
  * Convert that is able to convert an RRD to another RRD using a POForEach

@@ -16,8 +16,8 @@ import scala.Tuple2;
 import scala.reflect.ClassManifest;
 import scala.runtime.AbstractFunction1;
 import scala.runtime.AbstractFunction2;
-import spark.PairRDDFunctions;
-import spark.RDD;
+import org.apache.spark.rdd.PairRDDFunctions;
+import org.apache.spark.rdd.RDD;
 
 @SuppressWarnings({ "serial"})
 public class DistinctConverter implements POConverter<Tuple, Tuple, PODistinct> {

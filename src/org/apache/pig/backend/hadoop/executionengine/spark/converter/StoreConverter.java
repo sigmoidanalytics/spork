@@ -19,8 +19,9 @@ import org.apache.pig.impl.util.ObjectSerializer;
 
 import scala.Tuple2;
 import scala.runtime.AbstractFunction1;
-import spark.PairRDDFunctions;
-import spark.RDD;
+import org.apache.spark.rdd.PairRDDFunctions;
+import org.apache.spark.rdd.RDD;
+import org.apache.spark.api.java.function.Function;
 
 import com.google.common.collect.Lists;
 
@@ -73,12 +74,12 @@ public class StoreConverter implements POConverter<Tuple, Tuple2<Text, Tuple>, P
         return poStore;
     }
 
-    private static class FromTupleFunction extends AbstractFunction1<Tuple, Tuple2<Text, Tuple>>
+    private static class FromTupleFunction extends Function<Tuple, Tuple2<Text, Tuple>>
             implements Serializable {
 
         private static Text EMPTY_TEXT = new Text();
 
-        public Tuple2<Text, Tuple> apply(Tuple v1) {
+        public Tuple2<Text, Tuple> call(Tuple v1) {
             return new Tuple2<Text, Tuple>(EMPTY_TEXT, v1);
         }
     }

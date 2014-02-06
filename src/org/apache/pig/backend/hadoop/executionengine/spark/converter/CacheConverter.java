@@ -10,7 +10,7 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POCache;
 import org.apache.pig.data.Tuple;
 
-import spark.RDD;
+import org.apache.spark.rdd.RDD;
 
 public class CacheConverter implements POConverter<Tuple, Tuple, POCache> {
 
