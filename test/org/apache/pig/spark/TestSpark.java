@@ -11,7 +11,6 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
-import java.util.Iterator;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -161,10 +160,13 @@ public class TestSpark {
         pigServer.registerQuery("B = GROUP A BY $0;");
         pigServer.registerQuery("C = FOREACH B GENERATE FLATTEN(A);");
         pigServer.registerQuery("STORE C INTO 'output' using mock.Storage;");
+        
+        List<Tuple> sortedOutput = data.get("output");
+        Collections.sort(sortedOutput);
 
         assertEquals(
                 Arrays.asList(tuple("test1"), tuple("test1"), tuple("test2")),
-                data.get("output"));
+                sortedOutput);
 
         pigServer.shutdown();
     }
@@ -182,10 +184,13 @@ public class TestSpark {
         pigServer.registerQuery("B = GROUP A BY $0;");
         pigServer.registerQuery("C = FOREACH B GENERATE COUNT(A);");
         pigServer.registerQuery("STORE C INTO 'output' using mock.Storage;");
+        
+        List<Tuple> sortedOutput = data.get("output");
+        Collections.sort(sortedOutput);
 
         assertEquals(
-                Arrays.asList(tuple(2l), tuple(1l)),
-                data.get("output"));
+                Arrays.asList(tuple(1l), tuple(2l)),
+                sortedOutput);
 
         pigServer.shutdown();
     }
@@ -617,6 +622,9 @@ public class TestSpark {
         pigServer.registerQuery("B = LOAD 'input2' using mock.Storage;");
         pigServer.registerQuery("C = JOIN A BY $0, B BY $0;");
         pigServer.registerQuery("STORE C INTO 'output' using mock.Storage;");
+        
+        List<Tuple> sortedOutput = data.get("output");
+        Collections.sort(sortedOutput);
 
         assertEquals(
                 Arrays.asList(
@@ -626,7 +634,7 @@ public class TestSpark {
                         tuple(1, "d", 1, "g"),
                         tuple(2, "b", 2, "f")
                         ),
-                        data.get("output"));
+                        sortedOutput);
 
         pigServer.shutdown();
     }

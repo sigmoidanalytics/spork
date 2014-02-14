@@ -237,7 +237,7 @@ public class PigInputFormat extends InputFormat<Text, Tuple> {
                     fs = new Path("/").getFileSystem(conf);
                     isFsPath = false;
                 }
-
+                
                 // if the execution is against Mapred DFS, set
                 // working dir to /user/<userid>
                 if(pigContext.getExecType() == ExecType.MAPREDUCE) {

@@ -52,7 +52,7 @@ public class StoreConverter implements POConverter<Tuple, Tuple2<Text, Tuple>, P
 
         JobConf storeJobConf = SparkUtil.newJobConf(pigContext);
         POStore poStore = configureStorer(storeJobConf, physicalOperator);
-
+        
         pairRDDFunctions.saveAsNewAPIHadoopFile(poStore.getSFile().getFileName(),
                     Text.class, Tuple.class, PigOutputFormat.class, storeJobConf);
 
