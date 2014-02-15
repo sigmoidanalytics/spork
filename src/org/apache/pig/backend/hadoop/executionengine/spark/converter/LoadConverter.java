@@ -23,8 +23,8 @@ import org.apache.pig.impl.util.ObjectSerializer;
 import scala.Function1;
 import scala.Tuple2;
 import scala.runtime.AbstractFunction1;
-import spark.RDD;
-import spark.SparkContext;
+import org.apache.spark.rdd.RDD;
+import org.apache.spark.SparkContext;
 
 import com.google.common.collect.Lists;
 

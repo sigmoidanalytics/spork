@@ -17,7 +17,7 @@ import org.apache.pig.impl.io.NullableTuple;
 import org.apache.pig.impl.io.PigNullableWritable;
 
 import scala.runtime.AbstractFunction1;
-import spark.RDD;
+import org.apache.spark.rdd.RDD;
 
 @SuppressWarnings({ "serial"})
 public class PackageConverter implements POConverter<Tuple, Tuple, POPackage> {

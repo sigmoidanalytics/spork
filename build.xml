@@ -257,6 +257,12 @@
         <delete file="${build.dir}/ant-eclipse-1.0.bin.tar.bz2" />
     </target>
 
+    <target name="report" depends="compile" description="Generate Ivy dependency report">
+      <property name="ivy.report.dir" location="target/ivy-report"/>
+      <mkdir dir="${ivy.report.dir}" />
+      <ivy:report todir="${ivy.report.dir}" />
+    </target>
+
     <target name="eclipse-files"
             depends="init,ant-eclipse-download,ivy-compile,ivy-test"
             description="Create eclipse project files">
@@ -321,7 +327,7 @@
 
     <path id="test.classpath">
         <!-- need to put this first, otherwise junit-3 testcases can break -->
-        <pathelement location="${ivy.lib.dir}/junit-3.8.1.jar"/>
+        <pathelement location="${ivy.lib.dir}/junit-4.11.jar"/>
         <pathelement location="${lib.dir}/spark/mesos-*.jar"/>
         
         <pathelement location="${build.classes}"/>
@@ -351,14 +357,12 @@
             <!-- SPORK -->
             <include name="spark-core*.jar" />
             <include name="scala-library*.jar" />
-            <include name="jetty*7.5.3*.jar" />
             <include name="fastutil*.jar" />
             <include name="protobuf*.jar" />
             <include name="asm*.jar" />
             <include name="slf4j*.jar" />
             <include name="servlet-api*.jar" />
             <include name="compress-lzf*.jar" />
-            <include name="mesos*.jar"/>
             
             <!-- /SPORK -->
 
@@ -382,14 +386,12 @@
             <!-- SPORK -->
             <include name="spark-core*.jar" />
             <include name="scala-library*.jar" />
-            <include name="jetty*7.5.3*.jar" />
             <include name="fastutil*.jar" />
             <include name="protobuf*.jar" />
             <include name="asm*.jar" />
             <include name="slf4j*.jar" />
             <include name="servlet-api*.jar" />
             <include name="compress-lzf*.jar" />
-            <include name="mesos-*.jar"/>
             <!-- /SPORK -->
 
             <include name="avro-${avro.version}.jar"/>

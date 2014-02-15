@@ -96,7 +96,7 @@
     <dependency org="javax.xml.bind" name="jaxb-api" rev="${jaxb-api.version}"
       conf="hadoop23->master"/>
     <dependency org="com.sun.xml.bind" name="jaxb-impl" rev="${jaxb-impl.version}"
-      conf="hadoop23->master"/> 
+      conf="hadoop23->master"/>
     <dependency org="com.google.inject" name="guice" rev="${guice.version}"
       conf="hadoop23->master"/>
     <dependency org="com.google.inject.extensions" name="guice-servlet" rev="${guice-servlet.version}"
@@ -115,11 +115,11 @@
       conf="hadoop20->default"/>
     <dependency org="org.apache.hadoop" name="hadoop-test" rev="${hadoop-test.version}"
       conf="hadoop20->default"/>
-    <dependency org="org.apache.hadoop" name="hadoop-annotations" 
+    <dependency org="org.apache.hadoop" name="hadoop-annotations"
       rev="${hadoop-common.version}" conf="hadoop23->master"/>
-    <dependency org="org.apache.hadoop" name="hadoop-auth" 
+    <dependency org="org.apache.hadoop" name="hadoop-auth"
       rev="${hadoop-common.version}" conf="hadoop23->master"/>
-    <dependency org="org.apache.hadoop" name="hadoop-common" 
+    <dependency org="org.apache.hadoop" name="hadoop-common"
       rev="${hadoop-common.version}" conf="hadoop23->master">
       <artifact name="hadoop-common" ext="jar" />
       <artifact name="hadoop-common" type="tests" ext="jar" m:classifier="tests" />
@@ -146,25 +146,25 @@
       conf="hadoop23->master" />
     <dependency org="org.apache.hadoop" name="hadoop-mapreduce-client-shuffle" rev="${hadoop-mapreduce.version}"
       conf="hadoop23->master" />
-    <dependency org="org.apache.hadoop" name="hadoop-mapreduce-client-common" 
+    <dependency org="org.apache.hadoop" name="hadoop-mapreduce-client-common"
       rev="${hadoop-mapreduce.version}" conf="hadoop23->master"/>
-    <dependency org="org.apache.hadoop" name="hadoop-yarn-api" 
+    <dependency org="org.apache.hadoop" name="hadoop-yarn-api"
       rev="${hadoop-mapreduce.version}" conf="hadoop23->master"/>
-    <dependency org="org.apache.hadoop" name="hadoop-yarn-common" 
+    <dependency org="org.apache.hadoop" name="hadoop-yarn-common"
       rev="${hadoop-mapreduce.version}" conf="hadoop23->master"/>
-    <dependency org="org.apache.hadoop" name="hadoop-yarn-server" 
+    <dependency org="org.apache.hadoop" name="hadoop-yarn-server"
       rev="${hadoop-mapreduce.version}" conf="hadoop23->master"/>
-    <dependency org="org.apache.hadoop" name="hadoop-yarn-server-web-proxy" 
+    <dependency org="org.apache.hadoop" name="hadoop-yarn-server-web-proxy"
       rev="${hadoop-mapreduce.version}" conf="hadoop23->master"/>
-    <dependency org="org.apache.hadoop" name="hadoop-yarn-server-common" 
+    <dependency org="org.apache.hadoop" name="hadoop-yarn-server-common"
       rev="${hadoop-mapreduce.version}" conf="hadoop23->master"/>
-    <dependency org="org.apache.hadoop" name="hadoop-yarn-server-nodemanager" 
+    <dependency org="org.apache.hadoop" name="hadoop-yarn-server-nodemanager"
       rev="${hadoop-mapreduce.version}" conf="hadoop23->master"/>
-    <dependency org="org.apache.hadoop" name="hadoop-yarn-server-resourcemanager" 
+    <dependency org="org.apache.hadoop" name="hadoop-yarn-server-resourcemanager"
       rev="${hadoop-mapreduce.version}" conf="hadoop23->master"/>
-    <dependency org="org.apache.hadoop" name="hadoop-yarn-client" 
+    <dependency org="org.apache.hadoop" name="hadoop-yarn-client"
       rev="${hadoop-mapreduce.version}" conf="hadoop23->master"/>
-    <dependency org="org.apache.hadoop" name="hadoop-mapreduce-client-hs" 
+    <dependency org="org.apache.hadoop" name="hadoop-mapreduce-client-hs"
       rev="${hadoop-mapreduce.version}" conf="hadoop23->master"/>
     <dependency org="org.mortbay.jetty" name="jetty" rev="${jetty.version}"
       conf="compile->master"/>
@@ -277,9 +277,11 @@
 
     <dependency org="org.mockito" name="mockito-all" rev="${mockito.version}" conf="compile->default"/>
 
-    <dependency org="org.spark-project" name="spark-core_2.9.1" rev="0.6.0-SNAPSHOT" conf="compile"/>
-    <dependency org="org.scala-lang" name="scala-library" rev="2.9.1" conf="compile"/>
+    <!-- <dependency org="org.apache.spark" name="spark-core_2.9.3" rev="0.8.2-incubating-SNAPSHOT-TW1" conf="compile->default">  -->
+    <dependency org="org.apache.spark" name="spark-core_2.9.3" rev="0.8.1-incubating" conf="compile->default">
+      <exclude org="org.eclipse.jetty.orbit" module="javax.servlet"/>
+    </dependency>
+    <dependency org="org.scala-lang" name="scala-library" rev="2.9.3" conf="compile"/>
 
     </dependencies>
 </ivy-module>
-

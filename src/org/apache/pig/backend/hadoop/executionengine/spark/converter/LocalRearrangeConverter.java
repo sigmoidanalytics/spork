@@ -14,7 +14,7 @@ import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.data.Tuple;
 
 import scala.runtime.AbstractFunction1;
-import spark.RDD;
+import org.apache.spark.rdd.RDD;
 
 @SuppressWarnings({ "serial"})
 public class LocalRearrangeConverter implements POConverter<Tuple, Tuple, POLocalRearrange> {

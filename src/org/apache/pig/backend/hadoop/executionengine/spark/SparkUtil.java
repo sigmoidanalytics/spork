@@ -10,11 +10,12 @@ import org.apache.pig.impl.util.ObjectSerializer;
 import org.apache.pig.impl.util.UDFContext;
 
 import scala.Tuple2;
+import scala.Product2;
 import scala.collection.JavaConversions;
 import scala.collection.Seq;
 import scala.reflect.ClassManifest;
 import scala.reflect.ClassManifest$;
-import spark.RDD;
+import org.apache.spark.rdd.RDD;
 
 import java.io.IOException;
 import java.util.List;
@@ -31,6 +32,11 @@ public class SparkUtil {
     @SuppressWarnings("unchecked")
     public static <K,V> ClassManifest<Tuple2<K, V>> getTuple2Manifest() {
         return (ClassManifest<Tuple2<K, V>>)(Object)getManifest(Tuple2.class);
+    }
+    
+    @SuppressWarnings("unchecked")
+    public static <K,V> ClassManifest<Product2<K, V>> getProduct2Manifest() {
+        return (ClassManifest<Product2<K, V>>)(Object)getManifest(Product2.class);
     }
 
     public static JobConf newJobConf(PigContext pigContext) throws IOException {

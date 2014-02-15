@@ -5,7 +5,7 @@ import java.util.List;
 
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
 
-import spark.RDD;
+import org.apache.spark.rdd.RDD;
 
 /**
  * Given an RDD and a PhysicalOperater, and implementation of this class can convert the RRD to
