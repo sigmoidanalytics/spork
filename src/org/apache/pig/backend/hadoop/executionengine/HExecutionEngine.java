@@ -144,7 +144,7 @@ public class HExecutionEngine {
         // All of the above is accomplished in the method call below
            
         JobConf jc = null;
-        if ( this.pigContext.getExecType() == ExecType.MAPREDUCE ) {
+        if ( this.pigContext.getExecType() != ExecType.LOCAL ) {
             // Check existence of user provided configs
             String isHadoopConfigsOverriden = properties.getProperty("pig.use.overriden.hadoop.configs");
             if (isHadoopConfigsOverriden != null && isHadoopConfigsOverriden.equals("true")) {
