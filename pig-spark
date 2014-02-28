@@ -1,0 +1,17 @@
+#!/bin/bash
+
+export HADOOP_CONF_DIR=
+export SPARK_YARN_APP_JAR=pig/pig-withouthadoop.jar
+export SPARK_YARN_APP_JAR=pig/pig-withouthadoop.jar
+export SPARK_JAVA_OPTS=" -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/heap.dump"
+export SPARK_JAR=spark/spark.jar
+export SPARK_MASTER=yarn-client
+# jars to ship
+export SPARK_JARS=/usr/lib/pig/piggybank.jar
+export PIG_CLASSPATH=${SPARK_JARS}:${SPARK_JAR}:`echo pig/* | tr ' ' ':'`
+export SPARK_PIG_JAR=pig/pig-withouthadoop.jar
+export SPARK_WORKER_CORES=4
+export SPARK_WORKER_MEMORY=4g
+export SPARK_WORKER_INSTANCES=160
+
+pig -x spark "$@"
