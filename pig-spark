@@ -9,10 +9,10 @@
 # Configure following environment variables to run it on YARN cluster
 
 
-# Follow this guide for further issues: 
+# Follow this guide for for enabling running spork: 
 ##	https://docs.google.com/a/mobipulse.in/document/d/13mIY3AbN6n0gySoc_3tjLuI1GQdik5aujl9d_WU1EIA/edit#
 
-export HADOOP_CONF_DIR=/usr/local/hadoop/etc/hadoop
+export HADOOP_CONF_DIR=
 
 # Not necessary after SPARK-1053
 export SPARK_YARN_APP_JAR=pig-withouthadoop.jar
@@ -23,7 +23,13 @@ export SPARK_YARN_APP_JAR=pig-withouthadoop.jar
 # Settings to work with YARN, spark jar compiled with hadoop 2
 export SPARK_JAR=spark.jar
 export SPARK_MASTER=yarn-client
-export SPARK_HOME=/home/lalit/pig-950/spark-0.8.1-incubating
+
+#if want to run on spark master
+#export SPARK_MASTER=spark://-------:7077
+#export MESOS_NATIVE_LIBRARY= <libmesos.so>
+####
+
+export SPARK_HOME=
 
 # jars to ship, pig-withouthadoop.jar to workaround Classloader issue
 export SPARK_JARS=piggybank.jar
