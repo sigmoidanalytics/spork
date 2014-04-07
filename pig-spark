@@ -2,14 +2,20 @@
 
 # Getting started
 #
-# Compile spark with hadoop 2.0 -SPARK_HADOOP_VERSION=2.0.5-alpha SPARK_YARN=true ./sbt/sbt clean assembly to generate spark.jar
+# Compile spark with hadoop 2.2.0 -SPARK_HADOOP_VERSION=2.2.0 SPARK_YARN=true ./sbt/sbt clean assembly to generate spark.jar
+
 # Compile pig with -Dhadoopversion=23 flag
+
 # Configure following environment variables to run it on YARN cluster
 
-export HADOOP_CONF_DIR=
+
+# Follow this guide for further issues: 
+##	https://docs.google.com/a/mobipulse.in/document/d/13mIY3AbN6n0gySoc_3tjLuI1GQdik5aujl9d_WU1EIA/edit#
+
+export HADOOP_CONF_DIR=/usr/local/hadoop/etc/hadoop
 
 # Not necessary after SPARK-1053
-export SPARK_YARN_APP_JAR=pig/pig-withouthadoop.jar
+export SPARK_YARN_APP_JAR=pig-withouthadoop.jar
 
 # To debug OOMs
 #export SPARK_JAVA_OPTS=" -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/heap.dump"
@@ -17,17 +23,18 @@ export SPARK_YARN_APP_JAR=pig/pig-withouthadoop.jar
 # Settings to work with YARN, spark jar compiled with hadoop 2
 export SPARK_JAR=spark.jar
 export SPARK_MASTER=yarn-client
+export SPARK_HOME=/home/lalit/pig-950/spark-0.8.1-incubating
 
 # jars to ship, pig-withouthadoop.jar to workaround Classloader issue
 export SPARK_JARS=piggybank.jar
 
 # Pig settings
 export PIG_CLASSPATH=${SPARK_JAR}:${SPARK_JARS}:mesos.jar:pig-withouthadoop.jar
-export SPARK_PIG_JAR=pig/pig-withouthadoop.jar
+export SPARK_PIG_JAR=pig-withouthadoop.jar
 
 # Cluster settings
-export SPARK_WORKER_CORES=4
-export SPARK_WORKER_MEMORY=4g
-export SPARK_WORKER_INSTANCES=160
+export SPARK_WORKER_CORES=1
+export SPARK_WORKER_MEMORY=1g
+export SPARK_WORKER_INSTANCES=1
 
 pig -x spark "$@"
