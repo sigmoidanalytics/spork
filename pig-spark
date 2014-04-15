@@ -10,9 +10,9 @@
 
 
 # Follow this guide for for enabling running spork: 
-##	https://docs.google.com/a/mobipulse.in/document/d/13mIY3AbN6n0gySoc_3tjLuI1GQdik5aujl9d_WU1EIA/edit#
+##	http://docs.sigmoidanalytics.com/index.php/Setting_up_spork_with_spark_0.8.1
 
-export HADOOP_CONF_DIR=
+export HADOOP_CONF_DIR=/usr/local/hadoop/etc/hadoop
 
 # Not necessary after SPARK-1053
 export SPARK_YARN_APP_JAR=pig-withouthadoop.jar
@@ -29,13 +29,13 @@ export SPARK_MASTER=yarn-client
 #export MESOS_NATIVE_LIBRARY= <libmesos.so>
 ####
 
-export SPARK_HOME=
+export SPARK_HOME=/home/lalit/pig-950/spark-0.8.1-incubating
 
 # jars to ship, pig-withouthadoop.jar to workaround Classloader issue
 export SPARK_JARS=piggybank.jar
 
 # Pig settings
-export PIG_CLASSPATH=${SPARK_JAR}:${SPARK_JARS}:mesos.jar:pig-withouthadoop.jar
+export PIG_CLASSPATH=${SPARK_JAR}:${SPARK_JARS}:mesos.jar:pig-withouthadoop.jar:tutorial.jar
 export SPARK_PIG_JAR=pig-withouthadoop.jar
 
 # Cluster settings
@@ -43,4 +43,4 @@ export SPARK_WORKER_CORES=1
 export SPARK_WORKER_MEMORY=1g
 export SPARK_WORKER_INSTANCES=1
 
-pig -x spark "$@"
+bin/pig -x spark "$@"
