@@ -52,12 +52,15 @@ case "`uname`" in
 CYGWIN*) cygwin=true;;
 esac
 debug=false
+SPORK=false
 
 remaining=()
 includeHCatalog="";
 addJarString=-Dpig.additional.jars\=;
 additionalJars="";
 # filter command line parameter
+
+
 for f in "$@"; do
      if [[ $f == "-secretDebugCmd" || $f == "-printCmdDebug" ]]; then
         debug=true
@@ -72,6 +75,10 @@ for f in "$@"; do
         additionalJars=`echo $f | sed s/$addJarString//`
       else
         remaining[${#remaining[@]}]="$f"
+     fi
+     ####for spark mode#####
+     if [[ ${remaining[@]} == "-x spark" ]]; then  ####
+      SPORK=true
      fi
 done
 
@@ -340,7 +347,8 @@ if [ "$includeHCatalog" == "true" ]; then
 fi
 
 # run it
-if [ -n "$HADOOP_BIN" ]; then
+#####modified for spark mode
+if [ -n "$HADOOP_BIN" ] && [ "$SPORK" == "false" ]; then 
     if [ "$debug" == "true" ]; then
         echo "Find hadoop at $HADOOP_BIN"
     fi
@@ -356,6 +364,7 @@ if [ -n "$HADOOP_BIN" ]; then
         PIG_JAR=`echo $PIG_HOME/share/pig/pig-*withouthadoop.jar`
     fi
 
+    
     if [ -n "$PIG_JAR" ]; then
         CLASSPATH=${CLASSPATH}:$PIG_JAR
     else
@@ -370,7 +379,6 @@ if [ -n "$HADOOP_BIN" ]; then
         echo "HADOOP_CLASSPATH: $HADOOP_CLASSPATH"
         echo "HADOOP_OPTS: $HADOOP_OPTS"
         echo "$HADOOP_BIN" jar "$PIG_JAR" "${remaining[@]}"
-        echo
     else
         exec "$HADOOP_BIN" jar "$PIG_JAR" "${remaining[@]}"
     fi
