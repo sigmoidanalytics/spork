@@ -154,13 +154,16 @@ public class SparkLauncher extends Launcher {
                     System.err.println("You need to set SPARK_HOME to run on a Mesos cluster!");
                     throw new PigException("SPARK_HOME is not set");
                 }
-                if (System.getenv("MESOS_NATIVE_LIBRARY") == null) {
+                /*
+                 * if (System.getenv("MESOS_NATIVE_LIBRARY") == null) {
+                
                     System.err.println("You need to set MESOS_NATIVE_LIBRARY to run on a Mesos cluster!");
                     throw new PigException("MESOS_NATIVE_LIBRARY is not set");
                 }
                 
                 // Tell Spark to use Mesos in coarse-grained mode (only affects Spark 0.6+; no impact on others)
                 System.setProperty("spark.mesos.coarse", "true");
+                */
             }
             
             // For coarse-grained Mesos mode, tell it an upper bound on how many cores to grab in total;
@@ -170,7 +173,8 @@ public class SparkLauncher extends Launcher {
                 maxCores = Integer.parseInt(System.getenv("SPARK_MAX_CPUS"));
                 System.setProperty("spark.cores.max", "" + maxCores);
             }
-            
+            System.setProperty("spark.cores.max", "1" );
+            System.setProperty("spark.executor.memory", "" + "2g");
             JavaSparkContext javaContext = new JavaSparkContext(master, "Spork", sparkHome, jars.toArray(new String[jars.size()]));
             sparkContext = javaContext.sc();
             sparkContext.addSparkListener(new StatsReportListener());

@@ -12,31 +12,32 @@
 # Follow this guide for for enabling running spork: 
 ##	http://docs.sigmoidanalytics.com/index.php/Setting_up_spork_with_spark_0.8.1
 
-export HADOOP_CONF_DIR=/usr/local/hadoop/etc/hadoop
+export HADOOP_CONF_DIR=/Users/mayur/Desktop/BuildSpark/hadoop-2.2.0/etc/hadoop
 
 # Not necessary after SPARK-1053
-export SPARK_YARN_APP_JAR=pig-withouthadoop.jar
+export SPARK_YARN_APP_JAR=build/pig-withouthadoop.jar 
 
 # To debug OOMs
 #export SPARK_JAVA_OPTS=" -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/heap.dump"
 
 # Settings to work with YARN, spark jar compiled with hadoop 2
-export SPARK_JAR=spark.jar
-export SPARK_MASTER=yarn-client
+export SPARK_JAR=build/ivy/lib/Pig/spark-core_2.9.3-0.8.1-incubating.jar
+export SPARK_MASTER=localhost
 
 #if want to run on spark master
 #export SPARK_MASTER=spark://-------:7077
 #export MESOS_NATIVE_LIBRARY= <libmesos.so>
 ####
 
-export SPARK_HOME=/home/lalit/pig-950/spark-0.8.1-incubating
+export SPARK_HOME=/Users/mayur/Desktop/BuildSpark/spark
 
 # jars to ship, pig-withouthadoop.jar to workaround Classloader issue
 export SPARK_JARS=piggybank.jar
 
 # Pig settings
-export PIG_CLASSPATH=${SPARK_JAR}:${SPARK_JARS}:mesos.jar:pig-withouthadoop.jar:tutorial.jar
-export SPARK_PIG_JAR=pig-withouthadoop.jar
+export PIG_CLASSPATH=${SPARK_JAR}:${SPARK_JARS}:lib/spark/mesos-0.9.0.jar:tutorial.jar:build/pig-withouthadoop.jar
+export SPARK_PIG_JAR=build/pig-withouthadoop.jar
+
 
 # Cluster settings
 export SPARK_WORKER_CORES=1
