@@ -12,8 +12,7 @@
 # Follow this guide for for enabling running spork: 
 ##	http://docs.sigmoidanalytics.com/index.php/Setting_up_spork_with_spark_0.8.1
 
-export HADOOP_CONF_DIR=/Users/mayur/Desktop/BuildSpark/hadoop-1.0.4/conf
-export HADOOP_HOME=/Users/mayur/Desktop/BuildSpark/hadoop-1.0.4/
+export HADOOP_CONF_DIR=
 
 # Not necessary after SPARK-1053
 #export SPARK_YARN_APP_JAR=build/pig-withouthadoop.jar 
@@ -34,7 +33,7 @@ export SPARK_MASTER=local[2]
 #export SPARK_JAR=/Users/mayur/Desktop/BuildSpark/pig/build/ivy/lib/Pig/spark-core_2.9.3-0.8.1-incubating.jar
 
 # Pig settings
-export PIG_CLASSPATH=/Users/mayur/Desktop/BuildSpark/pig/pig-withouthadoop.jar:/Users/mayur/Desktop/BuildSpark/pig/lib/spark/mesos-0.9.0.jar:/Users/mayur/Desktop/BuildSpark/pig/build/ivy/lib/Pig/*:$HADOOP_CONF_DIR
+export PIG_CLASSPATH=pig-withouthadoop.jar:lib/spark/mesos-0.9.0.jar:build/ivy/lib/Pig/*:$HADOOP_CONF_DIR
 
 
 # Cluster settings
