@@ -34,32 +34,25 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOpe
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POUnion;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.util.PlanHelper;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.CacheConverter;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.DistinctConverter;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.FilterConverter;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.ForEachConverter;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.GlobalRearrangeConverter;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.LimitConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.LoadConverter;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.LocalRearrangeConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.POConverter;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.PackageConverter;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.SortConverter;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.SplitConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.StoreConverter;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.UnionConverter;
 import org.apache.pig.data.SchemaTupleBackend;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.plan.OperatorKey;
 import org.apache.pig.tools.pigstats.PigStats;
 import org.apache.pig.tools.pigstats.SparkStats;
-
 import org.apache.spark.rdd.RDD;
 import org.apache.spark.scheduler.JobLogger;
 import org.apache.spark.scheduler.StatsReportListener;
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.streaming.DStream;
+import org.apache.spark.streaming.Duration;
+import org.apache.spark.streaming.StreamingContext;
+import org.apache.spark.streaming.api.java.JavaDStream;
+import org.apache.spark.streaming.api.java.JavaStreamingContext;
 
 /**
  * @author billg
@@ -70,12 +63,11 @@ public class SparkLauncher extends Launcher {
 
     // Our connection to Spark. It needs to be static so that it can be reused across jobs, because a
     // new SparkLauncher gets created for each job.
-    private static SparkContext sparkContext = null;
+    private static JavaStreamingContext sparkContext = null;
 
     // An object that handle cache calls in the operator graph. This is again static because we want
     // it to be shared across SparkLaunchers. It gets cleared whenever we close the SparkContext.
-    private static CacheConverter cacheConverter = null;
-
+   
     @Override
     public PigStats launchPig(PhysicalPlan physicalPlan, String grpName, PigContext pigContext) throws Exception {
         LOG.info("!!!!!!!!!!  Launching Spark (woot) !!!!!!!!!!!!");
@@ -105,19 +97,19 @@ public class SparkLauncher extends Launcher {
 
         convertMap.put(POLoad.class,    new LoadConverter(pigContext, physicalPlan, sparkContext));
         convertMap.put(POStore.class,   new StoreConverter(pigContext));
-        convertMap.put(POForEach.class, new ForEachConverter());
-        convertMap.put(POFilter.class,  new FilterConverter());
-        convertMap.put(POPackage.class, new PackageConverter());
-        convertMap.put(POCache.class,   cacheConverter);
-        convertMap.put(POLocalRearrange.class,  new LocalRearrangeConverter());
-        convertMap.put(POGlobalRearrange.class, new GlobalRearrangeConverter());
-        convertMap.put(POLimit.class, new LimitConverter());
-        convertMap.put(PODistinct.class, new DistinctConverter());
-        convertMap.put(POUnion.class, new UnionConverter(sparkContext));
-        convertMap.put(POSort.class, new SortConverter());
-        convertMap.put(POSplit.class, new SplitConverter());
+//        convertMap.put(POForEach.class, new ForEachConverter());
+//        convertMap.put(POFilter.class,  new FilterConverter());
+//        convertMap.put(POPackage.class, new PackageConverter());
+//        convertMap.put(POCache.class,   cacheConverter);
+//        convertMap.put(POLocalRearrange.class,  new LocalRearrangeConverter());
+//        convertMap.put(POGlobalRearrange.class, new GlobalRearrangeConverter());
+//        convertMap.put(POLimit.class, new LimitConverter());
+//        convertMap.put(PODistinct.class, new DistinctConverter());
+//        convertMap.put(POUnion.class, new UnionConverter(sparkContext));
+//        convertMap.put(POSort.class, new SortConverter());
+//        convertMap.put(POSplit.class, new SplitConverter());
 
-        Map<OperatorKey, RDD<Tuple>> rdds = new HashMap<OperatorKey, RDD<Tuple>>();
+        Map<OperatorKey, JavaDStream<Tuple>> rdds = new HashMap<OperatorKey, JavaDStream<Tuple>>();
 
         SparkStats stats = new SparkStats();
         LinkedList<POStore> stores = PlanHelper.getPhysicalOperators(physicalPlan, POStore.class);
@@ -125,7 +117,7 @@ public class SparkLauncher extends Launcher {
             physicalToRDD(physicalPlan, poStore, rdds, convertMap);
             stats.addOutputInfo(poStore, 1, 1, true, c); // TODO: use real values
         }
-
+        sparkContext.start();
         return stats;
     }
 
@@ -175,11 +167,8 @@ public class SparkLauncher extends Launcher {
             }
             System.setProperty("spark.cores.max", "1" );
             System.setProperty("spark.executor.memory", "" + "2g");
-            JavaSparkContext javaContext = new JavaSparkContext(master, "Spork", sparkHome, jars.toArray(new String[jars.size()]));
-            sparkContext = javaContext.sc();
-            sparkContext.addSparkListener(new StatsReportListener());
-            sparkContext.addSparkListener(new JobLogger());
-            cacheConverter = new CacheConverter();
+            JavaStreamingContext javaContext = new JavaStreamingContext(master, "Spork", new Duration(5000), sparkHome, jars.toArray(new String[jars.size()]));
+            sparkContext = javaContext;
         }
     }
 
@@ -188,18 +177,17 @@ public class SparkLauncher extends Launcher {
         if (sparkContext != null) {
             sparkContext.stop();
             sparkContext = null;
-            cacheConverter = null;
         }
     }
 
     private void physicalToRDD(PhysicalPlan plan, PhysicalOperator physicalOperator,
-                               Map<OperatorKey, RDD<Tuple>> rdds,
+                               Map<OperatorKey, JavaDStream<Tuple>> rdds,
                                Map<Class<? extends PhysicalOperator>, POConverter> convertMap)
             throws IOException {
 
-        RDD<Tuple> nextRDD = null;
+        JavaDStream nextRDD = null;
         List<PhysicalOperator> predecessors = plan.getPredecessors(physicalOperator);
-        List<RDD<Tuple>> predecessorRdds = Lists.newArrayList();
+        List<JavaDStream<Tuple>> predecessorRdds = Lists.newArrayList();
         if (predecessors!=null) {
             for (PhysicalOperator predecessor : predecessors) {
                 physicalToRDD(plan, predecessor, rdds, convertMap);

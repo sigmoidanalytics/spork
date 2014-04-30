@@ -15,7 +15,9 @@ import scala.collection.JavaConversions;
 import scala.collection.Seq;
 import scala.reflect.ClassManifest;
 import scala.reflect.ClassManifest$;
+
 import org.apache.spark.rdd.RDD;
+import org.apache.spark.streaming.api.java.JavaDStream;
 
 import java.io.IOException;
 import java.util.List;
@@ -51,7 +53,7 @@ public class SparkUtil {
         return JavaConversions.asScalaBuffer(list);
     }
 
-    public static void assertPredecessorSize(List<RDD<Tuple>> predecessors,
+    public static void assertPredecessorSize(List<JavaDStream<Tuple>> predecessors,
                                              PhysicalOperator physicalOperator, int size) {
         if (predecessors.size() != size) {
             throw new RuntimeException("Should have " + size + " predecessors for " +

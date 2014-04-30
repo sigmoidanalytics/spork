@@ -11,6 +11,7 @@ import org.apache.pig.StoreFuncInterface;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.JobControlCompiler;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigOutputFormat;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLoad;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
 import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.data.Tuple;
@@ -19,8 +20,11 @@ import org.apache.pig.impl.util.ObjectSerializer;
 
 import scala.Tuple2;
 import scala.runtime.AbstractFunction1;
+
 import org.apache.spark.rdd.PairRDDFunctions;
 import org.apache.spark.rdd.RDD;
+import org.apache.spark.streaming.api.java.JavaDStream;
+import org.apache.spark.streaming.api.java.JavaPairDStream;
 import org.apache.spark.api.java.function.Function;
 
 import com.google.common.collect.Lists;
@@ -41,22 +45,17 @@ public class StoreConverter implements POConverter<Tuple, Tuple2<Text, Tuple>, P
         this.pigContext = pigContext;
     }
 
+    
     @Override
-    public RDD<Tuple2<Text, Tuple>> convert(List<RDD<Tuple>> predecessors, POStore physicalOperator) throws IOException {
+    public JavaDStream<Tuple> convert(List<JavaDStream<Tuple>> predecessors, POStore physicalOperator) throws IOException {
         SparkUtil.assertPredecessorSize(predecessors, physicalOperator, 1);
-        RDD<Tuple> rdd = predecessors.get(0);
-        // convert back to KV pairs
-        RDD<Tuple2<Text, Tuple>> rddPairs = rdd.map(FROM_TUPLE_FUNCTION, SparkUtil.<Text, Tuple>getTuple2Manifest());
-        PairRDDFunctions<Text, Tuple> pairRDDFunctions = new PairRDDFunctions<Text, Tuple>(rddPairs,
-                SparkUtil.getManifest(Text.class), SparkUtil.getManifest(Tuple.class));
-
+        JavaDStream<Tuple> rdd = predecessors.get(0);
         JobConf storeJobConf = SparkUtil.newJobConf(pigContext);
         POStore poStore = configureStorer(storeJobConf, physicalOperator);
         
-        pairRDDFunctions.saveAsNewAPIHadoopFile(poStore.getSFile().getFileName(),
-                    Text.class, Tuple.class, PigOutputFormat.class, storeJobConf);
+        rdd.print();
 
-        return rddPairs;
+        return rdd;
     }
 
     private static POStore configureStorer(JobConf jobConf,
@@ -83,4 +82,6 @@ public class StoreConverter implements POConverter<Tuple, Tuple2<Text, Tuple>, P
             return new Tuple2<Text, Tuple>(EMPTY_TEXT, v1);
         }
     }
+
+	
 }
