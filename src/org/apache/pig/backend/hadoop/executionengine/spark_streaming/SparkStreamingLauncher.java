@@ -1,4 +1,4 @@
-package org.apache.pig.backend.hadoop.executionengine.spark;
+package org.apache.pig.backend.hadoop.executionengine.spark_streaming;
 
 import java.io.IOException;
 import java.io.PrintStream;
@@ -34,9 +34,9 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOpe
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POUnion;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.util.PlanHelper;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.LoadConverter;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.POConverter;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.StoreConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark_streaming.converter.LoadConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark_streaming.converter.POConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark_streaming.converter.StoreConverter;
 import org.apache.pig.data.SchemaTupleBackend;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.PigContext;
@@ -57,9 +57,9 @@ import org.apache.spark.streaming.api.java.JavaStreamingContext;
 /**
  * @author billg
  */
-public class SparkLauncher extends Launcher {
+public class SparkStreamingLauncher extends Launcher {
 
-    private static final Log LOG = LogFactory.getLog(SparkLauncher.class);
+    private static final Log LOG = LogFactory.getLog(SparkStreamingLauncher.class);
 
     // Our connection to Spark. It needs to be static so that it can be reused across jobs, because a
     // new SparkLauncher gets created for each job.

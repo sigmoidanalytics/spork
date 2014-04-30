@@ -32,7 +32,8 @@ public enum ExecType implements Serializable {
      * Use the Hadoop Map/Reduce framework
      */
     MAPREDUCE,
-    SPARK;
+    SPARK,
+    SPARKSTREAMING;
 
     /**
      * Given a string, determine the exec type.
