@@ -5,42 +5,24 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.Job;
-import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.pig.LoadFunc;
-import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigFileInputFormat;
-import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigInputFormat;
-import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigTextInputFormat;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLoad;
 import org.apache.pig.backend.hadoop.executionengine.spark_streaming.SparkUtil;
-import org.apache.pig.builtin.TextLoader;
 import org.apache.pig.data.DefaultTuple;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.io.FileSpec;
 import org.apache.pig.impl.plan.OperatorKey;
 import org.apache.pig.impl.util.ObjectSerializer;
+import org.apache.spark.streaming.api.java.JavaDStream;
+import org.apache.spark.streaming.api.java.JavaStreamingContext;
 
 import scala.Function1;
-import scala.Tuple2;
 import scala.runtime.AbstractFunction1;
-
-import org.apache.spark.api.java.JavaPairRDD;
-import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.function.Function;
-import org.apache.spark.api.java.function.Function2;
-import org.apache.spark.api.java.function.PairFunction;
-import org.apache.spark.api.java.function.VoidFunction;
-import org.apache.spark.rdd.RDD;
-import org.apache.spark.streaming.DStream;
-import org.apache.spark.streaming.api.java.JavaDStream;
-import org.apache.spark.streaming.api.java.JavaPairDStream;
-import org.apache.spark.streaming.api.java.JavaStreamingContext;
-import org.apache.spark.SparkContext;
 
 import com.google.common.collect.Lists;
 
@@ -54,8 +36,8 @@ import com.google.common.collect.Lists;
 @SuppressWarnings({ "serial"})
 public class LoadConverter implements POConverter<Tuple, Tuple, POLoad> {
 
-    private static final ToTupleFunction TO_TUPLE_FUNCTION = new ToTupleFunction();
-
+	private static final Function1<String, Tuple> TO_VALUE_FUNCTION = new ToTupleFunction();
+     
     private PigContext pigContext;
     private PhysicalPlan physicalPlan;
     private JavaStreamingContext sparkContext;
@@ -77,28 +59,19 @@ public class LoadConverter implements POConverter<Tuple, Tuple, POLoad> {
 
         // don't know why but just doing this cast for now
         JavaDStream<String> hadoopRDD = sparkContext.textFileStream(poLoad.getLFile().getFileName());
-        
+       
         // map to get just RDD<Tuple>
-        return hadoopRDD.map(
-        		  new Function<String,Tuple>() {
-
-					@Override
-					public Tuple call(String arg0) throws Exception {
-						// TODO Auto-generated method stub
-						DefaultTuple var=new DefaultTuple();
-						var.append(arg0);
-						return var;
-					}
-        		  }
-        		  );
+        return new JavaDStream<Tuple>(hadoopRDD.dstream().map(TO_VALUE_FUNCTION,SparkUtil.getManifest(Tuple.class)), SparkUtil.getManifest(Tuple.class));
     }
 
-    private static class ToTupleFunction extends AbstractFunction1<Tuple2<Text, Tuple>, Tuple>
-            implements Function1<Tuple2<Text, Tuple>, Tuple>, Serializable {
+    private static class ToTupleFunction extends AbstractFunction1<String, Tuple>
+            implements Function1<String, Tuple>, Serializable {
 
         @Override
-        public Tuple apply(Tuple2<Text, Tuple> v1) {
-            return v1._2();
+        public Tuple apply(String v1) {
+        	DefaultTuple var=new DefaultTuple();
+			var.append(v1);
+        	return var;
         }
     }
 

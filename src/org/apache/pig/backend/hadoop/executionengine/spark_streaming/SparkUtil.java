@@ -69,11 +69,11 @@ public class SparkUtil {
         }
     }
 
-    public static  int getParallelism(List<RDD<Tuple>> predecessors, PhysicalOperator physicalOperator) {
+    public static  int getParallelism(List<JavaDStream<Tuple>> predecessors, PhysicalOperator physicalOperator) {
         int parallelism = physicalOperator.getRequestedParallelism();
         if (parallelism <= 0) {
             // Parallelism wasn't set in Pig, so set it to whatever Spark thinks is reasonable.
-            parallelism = predecessors.get(0).context().defaultParallelism();
+            parallelism =  predecessors.get(0).context().sparkContext().defaultParallelism();
         }
         return parallelism;
     }
