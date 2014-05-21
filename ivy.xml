@@ -278,13 +278,15 @@
     <dependency org="org.mockito" name="mockito-all" rev="${mockito.version}" conf="compile->default"/>
 
     <!-- <dependency org="org.apache.spark" name="spark-core_2.9.3" rev="0.8.2-incubating-SNAPSHOT-TW1" conf="compile->default">  -->
-    <dependency org="org.apache.spark" name="spark-core_2.9.3" rev="0.8.2-incubating-SNAPSHOT" conf="compile->default">
+   <!-- <dependency org="org.apache.spark" name="spark-core_2.9.3" rev="0.8.1-incubating" conf="compile->default">
       <exclude org="org.eclipse.jetty.orbit" module="javax.servlet"/>
     </dependency>
-    <dependency org="org.apache.spark" name="spark-streaming_2.9.3" rev="0.8.2-incubating-SNAPSHOT" conf="compile->default">
+    <dependency org="org.scala-lang" name="scala-library" rev="2.9.3" conf="compile"/>   -->
+
+     <dependency org="org.apache.spark" name="spark-core_2.10" rev="0.9.0-incubating" conf="compile->default">
       <exclude org="org.eclipse.jetty.orbit" module="javax.servlet"/>
     </dependency>
-    <dependency org="org.scala-lang" name="scala-library" rev="2.9.3" conf="compile"/>
+    <dependency org="org.scala-lang" name="scala-library" rev="2.10.3" conf="compile"/>
 
     </dependencies>
 </ivy-module>

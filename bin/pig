@@ -165,6 +165,8 @@ PIG_OPTS="$PIG_OPTS -Dpig.log.file=$PIG_LOGFILE"
 PIG_OPTS="$PIG_OPTS -Dpig.home.dir=$PIG_HOME"
 PIG_OPTS="$PIG_OPTS -Dpig.root.logger=${PIG_ROOT_LOGGER:-INFO,console,DRFA}"
 
+echo $CLASSPATH
+
 # run it
 if [ "$debug" == "true" ]; then
     echo "dry run:"

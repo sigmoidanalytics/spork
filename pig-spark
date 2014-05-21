@@ -12,9 +12,8 @@
 # Follow this guide for for enabling running spork: 
 ##	http://docs.sigmoidanalytics.com/index.php/Setting_up_spork_with_spark_0.8.1
 
-export HADOOP_CONF_DIR=/Users/mayur/Desktop/BuildSpark/hadoop-1.0.4/conf
-export HADOOP_HOME=/Users/mayur/Desktop/BuildSpark/hadoop-1.0.4/
-
+export HADOOP_CONF_DIR=/home/lalit/sporkCluster/hadoop-1.0.4/conf
+export HADOOP_HOME=/home/lalit/sporkCluster/hadoop-1.0.4
 # Not necessary after SPARK-1053
 #export SPARK_YARN_APP_JAR=build/pig-withouthadoop.jar 
 
@@ -28,13 +27,19 @@ export SPARK_MASTER=local[2]
 #export SPARK_MASTER=spark://-------:7077
 #export MESOS_NATIVE_LIBRARY= <libmesos.so>
 ####
+export PIG_CLASSPATH=home/lalit/sporkCluster/pig/pig-withouthadoop.jar:home/lalit/sporkCluster/pig/lib/spark/mesos-0.9.0.jar:/home/lalit/sporkCluster/pig/build/ivy/lib/Pig/*:$HADOOP_CONF_DIR:home/lalit/sporkCluster/pig/conf
 
+
+#export PIG_CLASSPATH=/home/akhld/mobi/localcluster/hadoop/:/home/akhld/mobi/localcluster/codes/pig/conf
+export PIG_HOME=/home/lalit/sporkCluster/pig
+export SPARK_HOME=/home/lalit/sporkCluster/spark-0.9.0-incubating
+export SPARK_JAR=/home/lalit/sporkCluster/pig/build/ivy/lib/Pig/spark-core_2.10-0.9.0-incubating.jar
 
 # jars to ship, pig-withouthadoop.jar to workaround Classloader issue
 #export SPARK_JAR=/Users/mayur/Desktop/BuildSpark/pig/build/ivy/lib/Pig/spark-core_2.9.3-0.8.1-incubating.jar
 
 # Pig settings
-export PIG_CLASSPATH=/Users/mayur/Desktop/BuildSpark/pig/pig-withouthadoop.jar:/Users/mayur/Desktop/BuildSpark/pig/lib/spark/mesos-0.9.0.jar:/Users/mayur/Desktop/BuildSpark/pig/build/ivy/lib/Pig/*:$HADOOP_CONF_DIR
+#export PIG_CLASSPATH=pig-withouthadoop.jar:lib/spark/mesos-0.9.0.jar:build/ivy/lib/Pig/*:$HADOOP_CONF_DIR
 
 
 # Cluster settings

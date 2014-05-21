@@ -356,7 +356,6 @@
 
             <!-- SPORK -->
             <include name="spark-core*.jar" />
-            <include name="spark-streaming*.jar" />
             <include name="scala-library*.jar" />
             <include name="fastutil*.jar" />
             <include name="protobuf*.jar" />
@@ -386,7 +385,6 @@
 
             <!-- SPORK -->
             <include name="spark-core*.jar" />
-            <include name="spark-streaming*.jar" />
             <include name="scala-library*.jar" />
             <include name="fastutil*.jar" />
             <include name="protobuf*.jar" />
