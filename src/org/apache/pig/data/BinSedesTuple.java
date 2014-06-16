@@ -20,7 +20,9 @@ package org.apache.pig.data;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.List;
+
 import org.apache.pig.classification.InterfaceAudience;
 
 /**
@@ -30,7 +32,7 @@ import org.apache.pig.classification.InterfaceAudience;
  *  do not use it for storing any persistant data (ie in load/store functions).
  */
 @InterfaceAudience.Private
-public class BinSedesTuple extends DefaultTuple {
+public class BinSedesTuple extends DefaultTuple implements Serializable {
 
     private static final long serialVersionUID = 1L;
     private static final InterSedes sedes = InterSedesFactory.getInterSedesInstance();
