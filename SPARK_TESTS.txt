@@ -1,0 +1,237 @@
+========Load=========
+A = load '/test/inp.txt' USING PigStorage(',') AS (name: chararray);
+STORE A INTO '/testout/load' USING PigStorage();
+
+==========LIMIT==========
+raw1 = load '/test/excite-small.log' AS (user, time, query);
+clean1 = LIMIT raw1 10;
+dump clean1;
+STORE clean1 INTO '/testout/limit' USING PigStorage();
+
+======FILTER==========
+
+raw = load '/test/excite-small.log' USING PigStorage('\t') AS (user, time, query);
+clean1 = FILTER raw BY query == 'jarrow';
+STORE clean1 INTO '/testout/filter' USING PigStorage(); 
+
+==========Distinct==========
+raw = load '/test/excite-dup.log' USING PigStorage('\t') AS (user, time, query);
+clean1 = DISTINCT raw;
+STORE clean1 INTO '/testout/distinct' USING PigStorage();
+
+==========GROUP BY==========
+raw = load '/test/excite-small.log' USING PigStorage('\t') AS (user, time, query);
+clean1 = GROUP raw BY query;
+dump clean1;
+STORE clean1 INTO '/testout/groupBy' USING PigStorage();
+
+==========ORDER BY==========
+raw = load '/test/excite-tiny.log' USING PigStorage('\t') AS (user, time, query);
+clean1 = ORDER raw BY time desc;
+STORE clean1 INTO '/testout/orderby' USING PigStorage();
+
+==========join==========
+A = load '/test/data1' USING PigStorage(',') AS (p, q, r);
+B = load '/test/data2' USING PigStorage(',') AS (x, y);
+clean1 = JOIN A BY p, B BY x; 
+STORE clean1 INTO '/testout/join' USING PigStorage(',');
+
+==========skew join==========
+A = load '/test/data1' USING PigStorage(',') AS (p, q, r);
+B = load '/test/data2' USING PigStorage(',') AS (x, y);
+C = JOIN A BY p, B BY x USING 'skewed';
+STORE C INTO '/testout/joinSkew' USING PigStorage(',');
+
+==========split==========
+
+A = load '/test/data1' USING PigStorage(',') AS (p,q,r);
+SPLIT A INTO X IF p<7, Y IF q==3, Z IF (r<5 OR r>2); 
+STORE X INTO '/testout/split/X' USING PigStorage(',');
+STORE Y INTO '/testout/split/Y' USING PigStorage(',');
+STORE Z INTO '/testout/split/Z' USING PigStorage(',');
+
+==========Union==========
+A = load '/test/data1' USING PigStorage(',') AS (p, q, r);
+B = load '/test/data2' USING PigStorage(',') AS (x, y);
+clean1 = UNION A,B; 
+STORE clean1 INTO '/testout/unionSA' USING PigStorage(',');
+
+==========CROSS==========
+A = load '/test/data1' USING PigStorage(',') AS (p, q, r);
+B = load '/test/data2' USING PigStorage(',') AS (x, y);
+clean1 = CROSS A,B; 
+STORE clean1 INTO '/testout/cross' USING PigStorage(',');
+
+==========CONCAT==========
+raw = load '/test/excite-dup.log' USING PigStorage('\t') AS (user, time, query);
+clean1 = DISTINCT raw;
+X = FOREACH clean1 GENERATE user, CONCAT(time,query);
+STORE X INTO '/testout/concat' USING PigStorage(',');
+
+========COUNT==========
+A = load '/test/data1' USING PigStorage(',') AS (p, q, r);
+B = GROUP A BY p;
+X = FOREACH B GENERATE COUNT(A);
+STORE X INTO '/testout/count' USING PigStorage(',');
+
+==========COUNT_STAR==========
+
+A = load '/test/data1' USING PigStorage(',') AS (p, q, r);
+B = GROUP A BY p;
+X = FOREACH B GENERATE COUNT_STAR(A);
+STORE X INTO '/testout/countstar' USING PigStorage(',');
+
+==========MAX==========
+A = load '/test/data1' USING PigStorage(',') AS (p, q, r);
+B = GROUP A BY p;
+X = FOREACH B GENERATE group, MAX(A.r);
+STORE X INTO '/testout/max' USING PigStorage(',');
+
+==========MIN===========
+A = load '/test/data1' USING PigStorage(',') AS (p, q, r);
+B = GROUP A BY p;
+Y = FOREACH B GENERATE group, MIN(A.r);
+STORE Y INTO '/testout/min' USING PigStorage(',');
+
+=========RUN===========
+
+A = load '/test/excite-small.log' USING PigStorage('\t') AS (user, time, query);
+run /home/ubuntu/runscript.pig
+C = LIMIT clean1 5;
+STORE C INTO '/testout/run' USING PigStorage(',');
+
+runscript.pig:
+-----------------
+clean1 = LIMIT raw 8;
+dump clean1;
+
+
+===========sample==========
+
+A = LOAD '/test/data1' USING PigStorage(',') AS (p,q,r);
+X = SAMPLE A 0.4;
+STORE X INTO '/testout/sample' USING PigStorage(',');
+
+==========AVG=============
+
+A = LOAD '/test/data1' USING PigStorage(',') AS (p, q, r);
+B = GROUP A BY p;
+C = FOREACH B GENERATE A.p, AVG(A.r);
+STORE C INTO '/testout/avg' USING PigStorage(',');
+
+==========SIZE==========
+
+A = LOAD '/test/test.txt' USING PigStorage(',') AS (p, q, r);	
+B = FOREACH A GENERATE SIZE(p);
+STORE B INTO '/testout/size' USING PigStorage(',');
+
+==========SUM==========
+
+A = load '/test/user.txt' USING PigStorage(',') AS (user, item, num);
+B = GROUP A BY user;
+X = FOREACH B GENERATE group, SUM(A.num);
+STORE X INTO '/testout/sum' USING PigStorage(',');
+
+==========diff==========      
+
+A = load '/test/exdiff.txt' USING PigStorage(',') AS (B1:bag{T1:tuple(t1:int,t2:int)},B2:bag{T2:tuple(f1:int,f2:int)});
+X = FOREACH A DIFF(B1,B2);
+STORE X INTO '/testout/diff' USING PigStorage(',');
+
+===========IsEmpty============        
+
+SSN_NAME = load '/test/user1.txt' USING PigStorage(',') AS (ssn:long,name:chararray);
+SSN = load '/test/user2.txt' USING PigStorage(',') AS (ssn:long);
+X = JOIN SSN by ssn LEFT OUTER, SSN_NAME by ssn;
+Y = filter X by IsEmpty(SSN_NAME);
+STORE X INTO '/testout/isempty' USING PigStorage(',');
+
+=========TOKENIZE==========
+
+A  = LOAD '/test/inp.txt' USING PigStorage() AS (p:chararray);
+X = FOREACH A GENERATE TOKENIZE(p);
+STORE X INTO '/testout/tokenize' USING PigStorage();
+
+=========STREAM================
+
+A = load '/test/data1' USING PigStorage(',')  AS (p, q, r);
+STORE A into 'testout/streamSA' USING PigStorage('*');
+
+===========IMPORT========            
+
+IMPORT '/home/maheshk/Desktop/spork/mymacro.pig';
+
+mymacro.pig:
+------------
+raw = load 'test/excite-tiny.log' USING PigStorage('\t') AS (p,q,r);
+X = LIMIT raw 4;
+STORE X INTO '/testout/import' USING PigStorage(',');
+
+=======TEXT LOADER===============
+
+A = LOAD '/test/data1' USING TextLoader();
+STORE A into 'testout/textloader' USING PigStorage(',');
+
+==========UDF==========
+
+REGISTER /home/ubuntu/tutorial.jar;
+A = load '/test/small.txt' USING PigStorage(',') AS (name: chararray);
+B = FOREACH A GENERATE org.apache.pig.tutorial.ToLower(name) as name;
+STORE B INTO '/testout/udf' USING PigStorage(',');
+
+========DEFINE===================
+
+REGISTER /home/ubuntu/tutorial.jar;
+DEFINE myFunc org.apache.pig.tutorial.ToLower();
+A = load '/test/exdefine.txt' USING PigStorage(',') AS (name: chararray,name1: chararray);
+B = FOREACH A GENERATE myFunc(name) as name,name1;
+STORE B INTO '/testout/define' USING PigStorage(',');
+
+
+===========Group BY[Multiple fields]=================
+
+A = load '/test/hbdata1.txt' USING PigStorage(',')  AS (key,a,b,m,n,o,p);
+B = GROUP A BY (key,a,b,m);
+STORE B INTO '/testout/groupbymul' USING PigStorage(','); 
+
+=============JOIN[multiple fields]=====================
+
+A = load '/test/j1.txt' USING PigStorage(',') AS (p,q,r,s,t,u,v,w,x);
+B = load '/test/j2.txt' USING PigStorage(',') AS (a,b,c,d,e,f,g,h,i);
+C = JOIN A BY (r,s,t), B BY (c,d,e);
+STORE C INTO '/testout/joinmul' USING PigStorage(','); 
+
+=============Flatten================
+
+A = load '/test/data1' USING PigStorage(',') AS (p, q, r);
+B = load '/test/data2' USING PigStorage(',') AS (x, y);
+C = GROUP A BY p inner, B BY x inner;
+X = FOREACH C GENERATE FLATTEN(A.(p, q)),FLATTEN(B.$1);
+STORE C INTO '/testout/flatten' USING PigStorage(','); 
+
+=========Map[::] using Join========
+A = load '/test/data1' USING PigStorage(',') AS (p, q, r);
+B = load '/test/data2' USING PigStorage(',') AS (x, y);
+C = join A by p,B by x;
+D = FOREACH C generate A::p,B::x; 
+STORE C INTO '/testout/map' USING PigStorage(',');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
