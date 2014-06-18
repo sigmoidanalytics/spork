@@ -35,11 +35,14 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.pig.ExecType;
 import org.apache.pig.PigConstants;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigMapReduce;
+import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.data.SchemaTupleClassGenerator.GenContext;
 import org.apache.pig.data.utils.StructuresHelper.SchemaKey;
 import org.apache.pig.data.utils.StructuresHelper.Triple;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.logicalLayer.schema.Schema;
+import org.apache.pig.impl.util.ObjectSerializer;
 
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -58,7 +61,7 @@ public class SchemaTupleBackend {
     private URLClassLoader classLoader;
     private Map<Triple<SchemaKey, Boolean, GenContext>, SchemaTupleFactory> schemaTupleFactoriesByTriple = Maps.newHashMap();
     private Map<Integer, SchemaTupleFactory> schemaTupleFactoriesById = Maps.newHashMap();
-    private Configuration jConf;
+    private static Configuration jConf;
 
     private File codeDir;
 
@@ -91,7 +94,7 @@ public class SchemaTupleBackend {
             throw new RuntimeException("Unable to make URLClassLoader for tempDir: "
                     + codeDir.getAbsolutePath());
         }
-        this.jConf = jConf;
+        SchemaTupleBackend.jConf = jConf;
         this.isLocal = isLocal;
     }
 
@@ -265,7 +268,7 @@ public class SchemaTupleBackend {
     private static SchemaTupleBackend stb;
 
     public static void initialize(Configuration jConf, PigContext pigContext) throws IOException {
-        initialize(jConf, pigContext, pigContext.getExecType() == ExecType.LOCAL);
+        initialize(jConf, pigContext, false);
     }
 
     public static void initialize(Configuration jConf, PigContext pigContext, boolean isLocal) throws IOException {
@@ -278,23 +281,33 @@ public class SchemaTupleBackend {
             stbInstance.copyAndResolve();
             stb = stbInstance;
         }
+        LOG.info("stb : "+stb);
     }
 
     public static SchemaTupleFactory newSchemaTupleFactory(Schema s, boolean isAppendable, GenContext context)  {
-        if (stb == null) {
+    	LOG.info("stb 1 : "+stb);
+    	if (stb == null) {
             // It is possible (though ideally should be avoided) for this to be called on the frontend if
             // the Tuple processing path of the POPlan is invoked (perhaps for optimization purposes)
-            throw new RuntimeException("initialize was not called! Even when SchemaTuple feature is not set, it should be called.");
-        }
+//            throw new RuntimeException("context: initialize was not called! Even when SchemaTuple feature is not set, it should be called.");
+    		SchemaTupleBackend stbInstance = new SchemaTupleBackend(jConf, false);    		
+    		try { 
+    			stbInstance.copyAndResolve();
+ 			} 
+    		catch(Exception e) { e.printStackTrace(); }
+    		
+    		stb = stbInstance;
+        }        	
         return stb.internalNewSchemaTupleFactory(s, isAppendable, context);
     }
 
     protected static SchemaTupleFactory newSchemaTupleFactory(int id) {
-        if (stb == null) {
+    	LOG.info("stb 2 : "+stb);
+    	if (stb == null) {
             // It is possible (though ideally should be avoided) for this to be called on the frontend if
             // the Tuple processing path of the POPlan is invoked (perhaps for optimization purposes)
             throw new RuntimeException("initialize was not called! Even when SchemaTuple feature is not set, it should be called.");
-        }
+        }        
         return stb.internalNewSchemaTupleFactory(id);
     }
 }

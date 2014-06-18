@@ -13,7 +13,8 @@ import org.apache.pig.data.Tuple;
 import scala.Function1;
 import scala.Function2;
 import scala.Tuple2;
-import scala.reflect.ClassManifest;
+//import scala.reflect.ClassManifest;
+import scala.reflect.ClassTag;
 import scala.runtime.AbstractFunction1;
 import scala.runtime.AbstractFunction2;
 import org.apache.spark.rdd.PairRDDFunctions;
@@ -33,7 +34,7 @@ public class DistinctConverter implements POConverter<Tuple, Tuple, PODistinct> 
         SparkUtil.assertPredecessorSize(predecessors, poDistinct, 1);
         RDD<Tuple> rdd = predecessors.get(0);
 
-        ClassManifest<Tuple2<Tuple, Object>> tuple2ClassManifest = SparkUtil.<Tuple, Object>getTuple2Manifest();
+        ClassTag<Tuple2<Tuple, Object>> tuple2ClassManifest = SparkUtil.<Tuple, Object>getTuple2Manifest();
 
         RDD<Tuple2<Tuple, Object>> rddPairs = rdd.map(TO_KEY_VALUE_FUNCTION, tuple2ClassManifest);
         PairRDDFunctions<Tuple, Object> pairRDDFunctions =

@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.JobConf;
@@ -18,6 +19,7 @@ import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.util.ObjectSerializer;
 
 import scala.Tuple2;
+import scala.collection.JavaConversions;
 import scala.runtime.AbstractFunction1;
 import org.apache.spark.rdd.PairRDDFunctions;
 import org.apache.spark.rdd.RDD;
@@ -53,8 +55,7 @@ public class StoreConverter implements POConverter<Tuple, Tuple2<Text, Tuple>, P
         JobConf storeJobConf = SparkUtil.newJobConf(pigContext);
         POStore poStore = configureStorer(storeJobConf, physicalOperator);
         
-        pairRDDFunctions.saveAsNewAPIHadoopFile(poStore.getSFile().getFileName(),
-                    Text.class, Tuple.class, PigOutputFormat.class, storeJobConf);
+        pairRDDFunctions.saveAsNewAPIHadoopFile(poStore.getSFile().getFileName(),Text.class, Tuple.class, PigOutputFormat.class, storeJobConf);
 
         return rddPairs;
     }

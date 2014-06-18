@@ -22,7 +22,8 @@ import scala.Product2;
 import scala.Tuple2;
 import scala.collection.JavaConversions;
 import scala.collection.Seq;
-import scala.reflect.ClassManifest;
+//import scala.reflect.ClassManifest;
+import scala.reflect.ClassTag;
 
 @SuppressWarnings({ "serial"})
 public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlobalRearrange> {
@@ -59,7 +60,7 @@ public class GlobalRearrangeConverter implements POConverter<Tuple, Tuple, POGlo
         } else {
             //COGROUP
             // each pred returns (index, key, value)
-            ClassManifest<Tuple2<Object, Tuple>> tuple2ClassManifest = SparkUtil.<Object, Tuple>getTuple2Manifest();
+            ClassTag<Tuple2<Object, Tuple>> tuple2ClassManifest = SparkUtil.<Object, Tuple>getTuple2Manifest();
             
             List<RDD<Tuple2<Object, Tuple>>> rddPairs = new ArrayList();
             for (RDD<Tuple> rdd : predecessors) {

@@ -144,7 +144,7 @@ public class SparkLauncher extends Launcher {
                 pigJar = "build/pig-0.12.0-SNAPSHOT-withouthadoop.jar";
             }
             String[] sparkJars = sparkJarsSetting == null ? new String[]{} : sparkJarsSetting.split(",");
-
+            
             // TODO: Don't hardcode this JAR
             List<String> jars = Lists.asList(pigJar, sparkJars);
 
@@ -174,7 +174,7 @@ public class SparkLauncher extends Launcher {
                 System.setProperty("spark.cores.max", "" + maxCores);
             }
             System.setProperty("spark.cores.max", "1" );
-            System.setProperty("spark.executor.memory", "" + "2g");
+            System.setProperty("spark.executor.memory", "" + "1g");
             JavaSparkContext javaContext = new JavaSparkContext(master, "Spork", sparkHome, jars.toArray(new String[jars.size()]));
             sparkContext = javaContext.sc();
             sparkContext.addSparkListener(new StatsReportListener());
