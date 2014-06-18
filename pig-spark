@@ -29,7 +29,8 @@ fi
 #export SPARK_JAVA_OPTS=" -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/heap.dump"
 #export SPARK_JAVA_OPTS+=" -Xdebug -Xrunjdwp:transport=dt_socket,address=12345,server=y,suspend=y"
 # Settings to work with YARN, spark jar compiled with hadoop 2
-export SPARK_MASTER=spark://localhost:7077
+# export SPARK_MASTER=spark://localhost:7077
+export SPARK_MASTER=local[2]
 
 #if want to run on spark master
 #export SPARK_MASTER=spark://-------:7077
@@ -66,7 +67,7 @@ if [ -z "$PIG_HOME" ]; then
     exit 1
 fi
 
-export PIG_CLASSPATH=$PIG_HOME/build/ivy/lib/Pig/netty-3.6.6.Final.jar:$PIG_HOME/pig-withouthadoop.jar:$PIG_HOME/lib/spark/mesos-0.9.0.jar:$PIG_HOME/build/ivy/lib/Pig/*:$HADOOP_CONF_DIR:$PIG_HOME/conf
+export PIG_CLASSPATH=/usr/local/Cellar/hbase/hbase-0.94.1/conf:$PIG_HOME/build/ivy/lib/Pig/netty-3.6.6.Final.jar:$PIG_HOME/pig-withouthadoop.jar:$PIG_HOME/lib/spark/mesos-0.9.0.jar:$PIG_HOME/build/ivy/lib/Pig/*:$HADOOP_CONF_DIR:$PIG_HOME/conf
 export SPARK_JARS="$PIG_HOME/pig.jar"
 export SPARK_PIG_JAR=$PIG_HOME/pig.jar
 

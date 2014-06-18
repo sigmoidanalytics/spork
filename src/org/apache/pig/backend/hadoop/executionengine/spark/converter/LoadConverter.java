@@ -5,9 +5,15 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hbase.HBaseConfiguration;
+import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.hbase.client.Result;
+import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
+import org.apache.hadoop.hbase.mapreduce.TableInputFormat;
 import org.apache.pig.LoadFunc;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigInputFormat;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
@@ -15,6 +21,7 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.Physica
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLoad;
 import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.data.Tuple;
+import org.apache.pig.data.TupleFactory;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.io.FileSpec;
 import org.apache.pig.impl.plan.OperatorKey;
@@ -23,6 +30,9 @@ import org.apache.pig.impl.util.ObjectSerializer;
 import scala.Function1;
 import scala.Tuple2;
 import scala.runtime.AbstractFunction1;
+
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.rdd.NewHadoopRDD;
 import org.apache.spark.rdd.RDD;
 import org.apache.spark.SparkContext;
 
@@ -60,20 +70,31 @@ public class LoadConverter implements POConverter<Tuple, Tuple, POLoad> {
         configureLoader(physicalPlan, poLoad, loadJobConf);
 
         // don't know why but just doing this cast for now
-        RDD<Tuple2<Text, Tuple>> hadoopRDD = sparkContext.newAPIHadoopFile(
-                poLoad.getLFile().getFileName(), PigInputFormat.class,
-                Text.class, Tuple.class, loadJobConf);
-
+//        RDD<Tuple2<Text, Tuple>> rdd = sparkContext.newAPIHadoopFile(
+//                poLoad.getLFile().getFileName(), PigInputFormat.class,
+//                Text.class, Tuple.class, loadJobConf);
+                
+        //	HBase stuff
+        Configuration conf = HBaseConfiguration.create();
+        conf.set(TableInputFormat.INPUT_TABLE, "test");
+        
+        RDD<Tuple2<ImmutableBytesWritable, Result>> rdd = sparkContext.newAPIHadoopRDD(conf, 
+        		TableInputFormat.class, ImmutableBytesWritable.class, Result.class);					
+        
         // map to get just RDD<Tuple>
-        return hadoopRDD.map(TO_TUPLE_FUNCTION, SparkUtil.getManifest(Tuple.class));
+        return rdd.map(TO_TUPLE_FUNCTION, SparkUtil.getManifest(Tuple.class));
     }
 
-    private static class ToTupleFunction extends AbstractFunction1<Tuple2<Text, Tuple>, Tuple>
-            implements Function1<Tuple2<Text, Tuple>, Tuple>, Serializable {
+    private static class ToTupleFunction extends AbstractFunction1<Tuple2<ImmutableBytesWritable, Result>, Tuple>
+            implements Function1<Tuple2<ImmutableBytesWritable, Result>, Tuple>, Serializable {
 
-        @Override
-        public Tuple apply(Tuple2<Text, Tuple> v1) {
-            return v1._2();
+        public Tuple apply(Tuple2<ImmutableBytesWritable, Result> v1) {
+			ArrayList<Text> al = new ArrayList<Text>();
+			Text txt = new Text(v1._2().toString());			 
+			al.add(txt);
+			TupleFactory mTupleFactory = TupleFactory.getInstance();
+			Tuple t =  mTupleFactory.newTupleNoCopy(al);
+            return t;
         }
     }
 

@@ -233,8 +233,9 @@
 
     <dependency org="org.jruby" name="jruby-complete" rev="${jruby.version}" conf="compile->master"/>
     <dependency org="asm" name="asm" rev="${asm.version}" conf="compile->default"/>
-
-    <dependency org="org.apache.hbase" name="hbase" rev="${hbase.version}" conf="compile->master">
+    	   
+   <!-- 
+   	<dependency org="org.apache.hbase" name="hbase" rev="${hbase.version}" conf="compile->master">
       <artifact name="hbase" type="jar"/>
       <artifact name="hbase" type="test-jar" ext="jar" m:classifier="tests"/>
       <exclude org="org.apache.thrift" module="thrift"/>
@@ -255,8 +256,14 @@
       <exclude org="com.sun.jersey" module="jersey-server"/>
       <exclude org="com.sun.jersey" module="jersey-json"/>
       <exclude org="asm" module="asm"/>
+    </dependency>	    
+	  -->
+	  
+    <dependency org="org.apache.hbase" name="hbase" rev="0.94.6" conf="compile->master">
+    	<exclude org="asm" module="asm" />
+      	<exclude org="org.jboss.netty" module="netty" />         
     </dependency>
-
+    
     <!-- for TestHBaseStorage -->
     <dependency org="com.github.stephenc.high-scale-lib" name="high-scale-lib" rev="${high-scale-lib.version}"
        conf="test->default"/>
@@ -277,16 +284,12 @@
 
     <dependency org="org.mockito" name="mockito-all" rev="${mockito.version}" conf="compile->default"/>
 
-    <!-- <dependency org="org.apache.spark" name="spark-core_2.9.3" rev="0.8.2-incubating-SNAPSHOT-TW1" conf="compile->default">  -->
-   <!-- <dependency org="org.apache.spark" name="spark-core_2.9.3" rev="0.8.1-incubating" conf="compile->default">
-      <exclude org="org.eclipse.jetty.orbit" module="javax.servlet"/>
-    </dependency>
-    <dependency org="org.scala-lang" name="scala-library" rev="2.9.3" conf="compile"/>   -->
-
-     <dependency org="org.apache.spark" name="spark-core_2.10" rev="0.9.0-incubating" conf="compile->default">
+  	<dependency org="org.apache.spark" name="spark-core_2.10" rev="0.9.0-incubating" conf="compile->default">
       <exclude org="org.eclipse.jetty.orbit" module="javax.servlet"/>
     </dependency>
     <dependency org="org.scala-lang" name="scala-library" rev="2.10.3" conf="compile"/>
+    
+    <dependency org="org.cloudera.htrace" name="htrace-core" rev="2.02"/>
 
-    </dependencies>
+  </dependencies>
 </ivy-module>
