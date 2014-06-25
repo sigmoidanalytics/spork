@@ -281,11 +281,10 @@ public class SchemaTupleBackend {
             stbInstance.copyAndResolve();
             stb = stbInstance;
         }
-        LOG.info("stb : "+stb);
+        LOG.info("stb initialized : "+stb);
     }
 
-    public static SchemaTupleFactory newSchemaTupleFactory(Schema s, boolean isAppendable, GenContext context)  {
-    	LOG.info("stb 1 : "+stb);
+    public static SchemaTupleFactory newSchemaTupleFactory(Schema s, boolean isAppendable, GenContext context)  {    	
     	if (stb == null) {
             // It is possible (though ideally should be avoided) for this to be called on the frontend if
             // the Tuple processing path of the POPlan is invoked (perhaps for optimization purposes)

@@ -148,10 +148,10 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
     private final static String HBASE_CONFIG_SET = "hbase.config.set";
     private final static String HBASE_TOKEN_SET = "hbase.token.set";
 
-    private List<ColumnInfo> columnInfo_ = Lists.newArrayList();
+    public List<ColumnInfo> columnInfo_ = Lists.newArrayList();
 
     //Use JobConf to store hbase delegation token
-    private JobConf m_conf;
+    public JobConf m_conf;
     private RecordReader reader;
     private RecordWriter writer;
     private TableOutputFormat outputFormat = null;
@@ -162,7 +162,7 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
     private final static Options validOptions_ = new Options();
     private final static CommandLineParser parser_ = new GnuParser();
 
-    private boolean loadRowKey_;
+    public boolean loadRowKey_;
     private String delimiter_;
     private boolean ignoreWhitespace_;
     private final long limit_;
@@ -342,7 +342,7 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
      * @param ignoreWhitespace
      * @return
      */
-    private List<ColumnInfo> parseColumnList(String columnList,
+    public List<ColumnInfo> parseColumnList(String columnList,
                                              String delimiter,
                                              boolean ignoreWhitespace) {
         List<ColumnInfo> columnInfo = new ArrayList<ColumnInfo>();
@@ -709,14 +709,17 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
         }
 
         m_conf.set(TableInputFormat.INPUT_TABLE, tablename);
-
+        
+        LOG.info("projectedFieldsName : " + projectedFieldsName());
+        
         String projectedFields = udfProps.getProperty( projectedFieldsName() );
+        
         if (projectedFields != null) {
             // update columnInfo_
             pushProjection((RequiredFieldList) ObjectSerializer.deserialize(projectedFields));
         }
         addFiltersWithoutColumnPrefix(columnInfo_);
-
+        
         if (requiredFieldList != null) {
             Properties p = UDFContext.getUDFContext().getUDFProperties(this.getClass(),
                     new String[] {contextSignature});
