@@ -17,13 +17,19 @@
  */
 package org.apache.pig.impl.util;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Properties;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 
 public class UDFContext {
     
@@ -74,6 +80,7 @@ public class UDFContext {
     public Properties getClientSystemProps() {
         return clientSysProps;
     }
+    
     /**
      * Adds the JobConf to this singleton.  Will be 
      * called on the backend by the Map and Reduce 
@@ -179,6 +186,10 @@ public class UDFContext {
     public void serialize(Configuration conf) throws IOException {
         conf.set(UDF_CONTEXT, ObjectSerializer.serialize(udfConfs));
         conf.set(CLIENT_SYS_PROPS, ObjectSerializer.serialize(clientSysProps));
+        
+        // TODO:
+//        SparkUtil.saveObject((Serializable) jconf, "jconf");
+        SparkUtil.saveObject(clientSysProps, "clientSysProps");
     }
     
     /**
@@ -188,10 +199,16 @@ public class UDFContext {
      * @throws IOException if underlying deseralization throws it
      */
     @SuppressWarnings("unchecked")
-    public void deserialize() throws IOException {  
-        udfConfs = (HashMap<UDFContextKey, Properties>)ObjectSerializer.deserialize(jconf.get(UDF_CONTEXT));
-        clientSysProps = (Properties)ObjectSerializer.deserialize(
-                jconf.get(CLIENT_SYS_PROPS));
+    public void deserialize() throws IOException {
+    	// TODO: 
+//    	jconf = (Configuration) SparkUtil.readObject("jconf");
+    	
+//        udfConfs = (HashMap<UDFContextKey, Properties>)ObjectSerializer.deserialize(jconf.get(UDF_CONTEXT));
+//        clientSysProps = (Properties)ObjectSerializer.deserialize(
+//                jconf.get(CLIENT_SYS_PROPS));        
+
+        // TODO:
+        clientSysProps = (Properties) SparkUtil.readObject("clientSysProps");
     }
     
     private UDFContextKey generateKey(Class<?> c, String[] args) {

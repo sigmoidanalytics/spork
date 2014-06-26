@@ -17,7 +17,15 @@
  */
 package org.apache.pig.builtin;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -31,6 +39,9 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.compress.BZip2Codec;
@@ -209,6 +220,8 @@ LoadPushDown, LoadMetadata, StoreMetadata {
                 mLog.warn("'-tagsource' is deprecated. Use '-tagFile' instead.");
                 tagFile = true;
             }
+            
+    			
         } catch (ParseException e) {
             HelpFormatter formatter = new HelpFormatter();
             formatter.printHelp( "PigStorage(',', '[options]')", validOptions);
@@ -225,6 +238,72 @@ LoadPushDown, LoadMetadata, StoreMetadata {
             if (signature!=null) {
                 Properties p = UDFContext.getUDFContext().getUDFProperties(this.getClass());
                 mRequiredColumns = (boolean[])ObjectSerializer.deserialize(p.getProperty(signature));
+                
+                //mRequiredColumns = new boolean[]{false,false,true};
+                /* Lame Hack begins */
+                if(mRequiredColumns == null){
+                	try{
+                		/*
+	                	BufferedReader br = new BufferedReader(new FileReader("required_cols"));
+	                	String line;
+	                	while ((line = br.readLine()) != null) {
+	                	   
+	                		String[] tocks = line.split(",");
+	                		mRequiredColumns = new boolean[tocks.length];
+	                		
+	                		for(int il=0;il<tocks.length;il++){
+	                			
+	                			if(tocks[il].equalsIgnoreCase("true")){
+	                				mRequiredColumns[il] = true;
+	                			}else if(tocks[il].equalsIgnoreCase("true")){
+	                				mRequiredColumns[il] = false;
+	                			}
+	                		}
+	                	}
+	                	br.close();
+	                	*/ // ----------------
+	                	 
+                		Path pt=new Path("hdfs://localhost:9000/tmp/required_cols");
+                		Configuration confF = new Configuration();
+                        confF.addResource(new Path(System.getenv("HADOOP_CONF_DIR") + "/core-site.xml"));
+                        confF.addResource(new Path(System.getenv("HADOOP_CONF_DIR") + "/hdfs-site.xml"));
+                        
+                        //FileSystem fileSystem = FileSystem.get(confF);
+                        FileSystem fileSystem = FileSystem.get(pt.toUri(), confF);
+                        
+                		BufferedReader br=new BufferedReader(new InputStreamReader(fileSystem.open(pt)));
+                		String line;
+                		line=br.readLine();
+                		while (line != null){
+                		    System.out.println(line);
+                		    // be sure to read the next line otherwise you'll get an infinite loop
+                		    
+                		    
+                		    String[] tocks = line.split(",");
+                		    if(tocks.length > 0){
+		                		mRequiredColumns = new boolean[tocks.length];
+		                		
+		                		for(int il=0;il<tocks.length;il++){
+		                			
+		                			if(tocks[il].equalsIgnoreCase("true")){
+		                				mRequiredColumns[il] = true;
+		                			}else if(tocks[il].equalsIgnoreCase("true")){
+		                				mRequiredColumns[il] = false;
+		                			}
+		                		}
+                		    }
+                		    
+                		    line = br.readLine();
+                		}
+                		
+                		br.close();
+                		
+                	}catch(Exception e){ e.printStackTrace(); System.out.println("Lame hack fails!!"); }
+                	
+                }
+                
+                /* Lame Hack Ends */
+                
             }
             mRequiredColumnsInitialized = true;
         }
@@ -269,6 +348,7 @@ LoadPushDown, LoadMetadata, StoreMetadata {
     }
 
     private Tuple applySchema(Tuple tup) throws IOException {
+    	
         if ( caster == null) {
             caster = getLoadCaster();
         }
@@ -359,6 +439,57 @@ LoadPushDown, LoadMetadata, StoreMetadata {
                 if (rf.getIndex()!=-1)
                     mRequiredColumns[rf.getIndex()] = true;
             }
+            
+            /* Lame Hack starts */
+            
+            try{
+            	
+            	File file = new File("required_cols");                
+        		file.createNewFile();  
+            	PrintWriter writer = new PrintWriter("required_cols", "UTF-8");
+            	
+            	String col_hack="";
+            	for(int lol=0;lol<mRequiredColumns.length;lol++){
+            		
+            		col_hack = col_hack + mRequiredColumns[lol] + ",";
+            		
+            	}            	
+            	
+            	if (col_hack.length() > 0 && col_hack.charAt(col_hack.length()-1)==',') {
+            		col_hack = col_hack.substring(0, col_hack.length()-1);
+            	}
+            	writer.println("" + col_hack);
+            	writer.close();
+            	
+            	
+            	Configuration confF = new Configuration();
+                confF.addResource(new Path(System.getenv("HADOOP_CONF_DIR") + "/core-site.xml"));
+                confF.addResource(new Path(System.getenv("HADOOP_CONF_DIR") + "/hdfs-site.xml"));
+                
+                FileSystem fileSystem = FileSystem.get(confF);
+                
+                // Check if the file already exists
+                Path pathF = new Path("/tmp/required_cols");
+                if (fileSystem.exists(pathF)) {
+                	fileSystem.delete(pathF, true);
+                    
+                }
+
+                // Create a new file and write data to it.
+                FSDataOutputStream outF = fileSystem.create(pathF);
+                outF.writeBytes(col_hack);
+
+                // Close all the file descripters
+                
+                outF.close();
+                //fileSystem.close();
+                
+            	
+            }catch(Exception e){ e.printStackTrace(); System.out.println("Lame Hack Fails!!!!===>" + e); }
+            
+            /* Lame Hack ends */
+            
+            
             Properties p = UDFContext.getUDFContext().getUDFProperties(this.getClass());
             try {
                 p.setProperty(signature, ObjectSerializer.serialize(mRequiredColumns));

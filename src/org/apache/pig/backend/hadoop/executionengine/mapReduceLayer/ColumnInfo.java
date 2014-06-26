@@ -17,13 +17,14 @@
  */
 package org.apache.pig.backend.hadoop.executionengine.mapReduceLayer;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.pig.data.DataType;
 
 // Represent one column inside order key, this is a direct mapping from POProject
-public class ColumnInfo implements Cloneable {
+public class ColumnInfo implements Cloneable, Serializable {
     List<Integer> columns;
     byte resultType;
     int startCol = -1;

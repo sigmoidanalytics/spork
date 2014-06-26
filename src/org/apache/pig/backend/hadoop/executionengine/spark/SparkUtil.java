@@ -1,5 +1,9 @@
 package org.apache.pig.backend.hadoop.executionengine.spark;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.pig.backend.hadoop.datastorage.ConfigurationUtil;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
@@ -17,10 +21,15 @@ import scala.collection.Seq;
 //import scala.reflect.ClassManifest$;
 import scala.reflect.ClassTag;
 import scala.reflect.ClassTag$;
+
 import org.apache.spark.rdd.RDD;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.Serializable;
 import java.util.List;
+import java.util.Properties;
 
 /**
  * @author billg
@@ -78,4 +87,39 @@ public class SparkUtil {
         return parallelism;
     }
 
+    public static void saveObject(Serializable obj, String refName) throws IOException {
+    	if (obj != null) {
+	    	Configuration confF = new Configuration();
+	        confF.addResource(new Path(System.getenv("HADOOP_CONF_DIR") + "/core-site.xml"));
+	        confF.addResource(new Path(System.getenv("HADOOP_CONF_DIR") + "/hdfs-site.xml"));
+	        
+	        FileSystem fileSystem = FileSystem.get(confF);
+	        
+	        // Check if the file already exists
+	        Path pathF = new Path("hdfs://localhost:9000/tmp/props/"+refName);
+	        if (fileSystem.exists(pathF)) {
+	        	fileSystem.delete(pathF, true);            
+	        }
+
+	        // Create a new file and write data to it.
+	        FSDataOutputStream outF = fileSystem.create(pathF);
+	        outF.writeBytes(ObjectSerializer.serialize(obj));
+	        outF.close();
+    	}
+    }
+    
+    public static Serializable readObject(String refName) throws IOException {
+
+		Configuration confF = new Configuration();
+        confF.addResource(new Path(System.getenv("HADOOP_CONF_DIR") + "/core-site.xml"));
+        confF.addResource(new Path(System.getenv("HADOOP_CONF_DIR") + "/hdfs-site.xml"));
+        
+		Path pt=new Path("hdfs://localhost:9000/tmp/props/"+refName);
+        FileSystem fileSystem = FileSystem.get(pt.toUri(), confF);
+        
+		BufferedReader br=new BufferedReader(new InputStreamReader(fileSystem.open(pt)));		
+		Serializable obj = (Serializable) ObjectSerializer.deserialize(br.readLine());
+		
+		return obj;
+    }
 }

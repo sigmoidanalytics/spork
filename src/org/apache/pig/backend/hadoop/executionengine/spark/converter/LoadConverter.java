@@ -26,8 +26,10 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOpera
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLoad;
 import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
+import org.apache.pig.backend.hadoop.executionengine.util.MapRedUtil;
 import org.apache.pig.backend.hadoop.hbase.HBaseStorage;
-import org.apache.pig.backend.hadoop.hbase.HBaseStorage.ColumnInfo;
+//import org.apache.pig.backend.hadoop.hbase.HBaseStorage.ColumnInfo;
+import org.apache.pig.backend.hadoop.hbase.ColumnInfo;
 import org.apache.pig.data.DataByteArray;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.data.TupleFactory;
@@ -35,6 +37,7 @@ import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.io.FileSpec;
 import org.apache.pig.impl.plan.OperatorKey;
 import org.apache.pig.impl.util.ObjectSerializer;
+import org.apache.pig.impl.util.UDFContext;
 
 import scala.Function1;
 import scala.Tuple2;
@@ -82,18 +85,17 @@ public class LoadConverter implements POConverter<Tuple, Tuple, POLoad> {
                 
         //	HBase stuff
         String location = poLoad.getLFile().getFileName();
-        String tablename = null;
-        if (location.startsWith("hbase://")) {
-        	tablename = location.substring(8);
-            
+
+        if (location.startsWith("hbase://")) {            
         	configureLoader(physicalPlan, poLoad, loadJobConf);
-            hbs = configureHBaseLoader(physicalPlan, poLoad, loadJobConf);
+            hbs = configureHBaseLoader(physicalPlan, poLoad, loadJobConf);           
+            List<ColumnInfo> columnInfo = hbs.columnInfo_;
             
-//            Configuration conf = HBaseConfiguration.create();
-//            conf.set(TableInputFormat.INPUT_TABLE, tablename);
-//            HBaseConfiguration.merge(loadJobConf, conf);
+            //            SparkUtil.saveObject(hbs, "HBaseStorage");            
+            SparkUtil.saveObject((Serializable) columnInfo, "columnInfo_");
             
             JobConf conf = hbs.m_conf;
+            // Used by UDFContext
             
             RDD<Tuple2<ImmutableBytesWritable, Result>> rdd = sparkContext.newAPIHadoopRDD(conf, 
             		TableInputFormat.class, ImmutableBytesWritable.class, Result.class);
@@ -103,7 +105,7 @@ public class LoadConverter implements POConverter<Tuple, Tuple, POLoad> {
             // don't know why but just doing this cast for now
           RDD<Tuple2<Text, Tuple>> rdd = sparkContext.newAPIHadoopFile(
                   poLoad.getLFile().getFileName(), PigInputFormat.class,
-                  Text.class, Tuple.class, loadJobConf);                  
+                  Text.class, Tuple.class, loadJobConf);
           
           return rdd.map(TO_TUPLE_FUNCTION, SparkUtil.getManifest(Tuple.class));
         }
@@ -120,14 +122,24 @@ public class LoadConverter implements POConverter<Tuple, Tuple, POLoad> {
     
     private static class ToTupleHBaseFunction extends AbstractFunction1<Tuple2<ImmutableBytesWritable, Result>, Tuple>
             implements Function1<Tuple2<ImmutableBytesWritable, Result>, Tuple>, Serializable {
-
-        public Tuple apply(Tuple2<ImmutableBytesWritable, Result> v1) {
-			Result result = v1._2;            
-			boolean loadRowKey_ = hbs.loadRowKey_;
+        
+		public Tuple apply(Tuple2<ImmutableBytesWritable, Result> v1) {
+			Result result = v1._2;      
+			
+			// TODO
+			boolean loadRowKey_ = true;
 			
 			// Copied below stuff from HBaseStorage getNext()			
             ImmutableBytesWritable rowKey = v1._1;
-			List<ColumnInfo> columnInfo_ = hbs.columnInfo_;			
+//			List<ColumnInfo> columnInfo_ = hbs.columnInfo_;
+            List<ColumnInfo> columnInfo_ = null;
+			try {
+				columnInfo_ = (List<ColumnInfo> )SparkUtil.readObject("columnInfo_");
+			} catch (IOException e1) {
+				// TODO Auto-generated catch block
+				e1.printStackTrace();
+			}
+            
 			int tupleSize = columnInfo_.size();
 
             // use a map of families -> qualifiers with the most recent
@@ -208,8 +220,11 @@ public class LoadConverter implements POConverter<Tuple, Tuple, POLoad> {
     private HBaseStorage configureHBaseLoader(PhysicalPlan physicalPlan,
             POLoad poLoad, JobConf jobConf) throws IOException {    	
         Job job = new Job(jobConf);
-        HBaseStorage hbs = (HBaseStorage)poLoad.getLoadFunc();
         
+//        UDFContext.getUDFContext().addJobConf(jobConf);
+//        UDFContext.getUDFContext().deserialize();
+
+        HBaseStorage hbs = (HBaseStorage)poLoad.getLoadFunc();        
         hbs.setLocation(poLoad.getLFile().getFileName(), job);
         
     	return hbs;
