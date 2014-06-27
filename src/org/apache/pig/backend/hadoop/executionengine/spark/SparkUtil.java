@@ -90,13 +90,13 @@ public class SparkUtil {
     public static void saveObject(Serializable obj, String refName) throws IOException {
     	if (obj != null) {
 	    	Configuration confF = new Configuration();
-	        confF.addResource(new Path(System.getenv("HADOOP_CONF_DIR") + "/core-site.xml"));
-	        confF.addResource(new Path(System.getenv("HADOOP_CONF_DIR") + "/hdfs-site.xml"));
+	        confF.addResource(new Path(System.getenv("HADOOP_HOME") + "/conf/core-site.xml"));
+	        confF.addResource(new Path(System.getenv("HADOOP_HOME") + "/conf/hdfs-site.xml"));
 	        
 	        FileSystem fileSystem = FileSystem.get(confF);
 	        
 	        // Check if the file already exists
-	        Path pathF = new Path("hdfs://localhost:9000/tmp/props/"+refName);
+	        Path pathF = new Path("/tmp/props/"+refName);
 	        if (fileSystem.exists(pathF)) {
 	        	fileSystem.delete(pathF, true);            
 	        }
@@ -111,10 +111,10 @@ public class SparkUtil {
     public static Serializable readObject(String refName) throws IOException {
 
 		Configuration confF = new Configuration();
-        confF.addResource(new Path(System.getenv("HADOOP_CONF_DIR") + "/core-site.xml"));
-        confF.addResource(new Path(System.getenv("HADOOP_CONF_DIR") + "/hdfs-site.xml"));
+        confF.addResource(new Path(System.getenv("HADOOP_HOME") + "/conf/core-site.xml"));
+        confF.addResource(new Path(System.getenv("HADOOP_HOME") + "/conf/hdfs-site.xml"));
         
-		Path pt=new Path("hdfs://localhost:9000/tmp/props/"+refName);
+		Path pt=new Path("/tmp/props/"+refName);
         FileSystem fileSystem = FileSystem.get(pt.toUri(), confF);
         
 		BufferedReader br=new BufferedReader(new InputStreamReader(fileSystem.open(pt)));		
