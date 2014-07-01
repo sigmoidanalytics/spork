@@ -222,6 +222,7 @@ static int run(String args[], PigProgressNotificationListener listener) {
 
         // set up client side system properties in UDF context
         UDFContext.getUDFContext().setClientSystemProps(properties);
+        UDFContext.getUDFContext().serialize(conf);
 
         char opt;
         while ((opt = opts.getNextOpt()) != CmdLineParser.EndOfOpts) {

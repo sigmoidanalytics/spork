@@ -96,7 +96,7 @@ public class SparkUtil {
 	        FileSystem fileSystem = FileSystem.get(confF);
 	        
 	        // Check if the file already exists
-	        Path pathF = new Path("/tmp/props/"+refName);
+	        Path pathF = new Path("/pig-props/"+refName);
 	        if (fileSystem.exists(pathF)) {
 	        	fileSystem.delete(pathF, true);            
 	        }
@@ -108,17 +108,17 @@ public class SparkUtil {
     	}
     }
     
-    public static Serializable readObject(String refName) throws IOException {
+    public static Object readObject(String refName) throws IOException {
 
 		Configuration confF = new Configuration();
         confF.addResource(new Path(System.getenv("HADOOP_HOME") + "/conf/core-site.xml"));
         confF.addResource(new Path(System.getenv("HADOOP_HOME") + "/conf/hdfs-site.xml"));
         
-		Path pt=new Path("/tmp/props/"+refName);
+		Path pt=new Path("/pig-props/"+refName);
         FileSystem fileSystem = FileSystem.get(pt.toUri(), confF);
         
 		BufferedReader br=new BufferedReader(new InputStreamReader(fileSystem.open(pt)));		
-		Serializable obj = (Serializable) ObjectSerializer.deserialize(br.readLine());
+		Object obj = ObjectSerializer.deserialize(br.readLine());
 		
 		return obj;
     }
