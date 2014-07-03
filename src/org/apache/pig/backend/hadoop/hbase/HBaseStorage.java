@@ -65,6 +65,7 @@ import org.apache.hadoop.hbase.mapreduce.TableOutputFormat;
 import org.apache.hadoop.hbase.mapreduce.TableSplit;
 import org.apache.hadoop.hbase.util.Base64;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.apache.hadoop.hive.ql.exec.UDF;
 import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.InputFormat;
@@ -160,19 +161,19 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
     private Scan scan;
     private String contextSignature = null;
 
-    private final CommandLine configuredOptions_;
+    private CommandLine configuredOptions_;
     private final static Options validOptions_ = new Options();
     private final static CommandLineParser parser_ = new GnuParser();
 
     public boolean loadRowKey_;
     private String delimiter_;
     private boolean ignoreWhitespace_;
-    private final long limit_;
-    private final int caching_;
-    private final boolean noWAL_;
-    private final long minTimestamp_;
-    private final long maxTimestamp_;
-    private final long timestamp_;
+    private long limit_;
+    private int caching_;
+    private  boolean noWAL_;
+    private long minTimestamp_;
+    private long maxTimestamp_;
+    private long timestamp_;
 
     protected transient byte[] gt_;
     protected transient byte[] gte_;
@@ -251,78 +252,91 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
      * @throws IOException
      */
     public HBaseStorage(String columnList, String optString) throws ParseException, IOException {
-        populateValidOptions();
-        String[] optsArr = optString.split(" ");
-        try {
-            configuredOptions_ = parser_.parse(validOptions_, optsArr);
-        } catch (ParseException e) {
-            HelpFormatter formatter = new HelpFormatter();
-            formatter.printHelp( "[-loadKey] [-gt] [-gte] [-lt] [-lte] [-columnPrefix] [-caching] [-caster] [-noWAL] [-limit] [-delim] [-ignoreWhitespace] [-minTimestamp] [-maxTimestamp] [-timestamp]", validOptions_ );
-            throw e;
-        }
-
-        loadRowKey_ = configuredOptions_.hasOption("loadKey");
-
-        delimiter_ = ",";
-        if (configuredOptions_.getOptionValue("delim") != null) {
-          delimiter_ = configuredOptions_.getOptionValue("delim");
-        }
-
-        ignoreWhitespace_ = true;
-        if (configuredOptions_.hasOption("ignoreWhitespace")) {
-          String value = configuredOptions_.getOptionValue("ignoreWhitespace");
-          if (!"true".equalsIgnoreCase(value)) {
-            ignoreWhitespace_ = false;
-          }
-        }
-
-        columnInfo_ = parseColumnList(columnList, delimiter_, ignoreWhitespace_);
-                
-        // TODO:
-        UDFContext.getUDFContext().deserialize();
-        
-        String defaultCaster = UDFContext.getUDFContext().getClientSystemProps().getProperty(CASTER_PROPERTY, STRING_CASTER);
-        String casterOption = configuredOptions_.getOptionValue("caster", defaultCaster);
-        if (STRING_CASTER.equalsIgnoreCase(casterOption)) {
-            caster_ = new Utf8StorageConverter();
-        } else if (BYTE_CASTER.equalsIgnoreCase(casterOption)) {
-            caster_ = new HBaseBinaryConverter();
-        } else {
+    	minTimestamp_ = 0;
+    	maxTimestamp_ = 0;
+    	timestamp_ = 0;
+    	noWAL_ = false;
+    	configuredOptions_ = null;
+    	limit_ = 0;
+    	caching_ = 0;
+    	
+    	try {
+    		populateValidOptions();
+            String[] optsArr = optString.split(" ");
             try {
-              caster_ = (LoadCaster) PigContext.instantiateFuncFromSpec(casterOption);
-            } catch (ClassCastException e) {
-                LOG.error("Configured caster does not implement LoadCaster interface.");
-                throw new IOException(e);
-            } catch (RuntimeException e) {
-                LOG.error("Configured caster class not found.", e);
-                throw new IOException(e);
+                configuredOptions_ = parser_.parse(validOptions_, optsArr);
+            } catch (ParseException e) {
+                HelpFormatter formatter = new HelpFormatter();
+                formatter.printHelp( "[-loadKey] [-gt] [-gte] [-lt] [-lte] [-columnPrefix] [-caching] [-caster] [-noWAL] [-limit] [-delim] [-ignoreWhitespace] [-minTimestamp] [-maxTimestamp] [-timestamp]", validOptions_ );
+                throw e;
             }
-        }
-        LOG.debug("Using caster " + caster_.getClass());
 
-        caching_ = Integer.valueOf(configuredOptions_.getOptionValue("caching", "100"));
-        limit_ = Long.valueOf(configuredOptions_.getOptionValue("limit", "-1"));
-        noWAL_ = configuredOptions_.hasOption("noWAL");
+            loadRowKey_ = configuredOptions_.hasOption("loadKey");
 
-        if (configuredOptions_.hasOption("minTimestamp")){
-            minTimestamp_ = Long.parseLong(configuredOptions_.getOptionValue("minTimestamp"));
-        } else {
-            minTimestamp_ = Long.MIN_VALUE;
-        }
+            delimiter_ = ",";
+            if (configuredOptions_.getOptionValue("delim") != null) {
+              delimiter_ = configuredOptions_.getOptionValue("delim");
+            }
 
-        if (configuredOptions_.hasOption("maxTimestamp")){
-            maxTimestamp_ = Long.parseLong(configuredOptions_.getOptionValue("maxTimestamp"));
-        } else {
-            maxTimestamp_ = Long.MAX_VALUE;
-        }
+            ignoreWhitespace_ = true;
+            if (configuredOptions_.hasOption("ignoreWhitespace")) {
+              String value = configuredOptions_.getOptionValue("ignoreWhitespace");
+              if (!"true".equalsIgnoreCase(value)) {
+                ignoreWhitespace_ = false;
+              }
+            }
 
-        if (configuredOptions_.hasOption("timestamp")){
-            timestamp_ = Long.parseLong(configuredOptions_.getOptionValue("timestamp"));
-        } else {
-            timestamp_ = 0;
-        }
+            columnInfo_ = parseColumnList(columnList, delimiter_, ignoreWhitespace_);
+                    
+            // TODO:
+            UDFContext.getUDFContext().deserialize();
+            
+            String defaultCaster = UDFContext.getUDFContext().getClientSystemProps().getProperty(CASTER_PROPERTY, STRING_CASTER);
+            String casterOption = configuredOptions_.getOptionValue("caster", defaultCaster);
+            if (STRING_CASTER.equalsIgnoreCase(casterOption)) {
+                caster_ = new Utf8StorageConverter();
+            } else if (BYTE_CASTER.equalsIgnoreCase(casterOption)) {
+                caster_ = new HBaseBinaryConverter();
+            } else {
+                try {
+                  caster_ = (LoadCaster) PigContext.instantiateFuncFromSpec(casterOption);
+                } catch (ClassCastException e) {
+                    LOG.error("Configured caster does not implement LoadCaster interface.");
+                    throw new IOException(e);
+                } catch (RuntimeException e) {
+                    LOG.error("Configured caster class not found.", e);
+                    throw new IOException(e);
+                }
+            }
+            LOG.debug("Using caster " + caster_.getClass());
 
-        initScan();
+            caching_ = Integer.valueOf(configuredOptions_.getOptionValue("caching", "100"));
+            limit_ = Long.valueOf(configuredOptions_.getOptionValue("limit", "-1"));
+            noWAL_ = configuredOptions_.hasOption("noWAL");
+
+            if (configuredOptions_.hasOption("minTimestamp")){
+                minTimestamp_ = Long.parseLong(configuredOptions_.getOptionValue("minTimestamp"));
+            } else {
+                minTimestamp_ = Long.MIN_VALUE;
+            }
+
+            if (configuredOptions_.hasOption("maxTimestamp")){
+                maxTimestamp_ = Long.parseLong(configuredOptions_.getOptionValue("maxTimestamp"));
+            } else {
+                maxTimestamp_ = Long.MAX_VALUE;
+            }
+
+            if (configuredOptions_.hasOption("timestamp")){
+                timestamp_ = Long.parseLong(configuredOptions_.getOptionValue("timestamp"));
+            } else {
+                timestamp_ = 0;
+            }
+
+            initScan();
+		} catch (Exception e) {
+			// TODO: handle exception
+			e.printStackTrace();
+		}
     }
 
     /**
@@ -592,7 +606,8 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
         }
     }
 
-    @Override
+    @SuppressWarnings("unchecked")
+	@Override
     public Tuple getNext() throws IOException {
         try {
             if (reader.nextKeyValue()) {
@@ -600,6 +615,8 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
                 .getCurrentKey();
                 Result result = (Result) reader.getCurrentValue();
 
+                columnInfo_ = (List<ColumnInfo>) SparkUtil.readObject("columnInfo_");
+                
                 int tupleSize = columnInfo_.size();
 
                 // use a map of families -> qualifiers with the most recent
@@ -749,6 +766,13 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
     private JobConf initializeLocalJobConfig(Job job) {
         Properties udfProps = getUDFProperties();
         Configuration jobConf = job.getConfiguration();
+//        try {
+////        	UDFContext.getUDFContext().addJobConf(jobConf);
+////			UDFContext.getUDFContext().serialize(jobConf);
+//		} catch (IOException e) {
+//			// TODO Auto-generated catch block
+//			e.printStackTrace();
+//		}
         JobConf localConf = new JobConf(jobConf);
         if (udfProps.containsKey(HBASE_CONFIG_SET)) {
             for (Entry<Object, Object> entry : udfProps.entrySet()) {

@@ -5,6 +5,7 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
+import org.apache.pig.Main;
 import org.apache.pig.backend.hadoop.datastorage.ConfigurationUtil;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POGlobalRearrange;
@@ -53,7 +54,7 @@ public class SparkUtil {
     public static JobConf newJobConf(PigContext pigContext) throws IOException {
         JobConf jobConf = new JobConf(ConfigurationUtil.toConfiguration(pigContext.getProperties()));
         jobConf.set("pig.pigContext", ObjectSerializer.serialize(pigContext));
-        UDFContext.getUDFContext().serialize(jobConf);
+//        UDFContext.getUDFContext().serialize(jobConf);
         jobConf.set("udf.import.list", ObjectSerializer.serialize(PigContext.getPackageImportList()));
         return jobConf;
     }
@@ -89,37 +90,44 @@ public class SparkUtil {
 
     public static void saveObject(Serializable obj, String refName) throws IOException {
     	if (obj != null) {
-	    	Configuration confF = new Configuration();
-	        confF.addResource(new Path(System.getenv("HADOOP_HOME") + "/conf/core-site.xml"));
-	        confF.addResource(new Path(System.getenv("HADOOP_HOME") + "/conf/hdfs-site.xml"));
-	        
-	        FileSystem fileSystem = FileSystem.get(confF);
-	        
-	        // Check if the file already exists
-	        Path pathF = new Path("/pig-props/"+refName);
-	        if (fileSystem.exists(pathF)) {
-	        	fileSystem.delete(pathF, true);            
-	        }
-
-	        // Create a new file and write data to it.
-	        FSDataOutputStream outF = fileSystem.create(pathF);
-	        outF.writeBytes(ObjectSerializer.serialize(obj));
-	        outF.close();
+//	    	Configuration confF = new Configuration();
+//	        confF.addResource(new Path(System.getenv("HADOOP_HOME") + "/conf/core-site.xml"));
+//	        confF.addResource(new Path(System.getenv("HADOOP_HOME") + "/conf/hdfs-site.xml"));
+//	        
+//	        FileSystem fileSystem = FileSystem.get(confF);
+//	        
+//	        // Check if the file already exists
+//	        Path pathF = new Path("/pig-props/"+refName);
+//	        if (fileSystem.exists(pathF)) {
+//	        	fileSystem.delete(pathF, true);            
+//	        }
+//
+//	        // Create a new file and write data to it.
+//	        FSDataOutputStream outF = fileSystem.create(pathF);
+//	        outF.writeBytes(ObjectSerializer.serialize(obj));
+//	        outF.close();
+////	        fileSystem.close();
+    	
+    		Main.bcaster.addResource(refName, obj);
     	}
     }
     
     public static Object readObject(String refName) throws IOException {
 
-		Configuration confF = new Configuration();
-        confF.addResource(new Path(System.getenv("HADOOP_HOME") + "/conf/core-site.xml"));
-        confF.addResource(new Path(System.getenv("HADOOP_HOME") + "/conf/hdfs-site.xml"));
-        
-		Path pt=new Path("/pig-props/"+refName);
-        FileSystem fileSystem = FileSystem.get(pt.toUri(), confF);
-        
-		BufferedReader br=new BufferedReader(new InputStreamReader(fileSystem.open(pt)));		
-		Object obj = ObjectSerializer.deserialize(br.readLine());
-		
-		return obj;
+//		Configuration confF = new Configuration();
+//        confF.addResource(new Path(System.getenv("HADOOP_HOME") + "/conf/core-site.xml"));
+//        confF.addResource(new Path(System.getenv("HADOOP_HOME") + "/conf/hdfs-site.xml"));
+//        
+//		Path pt=new Path("/pig-props/"+refName);
+//        FileSystem fileSystem = FileSystem.get(pt.toUri(), confF);
+//        
+//		BufferedReader br=new BufferedReader(new InputStreamReader(fileSystem.open(pt)));		
+//		Object obj = ObjectSerializer.deserialize(br.readLine());
+////		fileSystem.close();
+//		
+//		return obj;
+    	
+    	BroadCastClient bcc  = new BroadCastClient(System.getenv("BROADCAST_MASTER_IP"), Integer.parseInt(System.getenv("BROADCAST_PORT")));
+    	return bcc.getBroadCastMessage(refName);
     }
 }

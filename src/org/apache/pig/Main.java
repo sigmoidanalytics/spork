@@ -58,6 +58,7 @@ import org.apache.log4j.PropertyConfigurator;
 import org.apache.pig.PigRunner.ReturnCode;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.datastorage.ConfigurationUtil;
+import org.apache.pig.backend.hadoop.executionengine.spark.BroadCastServer;
 import org.apache.pig.classification.InterfaceAudience;
 import org.apache.pig.classification.InterfaceStability;
 import org.apache.pig.impl.PigContext;
@@ -110,6 +111,8 @@ public class Main {
     protected static final String PROGRESS_NOTIFICATION_LISTENER_KEY = "pig.notification.listener";
 
     protected static final String PROGRESS_NOTIFICATION_LISTENER_ARG_KEY = "pig.notification.listener.arg";
+
+    public static BroadCastServer bcaster;
 
     static {
        Attributes attr=null;
@@ -219,6 +222,9 @@ static int run(String args[], PigProgressNotificationListener listener) {
         if(execTypeString!=null && execTypeString.length()>0){
             execType = ExecType.fromString(execTypeString);
         }
+
+   		bcaster = new BroadCastServer();
+   		bcaster.startBroadcastServer(Integer.parseInt(System.getenv("BROADCAST_PORT")));
 
         // set up client side system properties in UDF context
         UDFContext.getUDFContext().setClientSystemProps(properties);

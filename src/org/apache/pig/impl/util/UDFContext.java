@@ -188,7 +188,7 @@ public class UDFContext {
         conf.set(CLIENT_SYS_PROPS, ObjectSerializer.serialize(clientSysProps));
         
         // TODO:
-//        SparkUtil.saveObject((Serializable) jconf, "jconf");
+//        SparkUtil.saveObject((Serializable)conf, "jconf"); 
         SparkUtil.saveObject(clientSysProps, "clientSysProps");
     }
     
@@ -205,7 +205,7 @@ public class UDFContext {
     	
 //        udfConfs = (HashMap<UDFContextKey, Properties>)ObjectSerializer.deserialize(jconf.get(UDF_CONTEXT));
 //        clientSysProps = (Properties)ObjectSerializer.deserialize(
-//                jconf.get(CLIENT_SYS_PROPS));        
+//                jconf.get(CLIENT_SYS_PROPS));
 
         // TODO:
         clientSysProps = (Properties) SparkUtil.readObject("clientSysProps");

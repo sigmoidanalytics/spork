@@ -87,7 +87,7 @@ public class LoadConverter implements POConverter<Tuple, Tuple, POLoad> {
         String location = poLoad.getLFile().getFileName();
 
         if (location.startsWith("hbase://")) {            
-        	configureLoader(physicalPlan, poLoad, loadJobConf);
+//        	configureLoader(physicalPlan, poLoad, loadJobConf);
             hbs = configureHBaseLoader(physicalPlan, poLoad, loadJobConf);           
             List<ColumnInfo> columnInfo = hbs.columnInfo_;
             
@@ -102,6 +102,7 @@ public class LoadConverter implements POConverter<Tuple, Tuple, POLoad> {
 
             return rdd.map(TO_TUPLE_HBASE_FUNCTION, SparkUtil.getManifest(Tuple.class));
         } else {
+          configureLoader(physicalPlan, poLoad, loadJobConf);
             // don't know why but just doing this cast for now
           RDD<Tuple2<Text, Tuple>> rdd = sparkContext.newAPIHadoopFile(
                   poLoad.getLFile().getFileName(), PigInputFormat.class,
@@ -123,15 +124,15 @@ public class LoadConverter implements POConverter<Tuple, Tuple, POLoad> {
     private static class ToTupleHBaseFunction extends AbstractFunction1<Tuple2<ImmutableBytesWritable, Result>, Tuple>
             implements Function1<Tuple2<ImmutableBytesWritable, Result>, Tuple>, Serializable {
         
+		@SuppressWarnings("unchecked")
 		public Tuple apply(Tuple2<ImmutableBytesWritable, Result> v1) {
-			Result result = v1._2;      
+			Result result = v1._2;
 			
 			// TODO
 			boolean loadRowKey_ = true;
 			
 			// Copied below stuff from HBaseStorage getNext()			
             ImmutableBytesWritable rowKey = v1._1;
-//			List<ColumnInfo> columnInfo_ = hbs.columnInfo_;
             List<ColumnInfo> columnInfo_ = null;
 			try {
 				columnInfo_ = (List<ColumnInfo> )SparkUtil.readObject("columnInfo_");
@@ -219,15 +220,39 @@ public class LoadConverter implements POConverter<Tuple, Tuple, POLoad> {
 
     private HBaseStorage configureHBaseLoader(PhysicalPlan physicalPlan,
             POLoad poLoad, JobConf jobConf) throws IOException {    	
+    	// copied from configureLoader
         Job job = new Job(jobConf);
+        LoadFunc loadFunc = poLoad.getLoadFunc();
         
-//        UDFContext.getUDFContext().addJobConf(jobConf);
-//        UDFContext.getUDFContext().deserialize();
+        loadFunc.setLocation(poLoad.getLFile().getFileName(), job);
 
-        HBaseStorage hbs = (HBaseStorage)poLoad.getLoadFunc();        
-        hbs.setLocation(poLoad.getLFile().getFileName(), job);
+        // stolen from JobControlCompiler
+        ArrayList<FileSpec> pigInputs = new ArrayList<FileSpec>();
+        //Store the inp filespecs
+        pigInputs.add(poLoad.getLFile());
+
+        ArrayList<List<OperatorKey>> inpTargets = Lists.newArrayList();
+        ArrayList<String> inpSignatures = Lists.newArrayList();
+        ArrayList<Long> inpLimits = Lists.newArrayList();
+        //Store the target operators for tuples read
+        //from this input
+        List<PhysicalOperator> loadSuccessors = physicalPlan.getSuccessors(poLoad);
+        List<OperatorKey> loadSuccessorsKeys = Lists.newArrayList();
+        if(loadSuccessors!=null){
+            for (PhysicalOperator loadSuccessor : loadSuccessors) {
+                loadSuccessorsKeys.add(loadSuccessor.getOperatorKey());
+            }
+        }
+        inpTargets.add(loadSuccessorsKeys);
+        inpSignatures.add(poLoad.getSignature());
+        inpLimits.add(poLoad.getLimit());
+
+        jobConf.set("pig.inputs", ObjectSerializer.serialize(pigInputs));
+        jobConf.set("pig.inpTargets", ObjectSerializer.serialize(inpTargets));
+        jobConf.set("pig.inpSignatures", ObjectSerializer.serialize(inpSignatures));
+        jobConf.set("pig.inpLimits", ObjectSerializer.serialize(inpLimits));
         
-    	return hbs;
+    	return (HBaseStorage)loadFunc;
     }
     
     /**
