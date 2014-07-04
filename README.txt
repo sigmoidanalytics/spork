@@ -30,7 +30,18 @@ Getting Started
 http://wiki.apache.org/pig/RunPig
 3. To check out the function library, try http://wiki.apache.org/pig/PiggyBank
 
-
+Development Guide
+=================
+1. Building Pig using ant
+   $ ant jar-all
+2. Environments variables required
+   export SPARK_HOME=/path/to/spark
+   export HADOOP_HOME=/path/to/hadoop
+   export MASTER=local[2] # for local mode or 
+   export MASTER=spark://ip:7077 # for cluster mode
+3. Using pig-spark
+   $ ./pig-spark
+   
 Contributing to the Project
 ===========================
 
