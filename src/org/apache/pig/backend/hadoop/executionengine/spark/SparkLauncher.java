@@ -72,6 +72,8 @@ public class SparkLauncher extends Launcher {
     // new SparkLauncher gets created for each job.
     private static SparkContext sparkContext = null;
 
+    public static BroadCastServer bcaster;
+
     // An object that handle cache calls in the operator graph. This is again static because we want
     // it to be shared across SparkLaunchers. It gets cleared whenever we close the SparkContext.
     private static CacheConverter cacheConverter = null;
@@ -96,6 +98,18 @@ public class SparkLauncher extends Launcher {
 //        kdv.visit();
 
 /////////
+
+        if(System.getenv("BROADCAST_PORT").length() == 0 || System.getenv("BROADCAST_MASTER_IP").length() == 0){
+
+            System.out.println("Missing BROADCAST_POST/BROADCAST_HOST in the environment.");
+            LOG.error("Missing BROADCAST_POST/BROADCAST_HOST in the environment.");         
+            System.exit(1);
+
+        }
+
+        bcaster = new BroadCastServer();
+        bcaster.startBroadcastServer(Integer.parseInt(System.getenv("BROADCAST_PORT")));
+        bcaster.addResource("require_fields", PigStorage.required_fields);
 
         startSparkIfNeeded();
 

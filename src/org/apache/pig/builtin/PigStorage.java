@@ -225,6 +225,22 @@ LoadPushDown, LoadMetadata, StoreMetadata {
             if (signature!=null) {
                 Properties p = UDFContext.getUDFContext().getUDFProperties(this.getClass());
                 mRequiredColumns = (boolean[])ObjectSerializer.deserialize(p.getProperty(signature));
+
+                /* Get the required columns from TCPServer*/
+                if(mRequiredColumns == null){
+                    try{
+                        
+                        BroadCastClient bcc  = new BroadCastClient(System.getenv("BROADCAST_MASTER_IP"), Integer.parseInt(System.getenv("BROADCAST_PORT")));
+                        boolean[] response = (boolean[]) bcc.getBroadCastMessage("require_fields");
+                        mRequiredColumns = response;
+                                                
+
+                    }catch(Exception e){ e.printStackTrace(); }
+
+                }
+
+                /* TCPServer Hack Ends */
+                
             }
             mRequiredColumnsInitialized = true;
         }
@@ -359,6 +375,18 @@ LoadPushDown, LoadMetadata, StoreMetadata {
                 if (rf.getIndex()!=-1)
                     mRequiredColumns[rf.getIndex()] = true;
             }
+
+            /* For the TCPServer */
+
+            try{
+
+                required_fields = mRequiredColumns;
+
+            }catch(Exception e){ e.printStackTrace(); }
+
+
+            /* TCPServer Hack ends */
+
             Properties p = UDFContext.getUDFContext().getUDFProperties(this.getClass());
             try {
                 p.setProperty(signature, ObjectSerializer.serialize(mRequiredColumns));
