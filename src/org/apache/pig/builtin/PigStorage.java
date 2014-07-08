@@ -23,6 +23,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 
+import org.apache.pig.backend.hadoop.executionengine.spark_streaming.BroadCastClient;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.GnuParser;
@@ -147,6 +148,9 @@ LoadPushDown, LoadMetadata, StoreMetadata {
 
     protected boolean[] mRequiredColumns = null;
     private boolean mRequiredColumnsInitialized = false;
+
+    // For the TCPServer
+    public static boolean[] required_fields;
 
     // Indicates whether the input file name/path should be read.
     private boolean tagFile = false;

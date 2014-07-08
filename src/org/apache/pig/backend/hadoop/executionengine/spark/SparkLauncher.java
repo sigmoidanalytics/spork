@@ -54,6 +54,7 @@ import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.plan.OperatorKey;
 import org.apache.pig.tools.pigstats.PigStats;
 import org.apache.pig.tools.pigstats.SparkStats;
+import org.apache.pig.builtin.PigStorage;
 
 import org.apache.spark.rdd.RDD;
 import org.apache.spark.scheduler.JobLogger;
