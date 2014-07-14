@@ -50,8 +50,7 @@ public class BroadCastServer extends Thread{
 
 				}else{
 
-					out.writeUTF("Requested resource not available!!");
-
+					out.writeObject(null);
 				}
 
 
