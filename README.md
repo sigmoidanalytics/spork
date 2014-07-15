@@ -5,7 +5,7 @@ This Pig branch adds a Spark execution mode (Spork!).
 ## Dependencies
 
 1. Spark version 0.9.0
-2. Hadoop
+2. Hadoop 1.0.4
 3. Java 7
 4. Git client
 5. ant
