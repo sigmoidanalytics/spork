@@ -43,5 +43,10 @@ Start pig and paste the script:
     distinct_queries = DISTINCT queries;
     STORE distinct_queries INTO '/pig-test/output/';
 
+## TODO
+
+1. Migrate to Spark-1.0
+2. Create spark planner instead of using mapreduce planner
+3. Get e2e tests to work with Spork and create a benchmark report
 
 Please feel free to file issues on our github repo (https://github.com/sigmoidanalytics/spork) or mail us at: spark@sigmoidanalytics.com.
