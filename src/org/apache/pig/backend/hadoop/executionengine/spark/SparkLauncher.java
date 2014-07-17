@@ -188,8 +188,10 @@ public class SparkLauncher extends Launcher {
                 maxCores = Integer.parseInt(System.getenv("SPARK_MAX_CPUS"));
                 System.setProperty("spark.cores.max", "" + maxCores);
             }
-            System.setProperty("spark.cores.max", "1" );
-            System.setProperty("spark.executor.memory", "" + "1g");
+            System.setProperty("spark.cores.max", "2" );
+            System.setProperty("spark.executor.memory", "" + "128m");
+System.setProperty("spark.shuffle.memoryFraction", "0.0");
+System.setProperty("spark.storage.memoryFraction", "0.0");
             JavaSparkContext javaContext = new JavaSparkContext(master, "Spork", sparkHome, jars.toArray(new String[jars.size()]));
             sparkContext = javaContext.sc();
             sparkContext.addSparkListener(new StatsReportListener());

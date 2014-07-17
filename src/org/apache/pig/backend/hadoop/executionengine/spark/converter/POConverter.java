@@ -8,8 +8,7 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOpera
 import org.apache.spark.rdd.RDD;
 
 /**
- * Given an RDD and a PhysicalOperater, and implementation of this class can convert the RRD to
- * another RRD.
+ * Given an RDD and a PhysicalOperater, and implementation of this class can convert the RDD to another RDD.
  *
  * @author billg
  */

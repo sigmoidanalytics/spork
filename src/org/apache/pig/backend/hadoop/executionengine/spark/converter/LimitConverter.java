@@ -12,10 +12,12 @@ import org.apache.pig.data.Tuple;
 
 import scala.collection.Iterator;
 import scala.collection.JavaConversions;
+
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.rdd.RDD;
+import org.apache.spark.api.java.JavaSparkContext;
 
-@SuppressWarnings({ "serial"})
+@SuppressWarnings({"serial"})
 public class LimitConverter implements POConverter<Tuple, Tuple, POLimit> {
 
     @Override
@@ -24,7 +26,8 @@ public class LimitConverter implements POConverter<Tuple, Tuple, POLimit> {
         SparkUtil.assertPredecessorSize(predecessors, poLimit, 1);
         RDD<Tuple> rdd = predecessors.get(0);
         LimitFunction limitFunction = new LimitFunction(poLimit);
-        return rdd.mapPartitions(limitFunction, false, SparkUtil.getManifest(Tuple.class));
+        RDD<Tuple> rdd2 = rdd.coalesce(1, false);
+        return rdd2.mapPartitions(limitFunction, false, SparkUtil.getManifest(Tuple.class));
     }
 
     private static class LimitFunction extends Function<Iterator<Tuple>, Iterator<Tuple>> implements Serializable {

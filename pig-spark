@@ -29,7 +29,7 @@ fi
 #export SPARK_JAVA_OPTS=" -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/heap.dump"
 #export SPARK_JAVA_OPTS+=" -Xdebug -Xrunjdwp:transport=dt_socket,address=12345,server=y,suspend=y"
 # Settings to work with YARN, spark jar compiled with hadoop 2
-export SPARK_MASTER=spark://localhost:7077
+#export SPARK_MASTER=spark://127.0.0.1:7077
 
 #if want to run on spark master
 #export SPARK_MASTER=spark://-------:7077
@@ -80,5 +80,9 @@ export SPARK_WORKER_CORES=1
 export SPARK_WORKER_MEMORY=512m
 export SPARK_MEM=512m
 export SPARK_WORKER_INSTANCES=1
+export BROADCAST_MASTER_IP="127.0.0.1"
+export BROADCAST_PORT="6000"
+
+echo $PIG_CLASSPATH
 
 bin/pig -x spark "$@"
