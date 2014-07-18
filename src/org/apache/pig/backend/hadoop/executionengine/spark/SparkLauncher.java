@@ -190,6 +190,10 @@ public class SparkLauncher extends Launcher {
             }
             System.setProperty("spark.cores.max", "1" );
             System.setProperty("spark.executor.memory", "" + "1g");
+	    System.setProperty("spark.storage.blockManagerTimeoutIntervalMs", "6000000");
+	    System.setProperty("spark.broadcast.factory","org.apache.spark.broadcast.TorrentBroadcastFactory");
+	    System.setProperty("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
+
             JavaSparkContext javaContext = new JavaSparkContext(master, "Spork", sparkHome, jars.toArray(new String[jars.size()]));
             sparkContext = javaContext.sc();
             sparkContext.addSparkListener(new StatsReportListener());

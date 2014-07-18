@@ -11,6 +11,7 @@ abstract class POOutputConsumerIterator implements
     private Result result = null;
     private boolean returned = true;
     private boolean finished = false;
+    private Tuple vt;
 
     POOutputConsumerIterator(java.util.Iterator<Tuple> input) {
         this.input = input;
@@ -31,8 +32,8 @@ abstract class POOutputConsumerIterator implements
                     finished = true;
                     return;
                 }
-                Tuple v1 = input.next();
-                attach(v1);
+                vt = input.next();
+                attach(vt);
             }
             result = getNextResult();
             returned = false;
