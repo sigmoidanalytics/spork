@@ -24,7 +24,7 @@ public class LocalRearrangeConverter implements POConverter<Tuple, Tuple, POLoca
     public RDD<Tuple> convert(List<RDD<Tuple>> predecessors, POLocalRearrange physicalOperator)
             throws IOException {
         SparkUtil.assertPredecessorSize(predecessors, physicalOperator, 1);
-        RDD<Tuple> rdd = predecessors.get(0);
+        RDD<Tuple> rdd = predecessors.get(0).repartition(100);
         // call local rearrange to get key and value
         return rdd.map(new LocalRearrangeFunction(physicalOperator), SparkUtil.getManifest(Tuple.class));
 
@@ -54,8 +54,8 @@ public class LocalRearrangeConverter implements POConverter<Tuple, Tuple, POLoca
                 case POStatus.STATUS_OK:
                     // (index, key, value without keys)
                     Tuple resultTuple = (Tuple)result.result;
-                    if (LOG.isDebugEnabled())
-                        LOG.debug("LocalRearrangeFunction out "+resultTuple);
+                   // if (LOG.isDebugEnabled())
+                     //   LOG.debug("LocalRearrangeFunction out "+resultTuple);
                     return resultTuple;
                 default:
                     throw new RuntimeException("Unexpected response code from operator "+physicalOperator+" : " + result);
