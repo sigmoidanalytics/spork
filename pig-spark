@@ -12,6 +12,12 @@
 # Follow this guide for for enabling running spork:
 ##  http://docs.sigmoidanalytics.com/index.php/Setting_up_spork_with_spark_0.8.1
 
+#CONFIGURE THE FOLLOWING IF YOU HAVENT CONFIGURED ALREADY
+#export HADOOP_HOME=
+#export HADOOP_CONF_DIR=$HADOOP_HOME/conf
+#export SPARK_HOME=
+export BROADCAST_MASTER_IP="127.0.0.1"
+export BROADCAST_MASTER_PORT="6000"
 
 if [ -z "$HADOOP_CONF_DIR" ]; then
     echo "You need to set HADOOP_CONF_DIR"
