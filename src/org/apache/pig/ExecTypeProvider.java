@@ -25,6 +25,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.LocalExecType;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRExecType;
+import org.apache.pig.backend.hadoop.executionengine.spark.SparkExecType;
 import org.apache.pig.impl.util.PropertiesUtil;
 
 public class ExecTypeProvider {
@@ -64,6 +65,9 @@ public class ExecTypeProvider {
         }
         if (execType instanceof LocalExecType) {
             return ExecType.LOCAL;
+        }
+        if (execType instanceof SparkExecType) {
+        	return ExecType.SPARK;
         }
         // if it is not MR specific but rather a different
         // execution engine, we don't have access to any

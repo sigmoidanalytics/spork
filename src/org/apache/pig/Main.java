@@ -362,15 +362,16 @@ public class Main {
             // create the context with the parameter
             PigContext pigContext = new PigContext(properties);
 
+            //System.out.println("LOG: Execution Engine = " + pigContext.getExecutionEngine());
             // create the static script state object
             ScriptState scriptState = pigContext.getExecutionEngine().instantiateScriptState();
             String commandLine = LoadFunc.join((AbstractList<String>)Arrays.asList(args), " ");
-            scriptState.setCommandLine(commandLine);
+            /*scriptState.setCommandLine(commandLine);
             if (listener != null) {
                 scriptState.registerListener(listener);
             }
             ScriptState.start(scriptState);
-
+            */
             pigContext.getProperties().setProperty("pig.cmd.args", commandLine);
 
             if(logFileName == null && !userSpecifiedLog) {

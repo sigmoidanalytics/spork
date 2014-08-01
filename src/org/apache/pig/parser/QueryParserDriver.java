@@ -174,7 +174,7 @@ public class QueryParserDriver {
         LogicalPlan plan = null;
 
         ScriptState ss = ScriptState.get();
-        CommonTokenStream tokenStream = tokenize(query, ss.getFileName());
+        CommonTokenStream tokenStream = tokenize(query, null);//, ss.getFileName());
 
         Tree ast = parse( tokenStream );
         ast = expandMacro( ast );

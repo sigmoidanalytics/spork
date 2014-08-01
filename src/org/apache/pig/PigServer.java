@@ -1346,7 +1346,7 @@ public class PigServer {
     private PigStats executeCompiledLogicalPlan() throws ExecException,
             FrontendException {
         // discover pig features used in this script
-        ScriptState.get().setScriptFeatures(currDAG.lp);
+        //ScriptState.get().setScriptFeatures(currDAG.lp);
         currDAG.lp.optimize(pigContext);
 
         return launchPlan(currDAG.lp, "job_pigexec_");
