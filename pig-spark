@@ -65,7 +65,7 @@ if [ -z "$PIG_HOME" ]; then
     exit 1
 fi
 
-#export SPARK_MASTER=spark://localhost:7077
+#export SPARK_MASTER=spark://kamals-air:7077
 export SPARK_MASTER=local[2]
 
 export PIG_CLASSPATH="$PIG_HOME/build/ivy/lib/Pig/slf4j-api-1.7.2.jar:$PIG_HOME/build/ivy/lib/Pig/netty-3.6.6.Final.jar:$PIG_HOME/pig-withouthadoop-h1.jar:$PIG_HOME/lib/spark/mesos-0.9.0.jar:$PIG_HOME/build/ivy/lib/Pig/*:$HADOOP_CONF_DIR"

@@ -45,7 +45,7 @@ import org.apache.pig.backend.hadoop.executionengine.spark.converter.LoadConvert
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.LocalRearrangeConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.POConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.PackageConverter;
-//import org.apache.pig.backend.hadoop.executionengine.spark.converter.SortConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.SortConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.SplitConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.StoreConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.UnionConverter;
@@ -130,7 +130,7 @@ public class SparkLauncher extends Launcher {
         convertMap.put(POLimit.class, new LimitConverter());
         convertMap.put(PODistinct.class, new DistinctConverter());
         convertMap.put(POUnion.class, new UnionConverter(sparkContext));
-        //convertMap.put(POSort.class, new SortConverter());
+        convertMap.put(POSort.class, new SortConverter());
         convertMap.put(POSplit.class, new SplitConverter());
 
         Map<OperatorKey, RDD<Tuple>> rdds = new HashMap<OperatorKey, RDD<Tuple>>();
@@ -190,8 +190,8 @@ public class SparkLauncher extends Launcher {
                 maxCores = Integer.parseInt(System.getenv("SPARK_MAX_CPUS"));
                 System.setProperty("spark.cores.max", "" + maxCores);
             }
-            System.setProperty("spark.cores.max", "2" );
-            System.setProperty("spark.executor.memory", "" + "128m");
+            System.setProperty("spark.cores.max", "1" );
+            System.setProperty("spark.executor.memory", "" + "512m");
 System.setProperty("spark.shuffle.memoryFraction", "0.0");
 System.setProperty("spark.storage.memoryFraction", "0.0");
             JavaSparkContext javaContext = new JavaSparkContext(master, "Spork", sparkHome, jars.toArray(new String[jars.size()]));

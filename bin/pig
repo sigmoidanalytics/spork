@@ -18,7 +18,6 @@
 #     PIG_ROOT_LOGGER The root appender. Default is INFO,console
 #
 #     PIG_HADOOP_VERSION Version of hadoop to run with.    Default is 17 (0.17).
-
 cygwin=false
 case "`uname`" in
 CYGWIN*) cygwin=true;;

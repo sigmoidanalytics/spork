@@ -298,6 +298,11 @@ public class POSort extends PhysicalOperator {
 		return res;
 	}
 
+	// TODO: Was removed from Pig 13 code. Added it here explicitly in Spork 13 to make sort operator work.
+	public Comparator<Tuple> getmComparator() {
+        return mComparator;
+	}
+	
 	@Override
 	public boolean supportsMultipleInputs() {
 		return false;
