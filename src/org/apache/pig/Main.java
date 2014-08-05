@@ -424,7 +424,7 @@ public class Main {
                     properties.setProperty("pig.jars.relative.to.dfs", "true");
                 }
 
-                scriptState.setFileName(file);
+                //scriptState.setFileName(file);
 
                 if (embedded) {
                     return runEmbeddedScript(pigContext, localFileRet.file.getPath(), engine);
@@ -467,7 +467,7 @@ public class Main {
                     new File(substFile).deleteOnExit();
                 }
 
-                scriptState.setScript(new File(file));
+                //scriptState.setScript(new File(file));
 
                 grunt = new Grunt(pin, pigContext);
                 gruntCalled = true;
@@ -553,7 +553,7 @@ public class Main {
                     properties.setProperty("pig.jars.relative.to.dfs", "true");
                 }
 
-                scriptState.setFileName(remainders[0]);
+                //scriptState.setFileName(remainders[0]);
 
                 if (embedded) {
                     return runEmbeddedScript(pigContext, localFileRet.file.getPath(), engine);
@@ -596,7 +596,7 @@ public class Main {
                                                        "PigLatin:" +new File(remainders[0]).getName()
                 );
 
-                scriptState.setScript(localFileRet.file);
+                //scriptState.setScript(localFileRet.file);
 
                 grunt = new Grunt(pin, pigContext);
                 gruntCalled = true;
