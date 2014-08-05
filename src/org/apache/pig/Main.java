@@ -502,7 +502,7 @@ public class Main {
 
                 sb.append('\n');
 
-                scriptState.setScript(sb.toString());
+                //scriptState.setScript(sb.toString());
 
                 in = new BufferedReader(new StringReader(sb.toString()));
 
