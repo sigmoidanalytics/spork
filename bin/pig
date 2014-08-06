@@ -26,11 +26,11 @@ esac
 debug=false
 
 # filter command line parameter
-for f in $@; do
+for f in "$@"; do
      if [[ $f = "-secretDebugCmd" ]]; then
         debug=true
      else
-        remaining="${remaining} $f"
+        remaining[${#remaining[@]}]="$f"
      fi
 done
 
@@ -170,8 +170,8 @@ echo $CLASSPATH
 # run it
 if [ "$debug" == "true" ]; then
     echo "dry run:"
-    echo "$JAVA" $JAVA_HEAP_MAX $PIG_OPTS -classpath "$CLASSPATH" $CLASS ${remaining}
+    echo "$JAVA" $JAVA_HEAP_MAX $PIG_OPTS -classpath "$CLASSPATH" $CLASS "${remaining[@]}"
     echo
 else
-    exec "$JAVA" $JAVA_HEAP_MAX $PIG_OPTS -classpath "$CLASSPATH" $CLASS ${remaining}
+    exec "$JAVA" $JAVA_HEAP_MAX $PIG_OPTS -classpath "$CLASSPATH" $CLASS "${remaining[@]}"
 fi

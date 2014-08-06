@@ -13,9 +13,9 @@
 ##  http://docs.sigmoidanalytics.com/index.php/Setting_up_spork_with_spark_0.8.1
 
 #CONFIGURE THE FOLLOWING IF YOU HAVENT CONFIGURED ALREADY
-#export HADOOP_HOME=
-#export HADOOP_CONF_DIR=$HADOOP_HOME/conf
-#export SPARK_HOME=
+export HADOOP_HOME=/home/akhld/mobi/localcluster/hadoop
+export HADOOP_CONF_DIR=$HADOOP_HOME/conf
+export SPARK_HOME=/home/akhld/mobi/localcluster/spark
 export BROADCAST_MASTER_IP="127.0.0.1"
 export BROADCAST_PORT="6000"
 
@@ -35,7 +35,7 @@ fi
 #export SPARK_JAVA_OPTS=" -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/heap.dump"
 #export SPARK_JAVA_OPTS+=" -Xdebug -Xrunjdwp:transport=dt_socket,address=12345,server=y,suspend=y"
 # Settings to work with YARN, spark jar compiled with hadoop 2
-export SPARK_MASTER=spark://localhost:7077
+export SPARK_MASTER=local[2]
 
 #if want to run on spark master
 #export SPARK_MASTER=spark://-------:7077
