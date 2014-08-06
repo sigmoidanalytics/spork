@@ -54,7 +54,7 @@ import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.plan.OperatorKey;
 import org.apache.pig.tools.pigstats.PigStats;
-//import org.apache.pig.tools.pigstats.SparkStats;
+import org.apache.pig.tools.pigstats.SparkStats;
 import org.apache.pig.builtin.PigStorage;
 
 import org.apache.spark.rdd.RDD;
@@ -135,14 +135,14 @@ public class SparkLauncher extends Launcher {
 
         Map<OperatorKey, RDD<Tuple>> rdds = new HashMap<OperatorKey, RDD<Tuple>>();
 
-        //SparkStats stats = new SparkStats();
+        SparkStats stats = new SparkStats();
         LinkedList<POStore> stores = PlanHelper.getPhysicalOperators(physicalPlan, POStore.class);
         for (POStore poStore : stores) {
             physicalToRDD(physicalPlan, poStore, rdds, convertMap);
-            //stats.addOutputInfo(poStore, 1, 1, true, c); // TODO: use real values
+            stats.addOutputInfo(poStore, 1, 1, true, c); // TODO: use real values
         }
 
-        return null;//stats;
+        return stats;
     }
 
     private static void startSparkIfNeeded() throws PigException {
@@ -155,7 +155,7 @@ public class SparkLauncher extends Launcher {
 
             String sparkHome = System.getenv("SPARK_HOME"); // It's okay if this is null for local mode
             String sparkJarsSetting = System.getenv("SPARK_JARS");
-            sparkJarsSetting="/Users/kamal/codePlay/pig/build/pig-0.13.1-SNAPSHOT-withdependencies.jar";
+            //sparkJarsSetting="/Users/kamal/codePlay/pig/build/pig-0.13.1-SNAPSHOT-withdependencies.jar";
             String pigJar = System.getenv("SPARK_PIG_JAR");
             if(pigJar == null) {
                 pigJar = "build/pig-0.12.0-SNAPSHOT-withouthadoop.jar";
