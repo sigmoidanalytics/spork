@@ -88,6 +88,4 @@ export SPARK_WORKER_MEMORY=512m
 export SPARK_MEM=512m
 export SPARK_WORKER_INSTANCES=1
 
-echo "params : " "$@"
-
 bin/pig -x spark "$@"
