@@ -314,7 +314,7 @@
         <fileset dir="${lib.dir}/spark">
           <include name="**.*jar"/>
         </fileset>
-        
+
         <fileset dir="${lib.dir}" includes="*.jar"/>
         <fileset file="${ivy.lib.dir}/${zookeeper.jarfile}"/>
         <fileset dir="${ivy.lib.dir}" includes="*.jar"/>
@@ -329,7 +329,7 @@
         <!-- need to put this first, otherwise junit-3 testcases can break -->
         <pathelement location="${ivy.lib.dir}/junit-4.11.jar"/>
         <pathelement location="${lib.dir}/spark/mesos-*.jar"/>
-        
+
         <pathelement location="${build.classes}"/>
         <pathelement location="${test.src.dir}"/>
         <pathelement location="${piggybank.jarfile}"/>
@@ -347,9 +347,9 @@
             <include name="guava-${guava.version}.jar"/>
             <include name="automaton-${automaton.version}.jar"/>
             <include name="jansi-${jansi.version}.jar"/>
-            <include name="avro-${avro.version}.jar"/>     
-            <include name="avro-mapred-${avro.version}.jar"/>     
-            <include name="trevni-core-${avro.version}.jar"/>     
+            <include name="avro-${avro.version}.jar"/>
+            <include name="avro-mapred-${avro.version}.jar"/>
+            <include name="trevni-core-${avro.version}.jar"/>
             <include name="trevni-avro-${avro.version}.jar"/>
             <include name="snappy-java-${snappy.version}.jar"/>
             <include name="asm*.jar"/>
@@ -363,7 +363,7 @@
             <include name="slf4j*.jar" />
             <include name="servlet-api*.jar" />
             <include name="compress-lzf*.jar" />
-            
+
             <!-- /SPORK -->
 
         </patternset>
@@ -395,8 +395,8 @@
             <!-- /SPORK -->
 
             <include name="avro-${avro.version}.jar"/>
-            <include name="avro-mapred-${avro.version}.jar"/>    
-            <include name="trevni-core-${avro.version}.jar"/>    
+            <include name="avro-mapred-${avro.version}.jar"/>
+            <include name="trevni-core-${avro.version}.jar"/>
             <include name="trevni-avro-${avro.version}.jar"/>
             <include name="snappy-java-${snappy.version}.jar"/>
             <include name="asm*.jar"/>
@@ -940,7 +940,7 @@
         <ant dir="${test.e2e.dir}" target="undeploy"/>
     </target>
 
-    <target name="test-e2e-local" depends="jar, jar-withouthadoop, piggybank" description="run end-to-end tests in local mode">
+    <target name="test-e2e-local" depends="" description="run end-to-end tests in local mode">
         <ant dir="${test.e2e.dir}" target="test-local"/>
     </target>
 
