@@ -387,6 +387,7 @@ static int run(String args[], PigProgressNotificationListener listener) {
         log.info(getVersionString().replace("\n", ""));
 
         if(logFileName != null) {
+        	System.out.println("Logging started...");
             log.info("Logging error messages to: " + logFileName);
         }
 
