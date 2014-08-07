@@ -43,6 +43,8 @@ import org.apache.pig.ResourceSchema;
 import org.apache.pig.ResourceSchema.ResourceFieldSchema;
 import org.apache.pig.ResourceStatistics;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigSplit;
+import org.apache.pig.backend.hadoop.executionengine.spark.BroadCastClient;
+import org.apache.pig.backend.hadoop.executionengine.spark.SparkLauncher;
 import org.apache.pig.data.BagFactory;
 import org.apache.pig.data.DataBag;
 import org.apache.pig.data.DataByteArray;
@@ -108,7 +110,10 @@ public class JsonLoader extends LoadFunc implements LoadMetadata {
             udfc.getUDFProperties(this.getClass(), new String[]{udfcSignature});
         String strSchema = p.getProperty(SCHEMA_SIGNATURE);
         if (strSchema == null) {
-            throw new IOException("Could not find schema in UDF context");
+            //throw new IOException("Could not find schema in UDF context");
+        	BroadCastClient bc = new BroadCastClient(System.getenv("BROADCAST_MASTER_IP"), Integer.parseInt(System.getenv("BROADCAST_PORT")));
+            p = (Properties) bc.getBroadCastMessage("json_schema");
+            strSchema = p.getProperty(SCHEMA_SIGNATURE);
         }
 
         // Parse the schema from the string stored in the properties object.
@@ -324,6 +329,16 @@ public class JsonLoader extends LoadFunc implements LoadMetadata {
             udfc.getUDFProperties(this.getClass(), new String[]{udfcSignature});
         p.setProperty(SCHEMA_SIGNATURE, s.toString());
 
+        try{
+        	
+        	if(SparkLauncher.bcaster != null){
+        		SparkLauncher.bcaster.addResource("json_schema", p);
+        	}
+        	
+        }catch(Exception e){
+        	e.printStackTrace();
+        }
+        
         return s;
     }
 
