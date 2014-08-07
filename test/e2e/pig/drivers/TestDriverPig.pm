@@ -423,7 +423,13 @@ sub getPigCmd($$$)
         }
         TestDriver::dbg("Additional java parameters: [$additionalJavaParams].\n");
 
-        push(@pigCmd, ("-x", "local"));
+        # TODO: Works only when spork is found in path, should have it running as in tez
+
+        if(index(@pigCmd[0], "spork") != -1) {
+            push(@pigCmd, ("-x", "spark"));
+        } else {
+            push(@pigCmd, ("-x", "local"));
+        }
     }
 
     if (defined($testCmd->{'java_params'}) || defined($additionalJavaParams)) {
