@@ -25,7 +25,28 @@ CYGWIN*) cygwin=true;;
 esac
 debug=false
 
-export PIG_HOME=/Users/praveenr/Developer/sigmoid-spark/spork
+
+# resolve links - $0 may be a softlink
+this="$0"
+while [ -h "$this" ]; do
+    ls=`ls -ld "$this"`
+    link=`expr "$ls" : '.*-> \(.*\)$'`
+    if expr "$link" : '.*/.*' > /dev/null; then
+        this="$link"
+    else
+        this=`dirname "$this"`/"$link"
+    fi
+done
+
+# convert relative path to absolute path
+bin=`dirname "$this"`
+script=`basename "$this"`
+bin=`unset CDPATH; cd "$bin"; pwd`
+this="$bin/$script"
+
+# the root of the Pig installation
+export PIG_HOME=`dirname "$this"`/..
+
 
 # TODO: Spark stuff - Should pick up from env variables ideally
 export PIG_CLASSPATH=$PIG_HOME/build/ivy/lib/Pig/netty-3.6.6.Final.jar:$PIG_HOME/pig-withouthadoop.jar:$PIG_HOME/lib/spark/mesos-0.9.0.jar:$PIG_HOME/build/ivy/lib/Pig/*:$HADOOP_CONF_DIR:$PIG_HOME/conf
@@ -48,27 +69,6 @@ for f in "$@"; do
         remaining[${#remaining[@]}]="$f"
      fi
 done
-
-# resolve links - $0 may be a softlink
-this="$0"
-while [ -h "$this" ]; do
-    ls=`ls -ld "$this"`
-    link=`expr "$ls" : '.*-> \(.*\)$'`
-    if expr "$link" : '.*/.*' > /dev/null; then
-        this="$link"
-    else
-        this=`dirname "$this"`/"$link"
-    fi
-done
-
-# convert relative path to absolute path
-bin=`dirname "$this"`
-script=`basename "$this"`
-bin=`unset CDPATH; cd "$bin"; pwd`
-this="$bin/$script"
-
-# the root of the Pig installation
-export PIG_HOME=`dirname "$this"`/..
 
 #check to see if the conf dir is given as an optional argument
 if [ $# -gt 1 ]
