@@ -112,7 +112,8 @@ public class JsonLoader extends LoadFunc implements LoadMetadata {
         if (strSchema == null) {
             //throw new IOException("Could not find schema in UDF context");
         	BroadCastClient bc = new BroadCastClient(System.getenv("BROADCAST_MASTER_IP"), Integer.parseInt(System.getenv("BROADCAST_PORT")));
-            p = (Properties) bc.getBroadCastMessage("json_schema");
+        	p = (Properties) bc.getBroadCastMessage("json_schema");
+        	p = (Properties) bc.getBroadCastMessage("json_schema");
             strSchema = p.getProperty(SCHEMA_SIGNATURE);
         }
 
@@ -332,7 +333,7 @@ public class JsonLoader extends LoadFunc implements LoadMetadata {
         try{
         	
         	if(SparkLauncher.bcaster != null){
-        		SparkLauncher.bcaster.addResource("json_schema", p);
+        		SparkLauncher.bcaster.addResource("json_schema","json_schema", p);
         	}
         	
         }catch(Exception e){

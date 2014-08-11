@@ -40,6 +40,8 @@ import org.apache.pig.ResourceSchema.ResourceFieldSchema;
 import org.apache.pig.ResourceStatistics;
 import org.apache.pig.StoreMetadata;
 import org.apache.pig.StoreFunc;
+import org.apache.pig.backend.hadoop.executionengine.spark.BroadCastClient;
+import org.apache.pig.backend.hadoop.executionengine.spark.SparkLauncher;
 import org.apache.pig.data.DataType;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.data.DataBag;
@@ -103,6 +105,16 @@ public class JsonStorage extends StoreFunc implements StoreMetadata {
         Properties p =
             udfc.getUDFProperties(this.getClass(), new String[]{udfcSignature});
         p.setProperty(SCHEMA_SIGNATURE, s.toString());
+        
+        try{
+        	
+        	if(SparkLauncher.bcaster != null){
+        		SparkLauncher.bcaster.addResource("new_json_schema", p);
+        	}        	
+        	
+        }catch(Exception e){
+        	e.printStackTrace();
+        }
     }
 
 
@@ -122,7 +134,10 @@ public class JsonStorage extends StoreFunc implements StoreMetadata {
             udfc.getUDFProperties(this.getClass(), new String[]{udfcSignature});
         String strSchema = p.getProperty(SCHEMA_SIGNATURE);
         if (strSchema == null) {
-            throw new IOException("Could not find schema in UDF context");
+            //throw new IOException("Could not find schema in UDF context");
+        	BroadCastClient bc = new BroadCastClient(System.getenv("BROADCAST_MASTER_IP"), Integer.parseInt(System.getenv("BROADCAST_PORT")));
+            p = (Properties) bc.getBroadCastMessage("new_json_schema");
+            strSchema = p.getProperty(SCHEMA_SIGNATURE);
         }
 
         // Parse the schema from the string stored in the properties object.
