@@ -37,6 +37,7 @@ import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigSplit;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigMapReduce;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStream;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.StreamConverterMain;
 import org.apache.pig.impl.streaming.ExecutableManager;
 import org.apache.pig.impl.streaming.StreamingCommand.Handle;
 import org.apache.pig.impl.streaming.StreamingCommand.HandleSpec;
@@ -91,6 +92,8 @@ public class HadoopExecutableManager extends ExecutableManager {
         
         // Save a copy of the JobConf
         job = PigMapReduce.sJobConfInternal.get();
+        
+        if(job == null) job = StreamConverterMain.sjobConf;
         
         // Save the output directory for the Pig Script
         scriptOutputDir = job.get("pig.streaming.task.output.dir");

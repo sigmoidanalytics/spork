@@ -72,6 +72,8 @@ public class BroadCastServer extends Thread{
 				}
 				
 				server.close();
+				in.close();
+				out.close();
 
 			}catch(Exception s){				
 				s.printStackTrace();

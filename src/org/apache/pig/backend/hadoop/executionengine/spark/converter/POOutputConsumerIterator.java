@@ -3,6 +3,7 @@ package org.apache.pig.backend.hadoop.executionengine.spark.converter;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.POStatus;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.Result;
+import org.apache.pig.backend.hadoop.executionengine.spark.SparkLauncher;
 import org.apache.pig.data.Tuple;
 
 abstract class POOutputConsumerIterator implements
@@ -21,7 +22,7 @@ abstract class POOutputConsumerIterator implements
 
     abstract protected Result getNextResult() throws ExecException;
 
-    private void readNext() {
+    /*private void readNext() {
         try {
             if (result != null && !returned) {
                 return;
@@ -58,8 +59,39 @@ abstract class POOutputConsumerIterator implements
         } catch (ExecException e) {
             throw new RuntimeException(e);
         }
-    }
+    }*/
 
+    private void readNext() {
+		try {
+			while (result == null || returned) {
+				if (result == null) {
+					if (!input.hasNext()) {
+						finished = true;
+						return;
+					}
+					Tuple v1 = input.next();
+					attach(v1);
+				}
+				result = getNextResult();
+				returned = false;
+				if (result.returnStatus == POStatus.STATUS_OK) {
+					returned = false;
+				} else if (result.returnStatus == POStatus.STATUS_NULL) {
+					returned = true;
+				} else if (result.returnStatus == POStatus.STATUS_EOP) {
+					finished = !input.hasNext();
+					if (!finished) {
+						result = null;
+					}
+				} else if (result.returnStatus == POStatus.STATUS_ERR)
+					throw new RuntimeException("Error while processing "
+							+ result);
+			}
+		} catch (ExecException e) {
+			throw new RuntimeException(e);
+		}
+	}
+    
     @Override
     public boolean hasNext() {
         readNext();
