@@ -25,9 +25,9 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.POStatus;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.Result;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLocalRearrange;
-import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POMergeJoin;
-//import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POMergeJoin.TuplesToSchemaTupleList;
-//import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POMergeJoin.TuplesToSchemaTupleList;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POFRJoin;
+//import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POFRJoin.TuplesToSchemaTupleList;
+//import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POFRJoin.TuplesToSchemaTupleList;
 import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.data.DataType;
 import org.apache.pig.data.SchemaTuple;
@@ -71,14 +71,14 @@ import scala.collection.JavaConversions;
 import org.apache.spark.api.java.function.Function;
 
 @SuppressWarnings("serial")
-public class MergeJoinConverter implements
-		POConverter<Tuple, Tuple, POMergeJoin> {
+public class FRJoinConverter implements
+		POConverter<Tuple, Tuple, POFRJoin> {
 
 	@Override
 	public RDD<Tuple> convert(List<RDD<Tuple>> predecessors,
-			POMergeJoin poMergeJoin) throws IOException {
+			POFRJoin poFRJoin) throws IOException {
 
-		SparkUtil.assertPredecessorSize(predecessors, poMergeJoin, 2);
+		SparkUtil.assertPredecessorSize(predecessors, poFRJoin, 2);
 
 		// extract the two RDDs
 		RDD<Tuple> rdd1 = predecessors.get(0);
@@ -86,9 +86,9 @@ public class MergeJoinConverter implements
 
 		// make (key, value) pairs, key has type Object, value has type Tuple
 		RDD<Tuple2<Object, Tuple>> rdd1Pair = rdd1.map(new ExtractKeyFunction(
-				poMergeJoin, 0), SparkUtil.<Object, Tuple> getTuple2Manifest());
+				poFRJoin, 0), SparkUtil.<Object, Tuple> getTuple2Manifest());
 		RDD<Tuple2<Object, Tuple>> rdd2Pair = rdd2.map(new ExtractKeyFunction(
-				poMergeJoin, 1), SparkUtil.<Object, Tuple> getTuple2Manifest());
+				poFRJoin, 1), SparkUtil.<Object, Tuple> getTuple2Manifest());
 
 		// join fn is present in JavaPairRDD class ..
 		JavaPairRDD<Object, Tuple> rdd1Pair_javaRDD = new JavaPairRDD<Object, Tuple>(
@@ -120,11 +120,11 @@ public class MergeJoinConverter implements
 			AbstractFunction1<Tuple, Tuple2<Object, Tuple>> implements
 			Serializable {
 
-		private final POMergeJoin poMergeJoin;
+		private final POFRJoin poFRJoin;
 		private final int LR_index; // 0 for left table, 1 for right table
 
-		public ExtractKeyFunction(POMergeJoin poMergeJoin, int LR_index) {
-			this.poMergeJoin = poMergeJoin;
+		public ExtractKeyFunction(POFRJoin poFRJoin, int LR_index) {
+			this.poFRJoin = poFRJoin;
 			this.LR_index = LR_index;
 		}
 
@@ -132,11 +132,11 @@ public class MergeJoinConverter implements
 		public Tuple2<Object, Tuple> apply(Tuple tuple) {
 			
 			// attach tuple to LocalRearrange
-			poMergeJoin.LRs[LR_index].attachInput(tuple);
+			poFRJoin.LRs[LR_index].attachInput(tuple);
 			
 			try {
 				// getNextTuple() returns the rearranged tuple
-				Result lrOut = poMergeJoin.LRs[LR_index].getNextTuple();
+				Result lrOut = poFRJoin.LRs[LR_index].getNextTuple();
 				
 				// If tuple is (AA, 5) and key index is $1, then it lrOut is 0 5 (AA), so get(1) returns key
 				Object key = ((Tuple) lrOut.result).get(1);

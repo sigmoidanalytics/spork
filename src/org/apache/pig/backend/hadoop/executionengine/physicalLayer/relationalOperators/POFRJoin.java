@@ -82,7 +82,7 @@ public class POFRJoin extends PhysicalOperator {
     // The key type for each Local Rearrange operator
     private List<List<Byte>> keyTypes;
     // The Local Rearrange operators modeling the join key
-    private POLocalRearrange[] LRs;
+    public POLocalRearrange[] LRs;
     // The set of files that represent the replicated inputs
     private FileSpec[] replFiles;
     // Used to configure the foreach operator
