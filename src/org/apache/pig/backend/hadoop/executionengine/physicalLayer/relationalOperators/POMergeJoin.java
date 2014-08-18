@@ -74,7 +74,7 @@ public class POMergeJoin extends PhysicalOperator {
     private boolean firstTime = true;
 
     //The Local Rearrange operators modeling the join key
-    private POLocalRearrange[] LRs;
+    public POLocalRearrange[] LRs;
 
     private transient LoadFunc rightLoader;
     private OperatorKey opKey;
@@ -99,7 +99,7 @@ public class POMergeJoin extends PhysicalOperator {
     // Buffer to hold accumulated left tuples.
     private transient TuplesToSchemaTupleList leftTuples;
 
-    private MultiMap<PhysicalOperator, PhysicalPlan> inpPlans;
+    public MultiMap<PhysicalOperator, PhysicalPlan> inpPlans;
 
     private PhysicalOperator rightPipelineLeaf;
 

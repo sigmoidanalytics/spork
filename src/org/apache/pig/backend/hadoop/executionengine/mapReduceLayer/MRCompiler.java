@@ -1395,16 +1395,16 @@ public class MRCompiler extends PhyPlanVisitor {
             }
             
             // Create new map-reduce operator for indexing job and then configure it.
-            MapReduceOper indexerMROp = getMROp();
-            FileSpec idxFileSpec = getIndexingJob(indexerMROp, baseMROp, poCoGrp.getLRInnerPlansOf(0));
-            poCoGrp.setIdxFuncSpec(idxFileSpec.getFuncSpec());
-            poCoGrp.setIndexFileName(idxFileSpec.getFileName());
+//            MapReduceOper indexerMROp = getMROp();
+//            FileSpec idxFileSpec = getIndexingJob(indexerMROp, baseMROp, poCoGrp.getLRInnerPlansOf(0));
+//            poCoGrp.setIdxFuncSpec(idxFileSpec.getFuncSpec());
+//            poCoGrp.setIndexFileName(idxFileSpec.getFileName());
             
             baseMROp.mapPlan.addAsLeaf(poCoGrp);
             for (FuncSpec funcSpec : funcSpecs)
                 baseMROp.UDFs.add(funcSpec.toString());
-            MRPlan.add(indexerMROp);
-            MRPlan.connect(indexerMROp, baseMROp);
+//            MRPlan.add(indexerMROp);
+//            MRPlan.connect(indexerMROp, baseMROp);
 
             phyToMROpMap.put(poCoGrp,baseMROp);
             // Going forward, new operators should be added in baseMRop. To make
@@ -1417,9 +1417,9 @@ public class MRCompiler extends PhyPlanVisitor {
         catch (MRCompilerException mrce){
             throw(mrce);
         }
-        catch (CloneNotSupportedException e) {
-            throw new MRCompilerException(e);
-        }
+//        catch (CloneNotSupportedException e) {
+//            throw new MRCompilerException(e);
+//        }
         catch(PlanException e){
             int errCode = 2034;
             String msg = "Error compiling operator " + poCoGrp.getClass().getCanonicalName();
@@ -1517,7 +1517,7 @@ public class MRCompiler extends PhyPlanVisitor {
 
     @Override
     public void visitMergeJoin(POMergeJoin joinOp) throws VisitorException {
-
+/*
         try{
             if(compiledInputs.length != 2 || joinOp.getInputs().size() != 2){
                 int errCode=1101;
@@ -1734,6 +1734,7 @@ public class MRCompiler extends PhyPlanVisitor {
            String errMsg = "Cloning exception caught while compiling POMergeJoin";
            throw new MRCompilerException(errMsg, errCode, PigException.BUG, e);
        }
+        */
     }
 
     @Override
