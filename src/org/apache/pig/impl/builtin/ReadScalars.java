@@ -101,11 +101,11 @@ public class ReadScalars extends EvalFunc<Object> {
                 }
                 value = t1.get(pos);
                 Tuple t2 = loader.getNext();
-                if(t2 != null){
+                /*if(t2 != null){
                     String msg = "Scalar has more than one row in the output. " 
                         + "1st : " + t1 + ", 2nd :" + t2;
                     throw new ExecException(msg);   
-                }
+                }*/
                 
             } catch (Exception e) {
                 throw new ExecException(e.getMessage());
