@@ -58,6 +58,7 @@ import org.apache.log4j.PropertyConfigurator;
 import org.apache.pig.PigRunner.ReturnCode;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.datastorage.ConfigurationUtil;
+import org.apache.pig.backend.hadoop.executionengine.spark.BroadCastServer;
 import org.apache.pig.classification.InterfaceAudience;
 import org.apache.pig.classification.InterfaceStability;
 import org.apache.pig.impl.PigContext;
@@ -101,6 +102,8 @@ public class Main {
     private static final String patchVersion;
     private static final String svnRevision;
     private static final String buildTime;
+    
+    public static BroadCastServer bcaster;
 
     private enum ExecMode {STRING, FILE, SHELL, UNKNOWN}
 
@@ -163,7 +166,12 @@ static int run(String args[], PigProgressNotificationListener listener) {
     boolean verbose = false;
     boolean gruntCalled = false;
     String logFileName = null;
-
+    
+    //Startup the Broadcast Server
+    
+    bcaster = new BroadCastServer();
+    bcaster.startBroadcastServer(Integer.parseInt(System.getenv("BROADCAST_PORT")));
+    
     try {
         Configuration conf = new Configuration(false);
         GenericOptionsParser parser = new GenericOptionsParser(conf, args);
@@ -387,6 +395,7 @@ static int run(String args[], PigProgressNotificationListener listener) {
         log.info(getVersionString().replace("\n", ""));
 
         if(logFileName != null) {
+        	System.out.println("Logging started...");
             log.info("Logging error messages to: " + logFileName);
         }
 

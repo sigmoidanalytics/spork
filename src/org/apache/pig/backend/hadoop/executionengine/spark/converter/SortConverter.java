@@ -73,16 +73,16 @@ public class SortConverter implements POConverter<Tuple, Tuple, POSort> {
 
         @Override
         public Tuple2<Tuple, Object> apply(Tuple t) {
-            if (LOG.isDebugEnabled()) {
+            /*if (LOG.isDebugEnabled()) {
                 LOG.debug("Sort ToKeyValueFunction in "+t);
-            }
+            }*/
             Tuple key = t;
             Object value = null;
             // (key, value)
             Tuple2<Tuple, Object> out = new Tuple2<Tuple, Object>(key, value);
-            if (LOG.isDebugEnabled()) {
+            /*if (LOG.isDebugEnabled()) {
                 LOG.debug("Sort ToKeyValueFunction out "+out);
-            }
+            }*/
             return out;
         }
     }
