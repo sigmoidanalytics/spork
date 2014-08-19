@@ -77,14 +77,14 @@ public class NativeMapReduceOper extends MapReduceOper {
         RunJarSecurityManager secMan = new RunJarSecurityManager();
         try {
             RunJar.main(getNativeMRParams());
-            PigStatsUtil.addNativeJobStats(PigStats.get(), this, true);
+            //PigStatsUtil.addNativeJobStats(PigStats.get(), this, true);
         } catch (SecurityException se) {
             if(secMan.getExitInvoked()) {
                 if(secMan.getExitCode() != 0) {
                     throw new JobCreationException("Native job returned with non-zero return code");
                 }
                 else {
-                    PigStatsUtil.addNativeJobStats(PigStats.get(), this, true);
+                    //PigStatsUtil.addNativeJobStats(PigStats.get(), this, true);
                 }
             }
         } catch (Throwable t) {

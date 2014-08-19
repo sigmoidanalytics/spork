@@ -422,10 +422,18 @@ sub getPigCmd($$$)
            $additionalJavaParams .= " -Dmapred.local.dir=$hadoopTmpDir -Dmapreduce.cluster.local.dir=$hadoopTmpDir";
         }
         TestDriver::dbg("Additional java parameters: [$additionalJavaParams].\n");
-
-        push(@pigCmd, ("-x", "local"));
+	if(index(@pigCmd[0], "spork") != -1){
+                push(@pigCmd, ("-x", "spark"));
+        }
+        else {
+                push(@pigCmd, ("-x", "local"));
+        }
     }
-
+    else {
+	if(index(@pigCmd[0], "spork") != -1){
+		push(@pigCmd, ("-x", "spark"));
+	}
+    }
     if (defined($testCmd->{'java_params'}) || defined($additionalJavaParams)) {
         if (defined($testCmd->{'java_params'})) {
 	   $ENV{'PIG_OPTS'} = join(" ", @{$testCmd->{'java_params'}}, $additionalJavaParams);
