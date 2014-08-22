@@ -155,7 +155,6 @@ public class SparkLauncher extends Launcher {
 
             String sparkHome = System.getenv("SPARK_HOME"); // It's okay if this is null for local mode
             String sparkJarsSetting = System.getenv("SPARK_JARS");
-            //sparkJarsSetting="/Users/kamal/codePlay/pig/build/pig-0.13.1-SNAPSHOT-withdependencies.jar";
             String pigJar = System.getenv("SPARK_PIG_JAR");
             if(pigJar == null) {
                 pigJar = "build/pig-0.12.0-SNAPSHOT-withouthadoop.jar";
