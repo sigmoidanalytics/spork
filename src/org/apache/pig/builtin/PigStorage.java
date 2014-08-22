@@ -67,6 +67,7 @@ import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigSplit;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigTextInputFormat;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigTextOutputFormat;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
+import org.apache.pig.backend.hadoop.executionengine.spark.BroadCastClient;
 import org.apache.pig.bzip2r.Bzip2TextInputFormat;
 import org.apache.pig.data.DataByteArray;
 import org.apache.pig.data.Tuple;
@@ -156,6 +157,9 @@ LoadPushDown, LoadMetadata, StoreMetadata, OverwritableStoreFunc {
     protected boolean[] mRequiredColumns = null;
     private boolean mRequiredColumnsInitialized = false;
 
+    // For the TCPServer
+    public static boolean[] required_fields;
+    
     // Indicates whether the input file name/path should be read.
     private boolean tagFile = false;
     private static final String TAG_SOURCE_FILE = "tagFile";
@@ -240,8 +244,24 @@ LoadPushDown, LoadMetadata, StoreMetadata, OverwritableStoreFunc {
         if (!mRequiredColumnsInitialized) {
             if (signature!=null) {
                 Properties p = UDFContext.getUDFContext().getUDFProperties(this.getClass());
-                mRequiredColumns = (boolean[])ObjectSerializer.deserialize(p.getProperty(signature));
-            }
+                mRequiredColumns = (boolean[])ObjectSerializer.deserialize(p.getProperty(signature));                
+
+                /* Get the required columns from TCPServer*/
+                if(mRequiredColumns == null){
+                    try{
+                        
+                        BroadCastClient bcc  = new BroadCastClient(System.getenv("BROADCAST_MASTER_IP"), Integer.parseInt(System.getenv("BROADCAST_PORT")));
+                        boolean[] response = (boolean[]) bcc.getBroadCastMessage("require_fields");
+                        mRequiredColumns = response;
+                                                
+
+                    }catch(Exception e){ e.printStackTrace(); }
+
+                }
+
+                /* TCPServer Hack Ends */                
+            }            
+            
             mRequiredColumnsInitialized = true;
         }
         //Prepend input source path if source tagging is enabled
@@ -391,6 +411,19 @@ LoadPushDown, LoadMetadata, StoreMetadata, OverwritableStoreFunc {
                 if (rf.getIndex()!=-1)
                     mRequiredColumns[rf.getIndex()] = true;
             }
+            
+
+            /* For the TCPServer */
+
+            try{
+
+                required_fields = mRequiredColumns;
+
+            }catch(Exception e){ e.printStackTrace(); }
+
+
+            /* TCPServer Hack ends */
+
             Properties p = UDFContext.getUDFContext().getUDFProperties(this.getClass());
             try {
                 p.setProperty(signature, ObjectSerializer.serialize(mRequiredColumns));

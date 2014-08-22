@@ -111,7 +111,7 @@ public class SparkLauncher extends Launcher {
 
         bcaster = new BroadCastServer();
         bcaster.startBroadcastServer(Integer.parseInt(System.getenv("BROADCAST_PORT")));
-        //bcaster.addResource("require_fields", PigStorage.required_fields);
+        bcaster.addResource("require_fields", PigStorage.required_fields);
 
         startSparkIfNeeded();
 
