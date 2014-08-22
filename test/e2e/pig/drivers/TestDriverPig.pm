@@ -433,7 +433,13 @@ sub getPigCmd($$$)
         }
         TestDriver::dbg("Additional java parameters: [$additionalJavaParams].\n");
 
-        push(@pigCmd, ("-x", "local"));
+        
+		if(index(@pigCmd[0], "spork") != -1){
+           	push(@pigCmd, ("-x", "spark"));
+    	}
+    	else {
+           	push(@pigCmd, ("-x", "local"));
+    	}
     }
 
     if (defined($testCmd->{'java_params'}) || defined($additionalJavaParams)) {
