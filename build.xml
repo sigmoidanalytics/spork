@@ -940,7 +940,7 @@
         <ant dir="${test.e2e.dir}" target="undeploy"/>
     </target>
 
-    <target name="test-e2e-local" depends="jar, jar-withouthadoop, piggybank" description="run end-to-end tests in local mode">
+    <target name="test-e2e-local" depends="" description="run end-to-end tests in local mode">
         <ant dir="${test.e2e.dir}" target="test-local"/>
     </target>
 

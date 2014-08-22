@@ -54,6 +54,20 @@ this="$bin/$script"
 # the root of the Pig installation
 export PIG_HOME=`dirname "$this"`/..
 
+export PIG_CLASSPATH=$PIG_HOME/build/ivy/lib/Pig/netty-3.6.6.Final.jar:$PIG_HOME/pig-withouthadoop-h1.jar:$PIG_HOME/lib/spark/mesos-0.9.0.jar:$PIG_HOME/build/ivy/lib/Pig/*:$HADOOP_CONF_DIR:$PIG_HOME/conf:$PIG_HOME/test/e2e/pig/testdist/lib/java/testudf.jar
+export SPARK_JARS="$PIG_HOME/pig-h1.jar"
+export SPARK_PIG_JAR=$PIG_HOME/pig-h1.jar
+export SPARK_MASTER=local[2]
+
+export SPARK_WORKER_CORES=2
+export SPARK_WORKER_MEMORY=512m
+export SPARK_MEM=512m
+export SPARK_WORKER_INSTANCES=1
+
+export BROADCAST_MASTER_IP="127.0.0.1"
+export BROADCAST_PORT="6000"
+
+
 #check to see if the conf dir is given as an optional argument
 if [ $# -gt 1 ]
 then
