@@ -21,6 +21,7 @@ import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.EndOfA
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.MROperPlan;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.POPackageAnnotator;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.expressionOperators.POUserFunc;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POCache;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.PODistinct;
@@ -56,6 +57,7 @@ import org.apache.pig.data.SchemaTupleBackend;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.plan.OperatorKey;
+import org.apache.pig.impl.util.UDFContext;
 import org.apache.pig.tools.pigstats.PigStats;
 import org.apache.pig.tools.pigstats.SparkStats;
 import org.apache.pig.builtin.PigStorage;
@@ -82,6 +84,8 @@ public class SparkLauncher extends Launcher {
     // An object that handle cache calls in the operator graph. This is again static because we want
     // it to be shared across SparkLaunchers. It gets cleared whenever we close the SparkContext.
     private static CacheConverter cacheConverter = null;
+    
+    //public static Configuration jc;
 
     @Override
     public PigStats launchPig(PhysicalPlan physicalPlan, String grpName, PigContext pigContext) throws Exception {
@@ -104,7 +108,7 @@ public class SparkLauncher extends Launcher {
         
         
        
-
+        
         EndOfAllInputSetter checker = new EndOfAllInputSetter(plan);
         checker.visit();
 /////////
@@ -120,7 +124,10 @@ public class SparkLauncher extends Launcher {
         bcaster = new BroadCastServer();
         bcaster.startBroadcastServer(Integer.parseInt(System.getenv("BROADCAST_PORT")));
         bcaster.addResource("require_fields", PigStorage.required_fields);
-
+        bcaster.addResource("required_property", POUserFunc.required_property);
+        //bcaster.addResource("jc", jc);
+        
+        //jc = c;
         startSparkIfNeeded();
 
         // initialize the supported converters

@@ -19,11 +19,14 @@ package org.apache.pig.impl.util;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.net.ConnectException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Properties;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.pig.backend.hadoop.executionengine.spark.BroadCastClient;
+import org.jruby.javasupport.Java;
 
 public class UDFContext {
     
@@ -130,6 +133,7 @@ public class UDFContext {
             p = new Properties();
             udfConfs.put(k, p);
         }
+        
         return p;
     }
 
@@ -156,12 +160,30 @@ public class UDFContext {
      * function.
      */
     @SuppressWarnings("rawtypes")
-    public Properties getUDFProperties(Class c) {
+    public Properties getUDFProperties(Class c){
         UDFContextKey k = generateKey(c, null);
         Properties p = udfConfs.get(k);
         if (p == null) {
             p = new Properties();
             udfConfs.put(k, p);
+        }
+        if(p.isEmpty())// && c == org.apache.pig.test.udf.evalfunc.UDFContextTestUDF.class)
+        {
+        	BroadCastClient bcc  = new BroadCastClient(System.getenv("BROADCAST_MASTER_IP"), Integer.parseInt(System.getenv("BROADCAST_PORT")));
+            Properties response = (Properties) bcc.getBroadCastMessage("required_property");
+            if(response != null)
+            	p = response;
+                   
+        /*
+        try {
+        	BroadCastClient bcc  = new BroadCastClient(System.getenv("BROADCAST_MASTER_IP"), Integer.parseInt(System.getenv("BROADCAST_PORT")));
+            Properties response = (Properties) bcc.getBroadCastMessage("required_property");
+            p = response;
+            } catch (RuntimeException ex){
+            	p = new Properties();
+            	udfConfs.put(k, p);
+            }
+         */   
         }
         return p;
     }
