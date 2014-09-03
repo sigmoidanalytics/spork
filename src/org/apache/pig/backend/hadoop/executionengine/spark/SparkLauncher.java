@@ -12,9 +12,11 @@ import com.google.common.collect.Lists;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.mapred.jobcontrol.JobControl;
 import org.apache.pig.Main;
 import org.apache.pig.PigConstants;
 import org.apache.pig.PigException;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.JobControlCompiler;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.Launcher;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRCompiler;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.NativeMapReduceOper;
@@ -25,6 +27,7 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOpera
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.expressionOperators.POUserFunc;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POCache;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POCollectedGroup;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.PODistinct;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POFilter;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POForEach;
@@ -37,9 +40,11 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOpe
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSort;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSplit;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStream;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POUnion;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.util.PlanHelper;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.CacheConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.CollectedGroupConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.DistinctConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.FilterConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.ForEachConverter;
@@ -53,6 +58,8 @@ import org.apache.pig.backend.hadoop.executionengine.spark.converter.PackageConv
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.SortConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.SplitConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.StoreConverter;
+//import org.apache.pig.backend.hadoop.executionengine.spark.converter.StreamConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.StreamConverterMain;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.UnionConverter;
 import org.apache.pig.data.SchemaTupleBackend;
 import org.apache.pig.data.Tuple;
@@ -81,6 +88,8 @@ public class SparkLauncher extends Launcher {
     private static SparkContext sparkContext = null;
 
     public static BroadCastServer bcaster;
+    
+    public static PhysicalPlan pp;
 
     // An object that handle cache calls in the operator graph. This is again static because we want
     // it to be shared across SparkLaunchers. It gets cleared whenever we close the SparkContext.
@@ -101,6 +110,7 @@ public class SparkLauncher extends Launcher {
         MRCompiler mrCompiler = new MRCompiler(physicalPlan, pigContext);
         mrCompiler.compile();
         MROperPlan plan = mrCompiler.getMRPlan();
+        
         POPackageAnnotator pkgAnnotator = new POPackageAnnotator(plan);
         pkgAnnotator.visit();
 //        // this one: not sure
@@ -113,6 +123,14 @@ public class SparkLauncher extends Launcher {
         EndOfAllInputSetter checker = new EndOfAllInputSetter(plan);
         checker.visit();
 /////////
+        //For Stream
+        /*EndOfAllInputSetter checker = new EndOfAllInputSetter(plan);
+        checker.visit();        
+        MROperPlan mrp = plan;        
+        JobControlCompiler jcc = new JobControlCompiler(pigContext, c);
+        JobControl jc = jcc.compile(mrp, grpName);
+        */
+        
 
         if(System.getenv("BROADCAST_PORT").length() == 0 || System.getenv("BROADCAST_MASTER_IP").length() == 0){
 
@@ -122,11 +140,14 @@ public class SparkLauncher extends Launcher {
 
         }
 
-        bcaster = new BroadCastServer();
-        bcaster.startBroadcastServer(Integer.parseInt(System.getenv("BROADCAST_PORT")));
-        bcaster.addResource("require_fields", PigStorage.required_fields);
-        bcaster.addResource("required_property", POUserFunc.required_property);
-
+        if(bcaster == null){
+        	
+        	bcaster = Main.bcaster;
+            //bcaster.startBroadcastServer(Integer.parseInt(System.getenv("BROADCAST_PORT")));
+            bcaster.addResource("require_fields", PigStorage.required_fields);
+	        bcaster.addResource("required_property", POUserFunc.required_property);
+        }
+        
         startSparkIfNeeded();
 
         // initialize the supported converters
@@ -147,7 +168,9 @@ public class SparkLauncher extends Launcher {
         convertMap.put(POSort.class, new SortConverter());
         convertMap.put(POSplit.class, new SplitConverter());
         convertMap.put(PONative.class, new NativeConverter());
-
+        convertMap.put(POStream.class, new StreamConverterMain(pigContext, physicalPlan, sparkContext));
+        convertMap.put(POCollectedGroup.class, new CollectedGroupConverter());
+        
         Map<OperatorKey, RDD<Tuple>> rdds = new HashMap<OperatorKey, RDD<Tuple>>();
 
         SparkStats stats = new SparkStats();

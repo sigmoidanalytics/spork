@@ -7,13 +7,20 @@ import java.io.DataOutputStream;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.OutputStream;
+import java.io.Serializable;
 
 /* TCPClient to receive Objects from TCPServer */
 
-public class BroadCastClient {
+public class BroadCastClient implements Serializable{
 
 	private String host;
 	private int port;
+	
+	private Socket client;
+	Object response=null;
+	OutputStream outToServer;
+	DataOutputStream out;
+	ObjectInputStream inFromServer;
 	
 	public BroadCastClient(String host, int port){
 
@@ -24,22 +31,24 @@ public class BroadCastClient {
 
 	public Object getBroadCastMessage(String request){
 
-		Object response=null;
 		
 		try{
 			
 			System.out.println("Connecting to " + host
 					+ " on port " + port);
-			Socket client = new Socket(host, port);
+			client = new Socket(host, port);
 			
-			OutputStream outToServer = client.getOutputStream();
-			DataOutputStream out = new DataOutputStream(outToServer);
+			outToServer = client.getOutputStream();
+			out = new DataOutputStream(outToServer);
 
 			out.writeUTF(request);
-			ObjectInputStream inFromServer = new ObjectInputStream(client.getInputStream());
+			inFromServer = new ObjectInputStream(client.getInputStream());
 			
 			response = inFromServer.readObject();
 			System.out.println("Server says " + response);
+			
+			outToServer.close();
+			out.close();
 			client.close();			
 			
 		}catch(Exception e){

@@ -32,7 +32,11 @@ import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.pig.LoadFunc;
+import org.apache.pig.Main;
 import org.apache.pig.backend.hadoop.datastorage.ConfigurationUtil;
+import org.apache.pig.backend.hadoop.executionengine.spark.BroadCastClient;
+import org.apache.pig.backend.hadoop.executionengine.spark.BroadCastServer;
+import org.apache.pig.backend.hadoop.executionengine.spark.SparkLauncher;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.io.FileSpec;
 import org.apache.pig.impl.util.ObjectSerializer;
@@ -97,6 +101,11 @@ public class PigRecordReader extends RecordReader<Text, Tuple> {
 
     private long recordCount = 0;
     
+    BroadCastClient bClient = new BroadCastClient(System.getenv("BROADCAST_MASTER_IP"), Integer.parseInt(System.getenv("BROADCAST_PORT")));
+    Object ocurrent_count;
+    BroadCastServer bServer = Main.bcaster;
+    long current_count;
+    
     /**
      * the Configuration object with data specific to the input the underlying
      * RecordReader will process (this is obtained after a 
@@ -157,7 +166,22 @@ public class PigRecordReader extends RecordReader<Text, Tuple> {
         if (inputRecordCounter != null && curValue != null) {
             inputRecordCounter.increment(1);            
         }
-       
+        /*try{
+        	//BroadCastClient bClient = new BroadCastClient(System.getenv("BROADCAST_MASTER_IP"), Integer.parseInt(System.getenv("BROADCAST_PORT")));
+        	ocurrent_count = bClient.getBroadCastMessage("current_count");
+        	
+        	if(ocurrent_count !=null){
+        		current_count = (long) ocurrent_count;
+        		current_count = current_count + 1;                
+                bServer.addResource("current_count", current_count);
+               
+        	}
+            
+        }catch(Exception e){
+        	System.out.println("Crashhh in RecordReader :" + e);
+        	e.printStackTrace();
+        }*/
+        
         return curValue;
     }
 
@@ -209,7 +233,14 @@ public class PigRecordReader extends RecordReader<Text, Tuple> {
             startNanos = System.nanoTime();
         }
         while ((curReader == null) || (curValue = loadfunc.getNext()) == null) {
-            if (!initNextRecordReader()) {
+        	try{
+            	BroadCastServer bs = Main.bcaster; 
+            	long ccount = 0;            
+            	bs.addResource("current_count", ccount);
+            }catch(Exception e){
+            	e.printStackTrace();
+            }
+        	if (!initNextRecordReader()) {
               return false;
             }
         }
