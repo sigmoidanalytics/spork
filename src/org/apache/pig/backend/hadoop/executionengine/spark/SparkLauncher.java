@@ -29,6 +29,7 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.Physica
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POCache;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POCollectedGroup;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.PODistinct;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POFRJoin;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POFilter;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POForEach;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POGlobalRearrange;
@@ -42,10 +43,13 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOpe
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStream;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POUnion;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POMergeJoin;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSkewedJoin;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.util.PlanHelper;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.CacheConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.CollectedGroupConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.DistinctConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.FRJoinConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.FilterConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.ForEachConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.GlobalRearrangeConverter;
@@ -61,6 +65,8 @@ import org.apache.pig.backend.hadoop.executionengine.spark.converter.StoreConver
 //import org.apache.pig.backend.hadoop.executionengine.spark.converter.StreamConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.StreamConverterMain;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.UnionConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.MergeJoinConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.SkewedJoinConverter;
 import org.apache.pig.data.SchemaTupleBackend;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.PigContext;
@@ -69,7 +75,6 @@ import org.apache.pig.impl.util.UDFContext;
 import org.apache.pig.tools.pigstats.PigStats;
 import org.apache.pig.tools.pigstats.SparkStats;
 import org.apache.pig.builtin.PigStorage;
-
 import org.apache.spark.rdd.RDD;
 import org.apache.spark.scheduler.JobLogger;
 import org.apache.spark.scheduler.StatsReportListener;
@@ -170,6 +175,9 @@ public class SparkLauncher extends Launcher {
         convertMap.put(PONative.class, new NativeConverter());
         convertMap.put(POStream.class, new StreamConverterMain(pigContext, physicalPlan, sparkContext));
         convertMap.put(POCollectedGroup.class, new CollectedGroupConverter());
+        convertMap.put(POMergeJoin.class, new MergeJoinConverter());
+        convertMap.put(POSkewedJoin.class, new SkewedJoinConverter());
+        convertMap.put(POFRJoin.class, new FRJoinConverter());
         
         Map<OperatorKey, RDD<Tuple>> rdds = new HashMap<OperatorKey, RDD<Tuple>>();
 
@@ -229,10 +237,6 @@ public class SparkLauncher extends Launcher {
             }
             System.setProperty("spark.cores.max", "1" );
             System.setProperty("spark.executor.memory", "" + "1g");
-	    System.setProperty("spark.storage.blockManagerTimeoutIntervalMs", "6000000");
-	    System.setProperty("spark.broadcast.factory","org.apache.spark.broadcast.TorrentBroadcastFactory");
-	    System.setProperty("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
-
             JavaSparkContext javaContext = new JavaSparkContext(master, "Spork", sparkHome, jars.toArray(new String[jars.size()]));
             sparkContext = javaContext.sc();
             sparkContext.addSparkListener(new StatsReportListener());
