@@ -17,9 +17,12 @@ import org.apache.pig.PigConstants;
 import org.apache.pig.PigException;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.Launcher;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRCompiler;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.NativeMapReduceOper;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.EndOfAllInputSetter;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.MROperPlan;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.POPackageAnnotator;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.expressionOperators.POUserFunc;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POCache;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.PODistinct;
@@ -29,6 +32,7 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOpe
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLimit;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLoad;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLocalRearrange;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.PONative;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPackage;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSort;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSplit;
@@ -43,6 +47,7 @@ import org.apache.pig.backend.hadoop.executionengine.spark.converter.GlobalRearr
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.LimitConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.LoadConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.LocalRearrangeConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.NativeConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.POConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.PackageConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.SortConverter;
@@ -53,6 +58,7 @@ import org.apache.pig.data.SchemaTupleBackend;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.plan.OperatorKey;
+import org.apache.pig.impl.util.UDFContext;
 import org.apache.pig.tools.pigstats.PigStats;
 import org.apache.pig.tools.pigstats.SparkStats;
 import org.apache.pig.builtin.PigStorage;
@@ -79,6 +85,8 @@ public class SparkLauncher extends Launcher {
     // An object that handle cache calls in the operator graph. This is again static because we want
     // it to be shared across SparkLaunchers. It gets cleared whenever we close the SparkContext.
     private static CacheConverter cacheConverter = null;
+    
+    //public static Configuration jc;
 
     @Override
     public PigStats launchPig(PhysicalPlan physicalPlan, String grpName, PigContext pigContext) throws Exception {
@@ -98,7 +106,12 @@ public class SparkLauncher extends Launcher {
 //        // this one: not sure
 //        KeyTypeDiscoveryVisitor kdv = new KeyTypeDiscoveryVisitor(plan);
 //        kdv.visit();
-
+        
+        
+       
+        
+        EndOfAllInputSetter checker = new EndOfAllInputSetter(plan);
+        checker.visit();
 /////////
 
         if(System.getenv("BROADCAST_PORT").length() == 0 || System.getenv("BROADCAST_MASTER_IP").length() == 0){
@@ -109,14 +122,11 @@ public class SparkLauncher extends Launcher {
 
         }
 
-        if(bcaster == null){
-        	
-        	bcaster = Main.bcaster;
-            //bcaster.startBroadcastServer(Integer.parseInt(System.getenv("BROADCAST_PORT")));
-            bcaster.addResource("require_fields", PigStorage.required_fields);
+        bcaster = new BroadCastServer();
+        bcaster.startBroadcastServer(Integer.parseInt(System.getenv("BROADCAST_PORT")));
+        bcaster.addResource("require_fields", PigStorage.required_fields);
+        bcaster.addResource("required_property", POUserFunc.required_property);
 
-        }
-        
         startSparkIfNeeded();
 
         // initialize the supported converters
@@ -136,6 +146,7 @@ public class SparkLauncher extends Launcher {
         convertMap.put(POUnion.class, new UnionConverter(sparkContext));
         convertMap.put(POSort.class, new SortConverter());
         convertMap.put(POSplit.class, new SplitConverter());
+        convertMap.put(PONative.class, new NativeConverter());
 
         Map<OperatorKey, RDD<Tuple>> rdds = new HashMap<OperatorKey, RDD<Tuple>>();
 
@@ -241,6 +252,10 @@ public class SparkLauncher extends Launcher {
 
         if (POStore.class.equals(physicalOperator.getClass())) {
             return;
+        }
+        
+        if (PONative.class.equals(physicalOperator.getClass())) {
+        	return;
         }
 
         if (nextRDD == null) {

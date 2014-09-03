@@ -41,6 +41,7 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOpera
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.Result;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhyPlanVisitor;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.util.MonitoredUDFExecutor;
+import org.apache.pig.backend.hadoop.executionengine.spark.BroadCastClient;
 import org.apache.pig.builtin.MonitoredUDF;
 import org.apache.pig.data.DataType;
 import org.apache.pig.data.SchemaTupleClassGenerator.GenContext;
@@ -75,6 +76,7 @@ public class POUserFunc extends ExpressionOperator {
     public static final byte INITIAL = 0;
     public static final byte INTERMEDIATE = 1;
     public static final byte FINAL = 2;
+    public static Properties required_property;
     private boolean initialized = false;
     private MonitoredUDFExecutor executor = null;
 
@@ -127,7 +129,10 @@ public class POUserFunc extends ExpressionOperator {
         this.setSignature(signature);
         Properties props = UDFContext.getUDFContext().getUDFProperties(func.getClass());
     	Schema tmpS=(Schema)props.get("pig.evalfunc.inputschema."+signature);
-
+    	if(!props.isEmpty())
+    	{
+    		required_property = props;
+    	}
     	if(tmpS!=null)
     		this.func.setInputSchema(tmpS);
         if (func.getClass().isAnnotationPresent(MonitoredUDF.class)) {
