@@ -430,7 +430,11 @@ sub getPigCmd($$$)
         } else {
             push(@pigCmd, ("-x", "local"));
         }
-    }
+    } else {
+		if(index(@pigCmd[0], "spork") != -1) {
+			push(@pigCmd, ("-x", "spark"));
+        }
+	}
 
     if (defined($testCmd->{'java_params'}) || defined($additionalJavaParams)) {
         if (defined($testCmd->{'java_params'})) {
