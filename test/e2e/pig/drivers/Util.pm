@@ -253,12 +253,6 @@ sub getPigCmd
             # use user provided jar
                 my $classpath;
 
-				if (defined $properties->{'jythonjar'}) {
-					$classpath = "$classpath:" . $properties->{'jythonjar'};
-				}
-				if (defined $properties->{'jrubyjar'}) {
-					$classpath = "$classpath:" . $properties->{'jrubyjar'};
-				}
                 if( $properties->{'exectype'} eq "local") {
                    # in local mode, we should not use
                    # any hadoop-site.xml
@@ -466,4 +460,15 @@ sub isWindows
         return 0;
     }
 }
+
+sub isCygwin
+{
+    if($^O =~ /cygwin/i) {
+        return 1;
+    }
+    else {
+        return 0;
+    }
+}
+
 1;

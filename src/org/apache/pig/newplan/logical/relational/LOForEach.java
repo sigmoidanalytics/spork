@@ -61,8 +61,19 @@ public class LOForEach extends LogicalRelationalOperator {
     @Override
     public LogicalSchema getSchema() throws FrontendException {
         List<Operator> ll = innerPlan.getSinks();
-        if (ll != null) {
-            schema = ((LogicalRelationalOperator)ll.get(0)).getSchema();
+        LogicalRelationalOperator generate = null;
+        // We can assume LOGenerate is the only sink of the inner plan, but
+        // only after DanglingNestedNodeRemover. LOForEach.getSchema will be
+        // run before DanglingNestedNodeRemover, so need to make sure we do
+        // get LOGenerate
+        for (Operator op : ll) {
+            if (op instanceof LOGenerate) {
+                generate = (LogicalRelationalOperator)op;
+                break;
+            }
+        }
+        if (generate != null) {
+            schema = generate.getSchema();
         }
         
         return schema;
@@ -77,44 +88,25 @@ public class LOForEach extends LogicalRelationalOperator {
     }
     
     // Find the LOInnerLoad of the inner plan corresponding to the project, and 
-    // also find whether there is a LOForEach in inner plan along the way
+    // also find whether there is a relational operator in inner plan along the way
     public static Pair<List<LOInnerLoad>, Boolean> findReacheableInnerLoadFromBoundaryProject(ProjectExpression project) throws FrontendException {
         boolean needNewUid = false;
-        LogicalRelationalOperator referred = project.findReferent();
-        // If it is nested foreach, generate new uid
-        if (referred instanceof LOForEach)
-            needNewUid = true;
-        List<Operator> srcs = referred.getPlan().getSources();
         List<LOInnerLoad> innerLoads = new ArrayList<LOInnerLoad>();
-        for (Operator src:srcs) {
-            if (src instanceof LOInnerLoad) {
-            	if( src == referred ) {
-            		innerLoads.add( (LOInnerLoad)src );
-            		continue;
-            	}
-            	
-            	Deque<Operator> stack = new LinkedList<Operator>();
-                List<Operator> succs = referred.getPlan().getSuccessors( src );
-                if( succs != null ) {
-                	for( Operator succ : succs ) {
-                		stack.push( succ );
-                	}
-                }
-                
-                while( !stack.isEmpty() ) {
-                	Operator op = stack.pop();
-                    if( op == referred ) {
-                        innerLoads.add((LOInnerLoad)src);
-                        break;
-                    }
-                    else {
-                    	List<Operator> ops = referred.getPlan().getSuccessors( op );
-                    	if( ops != null ) {
-                        	for( Operator o : ops ) {
-                        		stack.push( o );
-                        	}
-                    	}
-                    }
+        LogicalRelationalOperator referred = project.findReferent();
+        Deque<Operator> stack = new LinkedList<Operator>();
+        stack.add(referred);
+        while( !stack.isEmpty() ) {
+            Operator op = stack.pop();
+            if (op instanceof LOInnerLoad) {
+                innerLoads.add((LOInnerLoad)op);
+            }
+            else if (!(op instanceof LOGenerate)) {
+                needNewUid = true;
+            }
+            List<Operator> ops = referred.getPlan().getPredecessors( op );
+            if( ops != null ) {
+                for( Operator o : ops ) {
+                    stack.push( o );
                 }
             }
         }

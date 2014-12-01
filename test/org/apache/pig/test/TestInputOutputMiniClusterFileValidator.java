@@ -30,7 +30,6 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Iterator;
 
-import org.apache.pig.ExecType;
 import org.apache.pig.FuncSpec;
 import org.apache.pig.PigException;
 import org.apache.pig.PigServer;
@@ -49,21 +48,21 @@ import org.apache.pig.impl.util.LogUtils;
 import org.apache.pig.newplan.logical.relational.LOLoad;
 import org.apache.pig.newplan.logical.relational.LOStore;
 import org.apache.pig.newplan.logical.relational.LogicalPlan;
-import org.apache.pig.newplan.logical.rules.InputOutputFileValidator;
+import org.apache.pig.newplan.logical.visitor.InputOutputFileValidatorVisitor;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 
 public class TestInputOutputMiniClusterFileValidator {
-    private static MiniCluster cluster = MiniCluster.buildCluster();
+    private static MiniGenericCluster cluster = MiniGenericCluster.buildCluster();
     private PigServer pig;
     private PigContext ctx;
 
     @Before
     public void setUp() throws Exception {
-        ctx = new PigContext(ExecType.MAPREDUCE, cluster.getProperties());
+        ctx = new PigContext(cluster.getExecType(), cluster.getProperties());
         ctx.connect() ;
-        pig = new PigServer(ExecType.MAPREDUCE, cluster.getProperties());
+        pig = new PigServer(ctx);
     }
 
     @AfterClass
@@ -78,8 +77,8 @@ public class TestInputOutputMiniClusterFileValidator {
 
         LogicalPlan plan = genNewLoadStorePlan(inputfile, outputfile, ctx.getDfs()) ;
 
-        InputOutputFileValidator executor = new InputOutputFileValidator(plan, ctx) ;
-        executor.validate() ;
+        InputOutputFileValidatorVisitor executor = new InputOutputFileValidatorVisitor(plan, ctx) ;
+        executor.visit() ;
     }
 
     @Test
@@ -89,9 +88,9 @@ public class TestInputOutputMiniClusterFileValidator {
 
         LogicalPlan plan = genNewLoadStorePlan(inputfile, outputfile, ctx.getDfs()) ;
 
-        InputOutputFileValidator executor = new InputOutputFileValidator(plan, ctx) ;
+        InputOutputFileValidatorVisitor executor = new InputOutputFileValidatorVisitor(plan, ctx) ;
         try {
-            executor.validate() ;
+            executor.visit() ;
             fail("Excepted to fail.");
         } catch(Exception e) {
             //good
@@ -165,7 +164,6 @@ public class TestInputOutputMiniClusterFileValidator {
     @Test
     public void testValidationNeg() throws Throwable{
 
-        PigServer pig = new PigServer(ExecType.MAPREDUCE,cluster.getProperties());
         try{
             pig.setBatchOn();
             pig.registerQuery("A = load 'inputfile' using PigStorage () as (a:int);");
@@ -219,10 +217,8 @@ public class TestInputOutputMiniClusterFileValidator {
             ctx.getLfs().asElement(fp1.getAbsolutePath());
 
         String path = fp1.getAbsolutePath();
-        if (System.getProperty("os.name").toUpperCase().startsWith("WINDOWS"))
-            path = FileLocalizer.parseCygPath(path, FileLocalizer.STYLE_UNIX);
 
-        ElementDescriptor distribElem = ctx.getDfs().asElement(path) ;
+        ElementDescriptor distribElem = ctx.getDfs().asElement(Util.removeColon(path)) ;
 
         localElem.copy(distribElem, null, false);
 
@@ -234,10 +230,8 @@ public class TestInputOutputMiniClusterFileValidator {
         File fp1 = generateTempFile() ;
 
         String path = fp1.getAbsolutePath();
-        if (System.getProperty("os.name").toUpperCase().startsWith("WINDOWS"))
-            path = FileLocalizer.parseCygPath(path, FileLocalizer.STYLE_UNIX);
 
-        ElementDescriptor distribElem = ctx.getDfs().asElement(path) ;
+        ElementDescriptor distribElem = ctx.getDfs().asElement(Util.removeColon(path)) ;
 
         if (distribElem.exists()) {
             distribElem.delete() ;

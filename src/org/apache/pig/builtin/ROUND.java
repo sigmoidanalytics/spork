@@ -44,7 +44,7 @@ public class ROUND extends EvalFunc<Long>{
 	 */
 	@Override
 	public Long exec(Tuple input) throws IOException {
-        if (input == null || input.size() == 0)
+        if (input == null || input.size() == 0 || input.get(0) == null)
             return null;
 
         try{
@@ -73,5 +73,10 @@ public class ROUND extends EvalFunc<Long>{
         funcList.add(new FuncSpec(DoubleRound.class.getName(),  new Schema(new Schema.FieldSchema(null, DataType.DOUBLE))));
         funcList.add(new FuncSpec(FloatRound.class.getName(),   new Schema(new Schema.FieldSchema(null, DataType.FLOAT))));
         return funcList;
+    }
+
+    @Override
+    public boolean allowCompileTimeCalculation() {
+        return true;
     }
 }

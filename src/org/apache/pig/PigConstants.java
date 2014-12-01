@@ -46,4 +46,17 @@ public class PigConstants {
      * by default, all rules are enabled.
      */
     public static final String PIG_OPTIMIZER_RULES_DISABLED_KEY = "pig.optimizer.rules.disabled";
+
+    /**
+     * Prefix used by pig to configure local mode configuration
+     */
+    public static final String PIG_LOCAL_CONF_PREFIX = "pig.local.";
+
+    /**
+     * Counter names used by pig.udf.profile
+     */
+    public static final String TIME_UDFS_INVOCATION_COUNTER = "approx_invocations";
+    public static final String TIME_UDFS_ELAPSED_TIME_COUNTER = "approx_microsecs";
+
+    public static final String TASK_INDEX = "mapreduce.task.index";
 }

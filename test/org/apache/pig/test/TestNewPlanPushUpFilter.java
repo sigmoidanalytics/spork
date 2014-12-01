@@ -17,13 +17,12 @@
  */
 package org.apache.pig.test;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
-
-import junit.framework.Assert;
 
 import org.apache.pig.ExecType;
 import org.apache.pig.FilterFunc;
@@ -37,7 +36,6 @@ import org.apache.pig.newplan.logical.relational.LOCogroup;
 import org.apache.pig.newplan.logical.relational.LOCross;
 import org.apache.pig.newplan.logical.relational.LODistinct;
 import org.apache.pig.newplan.logical.relational.LOFilter;
-import org.apache.pig.newplan.logical.relational.LOForEach;
 import org.apache.pig.newplan.logical.relational.LOJoin;
 import org.apache.pig.newplan.logical.relational.LOLimit;
 import org.apache.pig.newplan.logical.relational.LOLoad;
@@ -53,15 +51,21 @@ import org.apache.pig.newplan.logical.rules.PushUpFilter;
 import org.apache.pig.newplan.optimizer.PlanOptimizer;
 import org.apache.pig.newplan.optimizer.PlanTransformListener;
 import org.apache.pig.newplan.optimizer.Rule;
-
-import org.junit.Test;
+import org.junit.Assert;
 import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 /**
  * Test the logical optimizer.
  */
 public class TestNewPlanPushUpFilter {
     PigContext pc = new PigContext(ExecType.LOCAL, new Properties());
+
+    @BeforeClass
+    public static void oneTimeSetup() throws Exception {
+        new File("dummy").delete();
+    }
 
     @Before
     public void tearDown() {
@@ -96,8 +100,6 @@ public class TestNewPlanPushUpFilter {
         Operator op = newLogicalPlan.getSources().get(0);
         Assert.assertTrue( op instanceof LOLoad );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue( op instanceof LOForEach );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue( op instanceof LOStore );
         Assert.assertTrue( newLogicalPlan.getSuccessors(op) == null );
     }
@@ -112,8 +114,6 @@ public class TestNewPlanPushUpFilter {
 
         Operator op = newLogicalPlan.getSources().get(0);
         Assert.assertTrue( op instanceof LOLoad );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
@@ -132,8 +132,6 @@ public class TestNewPlanPushUpFilter {
         Operator op = newLogicalPlan.getSources().get( 0 );
         Assert.assertTrue(  op instanceof LOLoad );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOStream );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
@@ -150,8 +148,6 @@ public class TestNewPlanPushUpFilter {
 
         Operator op = newLogicalPlan.getSources().get( 0 );
         Assert.assertTrue(  op instanceof LOLoad );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
@@ -172,8 +168,6 @@ public class TestNewPlanPushUpFilter {
         Operator op = newLogicalPlan.getSources().get( 0 );
         Assert.assertTrue(  op instanceof LOLoad );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOSort );
@@ -192,8 +186,6 @@ public class TestNewPlanPushUpFilter {
 
         Operator op = newLogicalPlan.getSources().get( 0 );
         Assert.assertTrue(  op instanceof LOLoad );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
@@ -214,8 +206,6 @@ public class TestNewPlanPushUpFilter {
         Operator op = newLogicalPlan.getSources().get( 0 );
         Assert.assertTrue(  op instanceof LOLoad );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LODistinct );
@@ -234,8 +224,6 @@ public class TestNewPlanPushUpFilter {
 
         Operator op = newLogicalPlan.getSources().get( 0 );
         Assert.assertTrue(  op instanceof LOLoad );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
@@ -256,8 +244,6 @@ public class TestNewPlanPushUpFilter {
         Operator op = newLogicalPlan.getSources().get( 0 );
         Assert.assertTrue(  op instanceof LOLoad );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LODistinct );
@@ -276,8 +262,6 @@ public class TestNewPlanPushUpFilter {
 
         Operator op = newLogicalPlan.getSources().get( 0 );
         Assert.assertTrue(  op instanceof LOLoad );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
         Assert.assertTrue( ((LOFilter)op).getAlias().equals( "B" ) );
@@ -300,8 +284,6 @@ public class TestNewPlanPushUpFilter {
         Operator op = newLogicalPlan.getSources().get( 0 );
         Assert.assertTrue(  op instanceof LOLoad );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOSplit );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOSplitOutput );
@@ -322,8 +304,6 @@ public class TestNewPlanPushUpFilter {
 
         Operator op = newLogicalPlan.getSources().get( 0 );
         Assert.assertTrue(  op instanceof LOLoad );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOLimit );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
@@ -356,13 +336,9 @@ public class TestNewPlanPushUpFilter {
             loadB = loads.get( 0 );
         }
 
-        Operator foreachA = newLogicalPlan.getSuccessors(loadA).get( 0 );
-        Assert.assertTrue(  foreachA instanceof LOForEach );
-        Operator filterA = newLogicalPlan.getSuccessors(foreachA).get( 0 );
+        Operator filterA = newLogicalPlan.getSuccessors(loadA).get( 0 );
         Assert.assertTrue(  filterA instanceof LOFilter );
-        Operator foreachB = newLogicalPlan.getSuccessors(loadB).get( 0 );
-        Assert.assertTrue(  foreachB instanceof LOForEach );
-        Operator filterB = newLogicalPlan.getSuccessors(foreachB).get( 0 );
+        Operator filterB = newLogicalPlan.getSuccessors(loadB).get( 0 );
         Assert.assertTrue(  filterB instanceof LOFilter );
         
         Operator unionA = newLogicalPlan.getSuccessors( filterA ).get( 0 );
@@ -399,13 +375,9 @@ public class TestNewPlanPushUpFilter {
             loadB = loads.get( 0 );
         }
 
-        Operator foreachA = newLogicalPlan.getSuccessors(loadA).get( 0 );
-        Assert.assertTrue(  foreachA instanceof LOForEach );
-        Operator filterA = newLogicalPlan.getSuccessors(foreachA).get( 0 );
+        Operator filterA = newLogicalPlan.getSuccessors(loadA).get( 0 );
         Assert.assertTrue(  filterA instanceof LOFilter );
-        Operator foreachB = newLogicalPlan.getSuccessors(loadB).get( 0 );
-        Assert.assertTrue(  foreachB instanceof LOForEach );
-        Operator filterB = newLogicalPlan.getSuccessors(foreachB).get( 0 );
+        Operator filterB = newLogicalPlan.getSuccessors(loadB).get( 0 );
         Assert.assertTrue(  filterB instanceof LOFilter );
         
         Operator unionA = newLogicalPlan.getSuccessors( filterA ).get( 0 );
@@ -442,13 +414,9 @@ public class TestNewPlanPushUpFilter {
             loadB = loads.get( 0 );
         }
 
-        Operator foreachA = newLogicalPlan.getSuccessors(loadA).get( 0 );
-        Assert.assertTrue(  foreachA instanceof LOForEach );
-        Operator filterA = newLogicalPlan.getSuccessors(foreachA).get( 0 );
+        Operator filterA = newLogicalPlan.getSuccessors(loadA).get( 0 );
         Assert.assertTrue(  filterA instanceof LOFilter );
-        Operator foreachB = newLogicalPlan.getSuccessors(loadB).get( 0 );
-        Assert.assertTrue(  foreachB instanceof LOForEach );
-        Operator filterB = newLogicalPlan.getSuccessors(foreachB).get( 0 );
+        Operator filterB = newLogicalPlan.getSuccessors(loadB).get( 0 );
         Assert.assertTrue(  filterB instanceof LOFilter );
         
         Operator unionA = newLogicalPlan.getSuccessors( filterA ).get( 0 );
@@ -483,8 +451,6 @@ public class TestNewPlanPushUpFilter {
             op = loads.get( 1 );
 
         op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOCross );
@@ -512,8 +478,6 @@ public class TestNewPlanPushUpFilter {
         else
             op = loads.get( 1 );
 
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
@@ -547,13 +511,9 @@ public class TestNewPlanPushUpFilter {
             loadB = loads.get( 0 );
         }
 
-        Operator foreachA = newLogicalPlan.getSuccessors(loadA).get( 0 );
-        Assert.assertTrue(  foreachA instanceof LOForEach );
-        Operator op = newLogicalPlan.getSuccessors(foreachA).get( 0 );
+        Operator op = newLogicalPlan.getSuccessors(loadA).get( 0 );
         Assert.assertTrue(  op instanceof LOCross );
-        Operator foreachB = newLogicalPlan.getSuccessors(loadB).get( 0 );
-        Assert.assertTrue(  foreachB instanceof LOForEach );
-        op = newLogicalPlan.getSuccessors(foreachB).get( 0 );
+        op = newLogicalPlan.getSuccessors(loadB).get( 0 );
         Assert.assertTrue(  op instanceof LOCross );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
@@ -583,12 +543,8 @@ public class TestNewPlanPushUpFilter {
             loadB = loads.get( 0 );
         }
         Operator op = newLogicalPlan.getSuccessors(loadA).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
         op = newLogicalPlan.getSuccessors(loadB).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOCross );
@@ -614,8 +570,6 @@ public class TestNewPlanPushUpFilter {
         else
             op = loads.get( 1 );
 
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
@@ -648,14 +602,10 @@ public class TestNewPlanPushUpFilter {
             loadB = loads.get( 0 );
         }
 
-        Operator foreachA = newLogicalPlan.getSuccessors(loadA).get( 0 );
-        Assert.assertTrue(  foreachA instanceof LOForEach );
-        Operator filterA = newLogicalPlan.getSuccessors(foreachA).get( 0 );
+        Operator filterA = newLogicalPlan.getSuccessors(loadA).get( 0 );
         Assert.assertTrue(  filterA instanceof LOFilter );
         
-        Operator foreachB = newLogicalPlan.getSuccessors(loadB).get( 0 );
-        Assert.assertTrue(  foreachB instanceof LOForEach );
-        Operator filterB = newLogicalPlan.getSuccessors(foreachB).get( 0 );
+        Operator filterB = newLogicalPlan.getSuccessors(loadB).get( 0 );
         Assert.assertTrue(  filterB instanceof LOFilter );
         
         Operator cogrpA = newLogicalPlan.getSuccessors( filterA ).get( 0 );
@@ -692,14 +642,10 @@ public class TestNewPlanPushUpFilter {
             loadB = loads.get( 0 );
         }
 
-        Operator foreachA = newLogicalPlan.getSuccessors(loadA).get( 0 );
-        Assert.assertTrue(  foreachA instanceof LOForEach );
-        Operator filterA = newLogicalPlan.getSuccessors(foreachA).get( 0 );
+        Operator filterA = newLogicalPlan.getSuccessors(loadA).get( 0 );
         Assert.assertTrue(  filterA instanceof LOFilter );
         
-        Operator foreachB = newLogicalPlan.getSuccessors(loadB).get( 0 );
-        Assert.assertTrue(  foreachB instanceof LOForEach );
-        Operator filterB = newLogicalPlan.getSuccessors(foreachB).get( 0 );
+        Operator filterB = newLogicalPlan.getSuccessors(loadB).get( 0 );
         Assert.assertTrue(  filterB instanceof LOFilter );
         
         Operator cogrpA = newLogicalPlan.getSuccessors( filterA ).get( 0 );
@@ -737,14 +683,10 @@ public class TestNewPlanPushUpFilter {
             loadB = loads.get( 0 );
         }
 
-        Operator foreachA = newLogicalPlan.getSuccessors(loadA).get( 0 );
-        Assert.assertTrue(  foreachA instanceof LOForEach );
-        Operator cogroupA = newLogicalPlan.getSuccessors(foreachA).get( 0 );
+        Operator cogroupA = newLogicalPlan.getSuccessors(loadA).get( 0 );
         Assert.assertTrue(  cogroupA instanceof LOCogroup );
         
-        Operator foreachB = newLogicalPlan.getSuccessors(loadB).get( 0 );
-        Assert.assertTrue(  foreachB instanceof LOForEach );
-        Operator cogroupB = newLogicalPlan.getSuccessors(foreachB).get( 0 );
+        Operator cogroupB = newLogicalPlan.getSuccessors(loadB).get( 0 );
         Assert.assertTrue(  cogroupB instanceof LOCogroup );
         
         Operator filter = newLogicalPlan.getSuccessors( cogroupA ).get( 0 );
@@ -781,14 +723,10 @@ public class TestNewPlanPushUpFilter {
             loadB = loads.get( 0 );
         }
 
-        Operator foreachA = newLogicalPlan.getSuccessors(loadA).get( 0 );
-        Assert.assertTrue(  foreachA instanceof LOForEach );
-        Operator filterA = newLogicalPlan.getSuccessors(foreachA).get( 0 );
+        Operator filterA = newLogicalPlan.getSuccessors(loadA).get( 0 );
         Assert.assertTrue(  filterA instanceof LOFilter );
         
-        Operator foreachB = newLogicalPlan.getSuccessors(loadB).get( 0 );
-        Assert.assertTrue(  foreachB instanceof LOForEach );
-        Operator filterB = newLogicalPlan.getSuccessors(foreachB).get( 0 );
+        Operator filterB = newLogicalPlan.getSuccessors(loadB).get( 0 );
         Assert.assertTrue(  filterB instanceof LOFilter );
         
         Operator cogrpA = newLogicalPlan.getSuccessors( filterA ).get( 0 );
@@ -825,14 +763,10 @@ public class TestNewPlanPushUpFilter {
             loadB = loads.get( 0 );
         }
 
-        Operator foreachA = newLogicalPlan.getSuccessors(loadA).get( 0 );
-        Assert.assertTrue(  foreachA instanceof LOForEach );
-        Operator filterA = newLogicalPlan.getSuccessors(foreachA).get( 0 );
+        Operator filterA = newLogicalPlan.getSuccessors(loadA).get( 0 );
         Assert.assertTrue(  filterA instanceof LOFilter );
         
-        Operator foreachB = newLogicalPlan.getSuccessors(loadB).get( 0 );
-        Assert.assertTrue(  foreachB instanceof LOForEach );
-        Operator filterB = newLogicalPlan.getSuccessors(foreachB).get( 0 );
+        Operator filterB = newLogicalPlan.getSuccessors(loadB).get( 0 );
         Assert.assertTrue(  filterB instanceof LOFilter );
         
         Operator cogrpA = newLogicalPlan.getSuccessors( filterA ).get( 0 );
@@ -869,14 +803,10 @@ public class TestNewPlanPushUpFilter {
             loadB = loads.get( 0 );
         }
 
-        Operator foreachA = newLogicalPlan.getSuccessors(loadA).get( 0 );
-        Assert.assertTrue(  foreachA instanceof LOForEach );
-        Operator cogroupA = newLogicalPlan.getSuccessors(foreachA).get( 0 );
+        Operator cogroupA = newLogicalPlan.getSuccessors(loadA).get( 0 );
         Assert.assertTrue(  cogroupA instanceof LOCogroup );
         
-        Operator foreachB = newLogicalPlan.getSuccessors(loadB).get( 0 );
-        Assert.assertTrue(  foreachB instanceof LOForEach );
-        Operator cogroupB = newLogicalPlan.getSuccessors(foreachB).get( 0 );
+        Operator cogroupB = newLogicalPlan.getSuccessors(loadB).get( 0 );
         Assert.assertTrue(  cogroupB instanceof LOCogroup );
         
         Operator filter = newLogicalPlan.getSuccessors( cogroupA ).get( 0 );
@@ -901,8 +831,6 @@ public class TestNewPlanPushUpFilter {
         Operator op = newLogicalPlan.getSources().get( 0 );
         Assert.assertTrue(  op instanceof LOLoad );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOCogroup );
@@ -921,8 +849,6 @@ public class TestNewPlanPushUpFilter {
 
         Operator op = newLogicalPlan.getSources().get( 0 );
         Assert.assertTrue(  op instanceof LOLoad );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
@@ -943,8 +869,6 @@ public class TestNewPlanPushUpFilter {
         Operator op = newLogicalPlan.getSources().get( 0 );
         Assert.assertTrue(  op instanceof LOLoad );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOCogroup );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
@@ -963,8 +887,6 @@ public class TestNewPlanPushUpFilter {
 
         Operator op = newLogicalPlan.getSources().get( 0 );
         Assert.assertTrue(  op instanceof LOLoad );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
@@ -985,8 +907,6 @@ public class TestNewPlanPushUpFilter {
         Operator op = newLogicalPlan.getSources().get( 0 );
         Assert.assertTrue(  op instanceof LOLoad );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOCogroup );
@@ -1005,8 +925,6 @@ public class TestNewPlanPushUpFilter {
 
         Operator op = newLogicalPlan.getSources().get( 0 );
         Assert.assertTrue(  op instanceof LOLoad );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOCogroup );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
@@ -1037,8 +955,6 @@ public class TestNewPlanPushUpFilter {
             op = loads.get( 1 );
 
         op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOJoin );
@@ -1067,8 +983,6 @@ public class TestNewPlanPushUpFilter {
         else
             op = loads.get( 1 );
 
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
@@ -1099,8 +1013,6 @@ public class TestNewPlanPushUpFilter {
             op = loads.get( 1 );
 
         op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOJoin );
@@ -1130,8 +1042,6 @@ public class TestNewPlanPushUpFilter {
             op = loads.get( 1 );
 
         op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOJoin );
@@ -1155,13 +1065,9 @@ public class TestNewPlanPushUpFilter {
         Assert.assertTrue( loads.get( 0 ) instanceof LOLoad );
         Assert.assertTrue( loads.get( 1 ) instanceof LOLoad );
         Operator op = newLogicalPlan.getSuccessors( loads.get( 0 ) ).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOJoin );
         
         op = newLogicalPlan.getSuccessors( loads.get( 1 ) ).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOJoin );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
@@ -1188,8 +1094,6 @@ public class TestNewPlanPushUpFilter {
         else
             op = loads.get( 1 );
 
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
@@ -1220,8 +1124,6 @@ public class TestNewPlanPushUpFilter {
             op = loads.get( 1 );
 
         op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOJoin );
@@ -1251,8 +1153,6 @@ public class TestNewPlanPushUpFilter {
             op = loads.get( 1 );
 
         op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOJoin );
@@ -1277,12 +1177,8 @@ public class TestNewPlanPushUpFilter {
         Assert.assertTrue( loads.get( 1 ) instanceof LOLoad );
 
         Operator op = newLogicalPlan.getSuccessors( loads.get( 0 ) ).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOJoin );
         op = newLogicalPlan.getSuccessors( loads.get( 1 ) ).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOJoin );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
@@ -1308,8 +1204,6 @@ public class TestNewPlanPushUpFilter {
         else
             op = loads.get( 1 );
 
-        op = newLogicalPlan.getSuccessors(op).get( 0 );
-        Assert.assertTrue(  op instanceof LOForEach );
         op = newLogicalPlan.getSuccessors(op).get( 0 );
         Assert.assertTrue(  op instanceof LOFilter );
         op = newLogicalPlan.getSuccessors(op).get( 0 );

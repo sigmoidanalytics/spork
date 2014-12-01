@@ -159,6 +159,11 @@ public class PushDownForEachFlatten extends Rule {
                     for( int i = 0; i < preds.size(); i++ ) {
                         Operator op = preds.get( i );
                         if( op == foreach ) {
+                            // Don't optimize if the flattened side is outer side of an outer join
+                            // See PIG-3826
+                            if (join.getInnerFlags()[i]==false) {
+                                return false;
+                            }
                             Collection<LogicalExpressionPlan> exprs = join.getJoinPlan( i );
                             for( LogicalExpressionPlan expr : exprs ) {
                                 List<ProjectExpression> projs = getProjectExpressions( expr );
@@ -260,6 +265,7 @@ public class PushDownForEachFlatten extends Rule {
                                 fieldsToBeFlattaned.add(fieldCount);
                                 if (gen.getUserDefinedSchema()!=null && gen.getUserDefinedSchema().get(i)!=null) {
                                     cachedUserDefinedSchema.put(fieldCount, gen.getUserDefinedSchema().get(i));
+                                    cachedUserDefinedSchema.get(fieldCount).mergeUid(gen.getOutputPlanSchemas().get(i));
                                     gen.getUserDefinedSchema().set(i, null);
                                 }
                                 fieldCount++;

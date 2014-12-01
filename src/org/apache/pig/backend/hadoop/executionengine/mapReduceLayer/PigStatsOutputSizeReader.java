@@ -30,20 +30,22 @@ import org.apache.pig.classification.InterfaceStability;
  * HBaseStorage), the output size cannot always be computed as the total size of
  * output files.
  *
- * @see FileBasedOutputSizeReader 
+ * @see FileBasedOutputSizeReader
  */
 @InterfaceAudience.Public
 @InterfaceStability.Evolving
 public interface PigStatsOutputSizeReader {
 
     static final String OUTPUT_SIZE_READER_KEY = "pig.stats.output.size.reader";
+    static final String OUTPUT_SIZE_READER_UNSUPPORTED = "pig.stats.output.size.reader.unsupported";
 
-    /** 
+    /**
      * Returns whether the given PSStore is supported by this output size reader
      * or not.
      * @param sto POStore
+     * @param conf Configuration
      */
-    public boolean supports(POStore sto);
+    public boolean supports(POStore sto, Configuration conf);
 
     /**
      * Returns the size of output in bytes. If the size of output cannot be

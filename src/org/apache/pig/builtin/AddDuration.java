@@ -71,7 +71,7 @@ public class AddDuration extends EvalFunc<DateTime> {
 
     @Override
     public DateTime exec(Tuple input) throws IOException {
-        if (input == null || input.size() < 2) {
+        if (input == null || input.size() < 2 || input.get(0) == null || input.get(1) == null) {
             return null;
         }
         
@@ -91,5 +91,10 @@ public class AddDuration extends EvalFunc<DateTime> {
         s.add(new Schema.FieldSchema(null, DataType.CHARARRAY));
         funcList.add(new FuncSpec(this.getClass().getName(), s));
         return funcList;
+    }
+
+    @Override
+    public boolean allowCompileTimeCalculation() {
+        return true;
     }
 }

@@ -30,10 +30,11 @@ import org.apache.pig.impl.util.IdentityHashSet;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.pig.backend.executionengine.ExecException;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRExecutionEngine;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLoad;
-import org.apache.pig.backend.hadoop.executionengine.HExecutionEngine;
+
 
 import org.apache.pig.data.DataBag;
 import org.apache.pig.data.Tuple;
@@ -66,7 +67,7 @@ public class ExampleGenerator {
 
     PhysicalPlan physPlan;
     PhysicalPlanResetter physPlanReseter;
-    private HExecutionEngine execEngine;
+    private MRExecutionEngine execEngine;
     private LocalMapReduceSimulator localMRRunner;
 
     Log log = LogFactory.getLog(getClass());
@@ -98,7 +99,7 @@ public class ExampleGenerator {
                     + e.getLocalizedMessage());
 
         }
-        execEngine = new HExecutionEngine(pigContext);
+        execEngine = new MRExecutionEngine(pigContext);
         localMRRunner = new LocalMapReduceSimulator();
         poLoadToSchemaMap = new HashMap<POLoad, LogicalSchema>();
     }
@@ -229,8 +230,9 @@ public class ExampleGenerator {
     }
 
     PhysicalPlan compilePlan(LogicalPlan plan) throws ExecException, FrontendException {
+        newPlan = new LogicalPlan(plan);
+        plan.optimize(pigContext);
         PhysicalPlan result = execEngine.compile(plan, null);
-        newPlan = execEngine.getNewPlan();
         return result;
     }
     

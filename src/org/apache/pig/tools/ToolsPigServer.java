@@ -29,8 +29,6 @@ import org.apache.pig.ExecType;
 import org.apache.pig.PigServer;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.executionengine.ExecJob;
-import org.apache.pig.backend.hadoop.executionengine.HExecutionEngine;
-import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
 import org.apache.pig.classification.InterfaceAudience;
 import org.apache.pig.classification.InterfaceStability;
 import org.apache.pig.impl.PigContext;
@@ -103,10 +101,10 @@ public class ToolsPigServer extends PigServer {
         FileInputStream fis = null;
         try{
             fis = new FileInputStream(fileName);
-            substituted = doParamSubstitution(fis, params, paramFiles);
+            substituted = pigContext.doParamSubstitution(fis, paramMapToList(params), paramFiles);
         }catch (FileNotFoundException e){
             log.error(e.getLocalizedMessage());
-            throw new IOException(e.getCause());
+            throw new IOException(e);
         } finally {
             if (fis != null) {
                 fis.close();
@@ -115,15 +113,14 @@ public class ToolsPigServer extends PigServer {
 
         // Parse in grunt so that register commands are recognized
         try {
-            GruntParser grunt = new GruntParser(new StringReader(substituted));
+            GruntParser grunt = new GruntParser(new StringReader(substituted), this);
             grunt.setInteractive(false);
-            grunt.setParams(this);
             setBatchOn();
             //grunt.setLoadOnly(true);
             grunt.parseOnly();
         } catch (org.apache.pig.tools.pigscript.parser.ParseException e) {
             log.error(e.getLocalizedMessage());
-            throw new IOException(e.getCause());
+            throw new IOException(e);
         }
 
         Graph g = getClonedGraph();
@@ -151,13 +148,10 @@ public class ToolsPigServer extends PigServer {
      */
     public List<ExecJob> runPlan(LogicalPlan newPlan,
                                  String jobName) throws FrontendException, ExecException {
-    	
-        HExecutionEngine engine = new HExecutionEngine(pigContext);
-        PhysicalPlan pp = engine.compile(newPlan, null);
-        PigStats stats = launchPlan(pp, jobName);
-        return getJobs(stats);                        
+        PigStats stats = launchPlan(newPlan, jobName);
+        return getJobs(stats);
     }
-            
+
     public static class PigPlans {
 
         public LogicalPlan lp;

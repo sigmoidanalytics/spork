@@ -24,14 +24,22 @@ import static org.junit.Assert.fail;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
+import java.io.FilenameFilter;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.util.Properties;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.util.Shell;
+import org.apache.pig.ExecType;
+import org.apache.pig.impl.PigContext;
 import org.apache.pig.tools.parameters.ParameterSubstitutionPreprocessor;
 import org.apache.pig.tools.parameters.ParseException;
 import org.junit.Test;
@@ -134,7 +142,8 @@ public class TestParamSubPreproc {
      public void testShellCommand() throws Exception{
         log.info("Starting test testShellCommand()");
         ParameterSubstitutionPreprocessor ps = new ParameterSubstitutionPreprocessor(50);
-        pigIStream = new BufferedReader(new FileReader(basedir + "/input4.pig"));
+        pigIStream = WithConditionalReplacement(basedir + "/input4.pig", "sh test/org/apache/pig/test/data/generate_date.sh",
+                "test/org/apache/pig/test/data/generate_date.bat", Shell.WINDOWS);
         pigOStream = new FileWriter(basedir + "/output1.pig");
 
         String[] arg = null; //{"date=`sh generate_date.sh`"};     //`date \\T`"};
@@ -205,7 +214,7 @@ public class TestParamSubPreproc {
         try {
             ps.genSubstitutedFile(pigIStream , pigOStream , arg , argFiles);
             fail ("Should have thrown an Undefined parameter exception");
-        } catch (RuntimeException e) {
+        } catch (ParseException e) {
             assertEquals(e.getMessage(), "Undefined parameter : param");
         }
         log.info("Done");
@@ -261,7 +270,8 @@ public class TestParamSubPreproc {
     public void testSubstitutionWithinShellCommand() throws Exception{
         log.info("Starting test testSubstitutionWithinShellCommand()");
         ParameterSubstitutionPreprocessor ps = new ParameterSubstitutionPreprocessor(50);
-        pigIStream = new BufferedReader(new FileReader(basedir + "/inputSubstitutionWithinShellCommand.pig"));
+        pigIStream = WithConditionalReplacement(basedir + "/inputSubstitutionWithinShellCommand.pig", "sh test/org/apache/pig/test/data/generate_date.sh",
+                "test/org/apache/pig/test/data/generate_date.bat", Shell.WINDOWS);
         pigOStream = new FileWriter(basedir + "/output1.pig");
 
         String[] arg = null;
@@ -344,7 +354,8 @@ public class TestParamSubPreproc {
     public void testCmdnameAsParamDeclare() throws Exception{
         log.info("Starting test testCmdnameAsParamDeclare()");
         ParameterSubstitutionPreprocessor ps = new ParameterSubstitutionPreprocessor(50);
-        pigIStream = new BufferedReader(new FileReader(basedir + "/inputCmdnameAsParamDeclare.pig"));
+        pigIStream = WithConditionalReplacement(basedir + "/inputCmdnameAsParamDeclare.pig", "sh \\$cmd.sh \\$date",
+                "\\$cmd.bat \\$date", Shell.WINDOWS);
         pigOStream = new FileWriter(basedir + "/output1.pig");
 
         String[] arg = null;
@@ -984,9 +995,7 @@ public class TestParamSubPreproc {
         pigIStream = new BufferedReader(new FileReader(basedir + "/input1.pig"));
         pigOStream = new FileWriter(basedir + "/output1.pig");
 
-        String[] arg = {"date=`perl -e 'print \"20080228\n20070101\"' | head -n 1`"};
-        if (Util.WINDOWS)
-            arg[0] = "date=`perl -e 'print \\\"20080228\n20070101\\\"' | head -n 1`";
+        String[] arg = {"date=`perl -e \"print qq@20080228\\n20070101@\" | head -n 1`"};
         String[] argFiles = null;
         ps.genSubstitutedFile(pigIStream , pigOStream , arg , argFiles);
 
@@ -1339,4 +1348,48 @@ public class TestParamSubPreproc {
         inExpected.close();
         inResult.close();
     }
+
+    @Test
+    public void testGruntWithParamSub() throws Exception{
+        log.info("Starting test testGruntWithParamSub()");
+        File inputFile = Util.createFile(new String[]{"daniel\t10","jenny\t20"});
+        File outputFile = File.createTempFile("tmp", "");
+        outputFile.delete();
+        PigContext pc = new PigContext(ExecType.LOCAL, new Properties());
+        String command = "a = load '" + Util.generateURI(inputFile.toString(), pc)  + "' as ($param1:chararray, $param2:int);\n"
+                + "store a into '" + Util.generateURI(outputFile.toString(), pc) + "';\n"
+                + "quit\n";
+        System.setProperty("jline.WindowsTerminal.directConsole", "false");
+        System.setIn(new ByteArrayInputStream(command.getBytes()));
+        org.apache.pig.PigRunner.run(new String[] {"-x", "local", "-p", "param1=name", "-p", "param2=age"}, null);
+        File[] partFiles = outputFile.listFiles(new FilenameFilter() {
+            public boolean accept(File dir, String name) { 
+            return name.startsWith("part");
+        }
+        });
+        String resultContent = Util.readFile(partFiles[0]);
+        assertEquals(resultContent, "daniel\t10\njenny\t20\n");
+    }
+
+    @SuppressWarnings("resource")
+    private BufferedReader WithConditionalReplacement(String filename, String orig, String dest, boolean replace) throws IOException {
+        BufferedReader pigOrigIStream = new BufferedReader(new FileReader(filename));
+        BufferedReader result;
+         
+         if (replace) {
+            File tmpInputFile = File.createTempFile("tmp", "");
+            PrintWriter tmppw = new PrintWriter(tmpInputFile);
+            String line;
+            while ((line = pigOrigIStream.readLine())!=null) {
+                line = line.replaceAll(orig, dest);
+                tmppw.println(line);
+            }
+            pigOrigIStream.close();
+            tmppw.close();
+            result = new BufferedReader(new FileReader(tmpInputFile));
+         } else {
+            result = pigOrigIStream;
+         }
+         return result;
+     }
 }

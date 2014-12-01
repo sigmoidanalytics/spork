@@ -17,6 +17,9 @@
  */
 package org.apache.pig.backend.hadoop.executionengine.mapReduceLayer;
 
+import java.io.IOException;
+import java.util.List;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -29,11 +32,8 @@ import org.apache.pig.LoadMetadata;
 import org.apache.pig.ResourceStatistics;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLoad;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.util.PlanHelper;
+import org.apache.pig.backend.hadoop.executionengine.util.MapRedUtil;
 import org.apache.pig.impl.util.UriUtil;
-import org.apache.pig.impl.util.Utils;
-
-import java.io.IOException;
-import java.util.List;
 
 /**
  * Class that estimates the number of reducers based on input size.
@@ -92,38 +92,61 @@ public class InputSizeReducerEstimator implements PigReducerEstimator {
         return reducers;
     }
 
+    static long getTotalInputFileSize(Configuration conf,
+            List<POLoad> lds, Job job) throws IOException {
+        return getTotalInputFileSize(conf, lds, job, Long.MAX_VALUE);
+    }
+
     /**
      * Get the input size for as many inputs as possible. Inputs that do not report
      * their size nor can pig look that up itself are excluded from this size.
+     * 
+     * @param conf Configuration
+     * @param lds List of POLoads
+     * @param job Job
+     * @param max Maximum value of total input size that will trigger exit. Many
+     * times we're only interested whether the total input size is greater than
+     * X or not. In such case, we can exit the function early as soon as the max
+     * is reached.
+     * @return
+     * @throws IOException
      */
     static long getTotalInputFileSize(Configuration conf,
-                                      List<POLoad> lds, Job job) throws IOException {
+            List<POLoad> lds, Job job, long max) throws IOException {
         long totalInputFileSize = 0;
-        boolean foundSize = false;
         for (POLoad ld : lds) {
             long size = getInputSizeFromLoader(ld, job);
-            if (size > -1) { foundSize = true; }
-            if (size > 0) {
+            if (size > -1) {
                 totalInputFileSize += size;
                 continue;
-            }
-            // the input file location might be a list of comma separated files,
-            // separate them out
-            for (String location : LoadFunc.getPathStrings(ld.getLFile().getFileName())) {
-                if (UriUtil.isHDFSFileOrLocalOrS3N(location)) {
-                    Path path = new Path(location);
-                    FileSystem fs = path.getFileSystem(conf);
-                    FileStatus[] status = fs.globStatus(path);
-                    if (status != null) {
-                        for (FileStatus s : status) {
-                            totalInputFileSize += Utils.getPathLength(fs, s);
-                            foundSize = true;
+            } else {
+
+                // the input file location might be a list of comma separated files,
+                // separate them out
+                for (String location : LoadFunc.getPathStrings(ld.getLFile().getFileName())) {
+                    if (UriUtil.isHDFSFileOrLocalOrS3N(location, conf)) {
+                        Path path = new Path(location);
+                        FileSystem fs = path.getFileSystem(conf);
+                        FileStatus[] status = fs.globStatus(path);
+                        if (status != null) {
+                            for (FileStatus s : status) {
+                                totalInputFileSize += MapRedUtil.getPathLength(fs, s, max);
+                                if (totalInputFileSize > max) {
+                                    break;
+                                }
+                            }
+                        } else {
+                            // If file is not found, we should report -1
+                            return -1;
                         }
+                    } else {
+                        // If we cannot estimate size of a location, we should report -1
+                        return -1;
                     }
                 }
             }
         }
-        return foundSize ? totalInputFileSize : -1;
+        return totalInputFileSize;
     }
 
     /**

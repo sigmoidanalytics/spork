@@ -21,10 +21,13 @@ public class UnionConverter implements POConverter<Tuple, Tuple, POUnion> {
     }
 
     @Override
-    public RDD<Tuple> convert(List<RDD<Tuple>> predecessors, POUnion physicalOperator)
-            throws IOException {
-        SparkUtil.assertPredecessorSizeGreaterThan(predecessors, physicalOperator, 0);
-        UnionRDD<Tuple> unionRDD = new UnionRDD<Tuple>(sc, JavaConversions.asScalaBuffer(predecessors), SparkUtil.getManifest(Tuple.class));
+    public RDD<Tuple> convert(List<RDD<Tuple>> predecessors,
+            POUnion physicalOperator) throws IOException {
+        SparkUtil.assertPredecessorSizeGreaterThan(predecessors,
+                physicalOperator, 0);
+        UnionRDD<Tuple> unionRDD = new UnionRDD<Tuple>(sc,
+                JavaConversions.asScalaBuffer(predecessors),
+                SparkUtil.getManifest(Tuple.class));
         return unionRDD;
     }
 

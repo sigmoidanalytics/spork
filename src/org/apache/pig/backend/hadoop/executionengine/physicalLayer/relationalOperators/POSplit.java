@@ -212,7 +212,11 @@ public class POSplit extends PhysicalOperator {
         if (processedSet.cardinality() == myPlans.size()) {
             
             Result inp = processInput();
-            
+
+            if (inp.returnStatus == POStatus.STATUS_EOP && this.parentPlan.endOfAllInput) {
+                return getStreamCloseResult();
+            }
+
             if (inp.returnStatus == POStatus.STATUS_EOP
                 || inp.returnStatus == POStatus.STATUS_ERR ) {
                 return inp;

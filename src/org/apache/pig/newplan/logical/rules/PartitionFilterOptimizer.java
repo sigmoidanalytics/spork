@@ -31,11 +31,11 @@ import org.apache.pig.LoadMetadata;
 import org.apache.pig.Expression.BinaryExpression;
 import org.apache.pig.Expression.Column;
 import org.apache.pig.impl.logicalLayer.FrontendException;
+import org.apache.pig.newplan.FilterExtractor;
 import org.apache.pig.newplan.Operator;
 import org.apache.pig.newplan.OperatorPlan;
 import org.apache.pig.newplan.OperatorSubPlan;
-import org.apache.pig.newplan.PColFilterExtractor;
-import org.apache.pig.newplan.logical.expression.LogicalExpressionPlan;
+import org.apache.pig.newplan.PartitionFilterExtractor;
 import org.apache.pig.newplan.logical.relational.LOFilter;
 import org.apache.pig.newplan.logical.relational.LOLoad;
 import org.apache.pig.newplan.logical.relational.LogicalPlan;
@@ -46,9 +46,9 @@ import org.apache.pig.newplan.optimizer.Transformer;
 
 public class PartitionFilterOptimizer extends Rule {
     private String[] partitionKeys;
-    
+
     /**
-     * a reference to the LoadMetada implementation 
+     * a reference to the LoadMetada implementation
      */
     private LoadMetadata loadMetadata;
 
@@ -56,23 +56,23 @@ public class PartitionFilterOptimizer extends Rule {
      * a reference to the LoadFunc implementation
      */
     private LoadFunc loadFunc;
-    
+
     private LOLoad loLoad;
     private LOFilter loFilter;
-    
+
     /**
-     * a map between column names as reported in 
+     * a map between column names as reported in
      * {@link LoadMetadata#getSchema(String, org.apache.hadoop.conf.Configuration)}
-     * and as present in {@link LOLoad#getSchema()}. The two will be different 
+     * and as present in {@link LOLoad#getSchema()}. The two will be different
      * when the user has provided a schema in the load statement
      */
     private Map<String, String> colNameMap = new HashMap<String, String>();
-    
+
     /**
      * a map between column nameas as present in {@link LOLoad#getSchema()} and
-     * as reported in 
+     * as reported in
      * {@link LoadMetadata#getSchema(String, org.apache.hadoop.conf.Configuration)}.
-     * The two will be different when the user has provided a schema in the 
+     * The two will be different when the user has provided a schema in the
      * load statement.
      */
     private Map<String, String> reverseColNameMap = new HashMap<String, String>();
@@ -97,9 +97,9 @@ public class PartitionFilterOptimizer extends Rule {
     public Transformer getNewTransformer() {
         return new PartitionFilterPushDownTransformer();
     }
-    
+
     public class PartitionFilterPushDownTransformer extends Transformer {
-        private OperatorSubPlan subPlan;
+        protected OperatorSubPlan subPlan;
 
         @Override
         public boolean check(OperatorPlan matched) throws FrontendException {
@@ -109,17 +109,17 @@ public class PartitionFilterOptimizer extends Rule {
             if( succeds == null || succeds.size() == 0 || !( succeds.get(0) instanceof LOFilter ) )
                 return false;
             loFilter =  (LOFilter)succeds.get(0);
-            
+
             // Filter has dependency other than load, skip optimization
             if (currentPlan.getSoftLinkPredecessors(loFilter)!=null)
                 return false;
-            
+
             // we have to check more only if LoadFunc implements LoadMetada
             loadFunc = loLoad.getLoadFunc();
             if(!( loadFunc instanceof LoadMetadata ) ) {
                 return false;
             }
-            
+
             loadMetadata = (LoadMetadata)loadFunc;
             try {
 				partitionKeys = loadMetadata.getPartitionKeys(
@@ -128,12 +128,9 @@ public class PartitionFilterOptimizer extends Rule {
 				throw new FrontendException( e );
 			}
             if( partitionKeys == null || partitionKeys.length == 0 ) {
-            	return false;
+                return false;
             }
-            
-//            LogicalExpressionPlan filterExpr = filter.getFilterPlan();
-            
-            // we found a load-filter pattern where the load returns partition keys
+
             return true;
         }
 
@@ -147,39 +144,32 @@ public class PartitionFilterOptimizer extends Rule {
         	subPlan = new OperatorSubPlan( currentPlan );
 
         	setupColNameMaps();
-        	
-        	// PIG-1871: Don't throw exception if partition filters cannot be pushed up. 
-        	// Perform transformation on a copy of the filter plan, and replace the 
-        	// original filter plan only if the transformation is successful 
-        	// (i.e. partition filter can be pushed down) 
-        	LogicalExpressionPlan filterExpr = loFilter.getFilterPlan();
-        	LogicalExpressionPlan filterExprCopy = filterExpr.deepCopy();
-        	
-        	PColFilterExtractor pColFilterFinder = new PColFilterExtractor(
-        	        filterExprCopy, getMappedKeys( partitionKeys ) );
-        	pColFilterFinder.visit();
-        	Expression partitionFilter = pColFilterFinder.getPColCondition();
-        	
-        	if(partitionFilter != null) {
-        		// the column names in the filter may be the ones provided by
-        		// the user in the schema in the load statement - we may need
-        		// to replace them with partition column names as given by
-        		// LoadFunc.getSchema()
-        		updateMappedColNames(partitionFilter);
-        		try {
-					loadMetadata.setPartitionFilter(partitionFilter);
-				} catch (IOException e) {
-					throw new FrontendException( e );
-				}
-        		if(pColFilterFinder.isFilterRemovable()) {  
-        			currentPlan.removeAndReconnect( loFilter );
-        		} else {
-        		    loFilter.setFilterPlan(filterExprCopy);
-        		}
-        	}
+
+            FilterExtractor filterFinder = new PartitionFilterExtractor(loFilter.getFilterPlan(),
+                    getMappedKeys(partitionKeys));
+            filterFinder.visit();
+            Expression partitionFilter = filterFinder.getPushDownExpression();
+
+            if(partitionFilter != null) {
+                // the column names in the filter may be the ones provided by
+                // the user in the schema in the load statement - we may need
+                // to replace them with partition column names as given by
+                // LoadFunc.getSchema()
+                updateMappedColNames(partitionFilter);
+                try {
+                    loadMetadata.setPartitionFilter(partitionFilter);
+                } catch (IOException e) {
+                    throw new FrontendException( e );
+                }
+                if(filterFinder.isFilterRemovable()) {
+                    currentPlan.removeAndReconnect( loFilter );
+                } else {
+                    loFilter.setFilterPlan(filterFinder.getFilteredPlan());
+                }
+            }
         }
-        
-        private void updateMappedColNames(Expression expr) {
+
+        protected void updateMappedColNames(Expression expr) {
             if(expr instanceof BinaryExpression) {
                 updateMappedColNames(((BinaryExpression) expr).getLhs());
                 updateMappedColNames(((BinaryExpression) expr).getRhs());
@@ -190,7 +180,7 @@ public class PartitionFilterOptimizer extends Rule {
         }
 
         /**
-         * The partition keys in the argument are as reported by 
+         * The partition keys in the argument are as reported by
          * {@link LoadMetadata#getPartitionKeys(String, org.apache.hadoop.conf.Configuration)}.
          * The user may have renamed these by providing a schema with different names
          * in the load statement - this method will replace the former names with
@@ -198,7 +188,7 @@ public class PartitionFilterOptimizer extends Rule {
          * @param partitionKeys
          * @return
          */
-        private List<String> getMappedKeys(String[] partitionKeys) {
+        protected List<String> getMappedKeys(String[] partitionKeys) {
             List<String> mappedKeys = new ArrayList<String>(partitionKeys.length);
             for (int i = 0; i < partitionKeys.length; i++) {
                 mappedKeys.add(colNameMap.get(partitionKeys[i]));
@@ -206,16 +196,16 @@ public class PartitionFilterOptimizer extends Rule {
             return mappedKeys;
         }
 
-        private void setupColNameMaps() throws FrontendException {
+        protected void setupColNameMaps() throws FrontendException {
             LogicalSchema loLoadSchema = loLoad.getSchema();
             LogicalSchema loadFuncSchema = loLoad.getDeterminedSchema();
              for(int i = 0; i < loadFuncSchema.size(); i++) {
-                colNameMap.put(loadFuncSchema.getField(i).alias, 
+                colNameMap.put(loadFuncSchema.getField(i).alias,
                         (i < loLoadSchema.size() ? loLoadSchema.getField(i).alias :
                             loadFuncSchema.getField(i).alias));
-                
+
                 reverseColNameMap.put((i < loLoadSchema.size() ? loLoadSchema.getField(i).alias :
-                            loadFuncSchema.getField(i).alias), 
+                            loadFuncSchema.getField(i).alias),
                             loadFuncSchema.getField(i).alias);
             }
         }

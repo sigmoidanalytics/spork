@@ -41,8 +41,6 @@ import org.apache.pig.parser.ParserException;
 import org.apache.pig.test.utils.GenRandomData;
 import org.apache.pig.test.utils.TestHelper;
 import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
-import org.junit.Before;
 import org.junit.Test;
 
 /**
@@ -55,11 +53,6 @@ public class TestConversions {
     PigStorage ps = new PigStorage();
     Random r = new Random(42L);
     final int MAX = 10;
-
-    @Before
-    public void setUp() {
-        DateTimeZone.setDefault(DateTimeZone.forOffsetMillis(DateTimeZone.UTC.getOffset(null)));
-    }
 
     @Test
     public void testBytesToBoolean() throws IOException {
@@ -194,7 +187,7 @@ public class TestConversions {
             ResourceFieldSchema fs = GenRandomData.getSmallBagTextTupleFieldSchema();
 
             Tuple convertedTuple = ps.getLoadCaster().bytesToTuple(t.toString().getBytes(), fs);
-            assertTrue(TestHelper.tupleEquals(t, convertedTuple));
+            assertEquals(t, convertedTuple);
         }
 
     }
@@ -207,7 +200,7 @@ public class TestConversions {
         for (int i = 0; i < MAX; i++) {
             DataBag b = GenRandomData.genRandFullTupTextDataBag(r,5,100);
             DataBag convertedBag = ps.getLoadCaster().bytesToBag(b.toString().getBytes(), fs);
-            assertTrue(TestHelper.bagEquals(b, convertedBag));
+            assertTrue(b.equals(convertedBag));
         }
 
     }
@@ -215,11 +208,12 @@ public class TestConversions {
     @Test
     public  void testBytesToMap() throws IOException
     {
+        ResourceFieldSchema fs = GenRandomData.getRandMapFieldSchema();
 
         for (int i = 0; i < MAX; i++) {
             Map<String, Object>  m = GenRandomData.genRandMap(r,5);
             String expectedMapString = DataType.mapToString(m);
-            Map<String, Object> convertedMap = ps.getLoadCaster().bytesToMap(expectedMapString.getBytes());
+            Map<String, Object> convertedMap = ps.getLoadCaster().bytesToMap(expectedMapString.getBytes(), fs);
             assertTrue(TestHelper.mapEquals(m, convertedMap));
         }
 
@@ -365,29 +359,31 @@ public class TestConversions {
         assertNull(b);
 
         s = "[ab]";
-        Map<String, Object> m = ps.getLoadCaster().bytesToMap(s.getBytes());
+        schema = Utils.getSchemaFromString("m:map[chararray]");
+        rfs = new ResourceSchema(schema).getFields()[0];
+        Map<String, Object> m = ps.getLoadCaster().bytesToMap(s.getBytes(), rfs);
         assertNull(m);
 
         s = "[a#b";
-        m = ps.getLoadCaster().bytesToMap(s.getBytes());
+        m = ps.getLoadCaster().bytesToMap(s.getBytes(), rfs);
         assertNull(m);
 
         s = "[a#]";
-        m = ps.getLoadCaster().bytesToMap(s.getBytes());
+        m = ps.getLoadCaster().bytesToMap(s.getBytes(), rfs);
         Map.Entry<String, Object> entry = m.entrySet().iterator().next();
         assertEquals("a", entry.getKey());
         assertNull(entry.getValue());
 
         s = "[#]";
-        m = ps.getLoadCaster().bytesToMap(s.getBytes());
+        m = ps.getLoadCaster().bytesToMap(s.getBytes(), rfs);
         assertNull(m);
 
         s = "[a#}";
-        m = ps.getLoadCaster().bytesToMap(s.getBytes());
+        m = ps.getLoadCaster().bytesToMap(s.getBytes(), rfs);
         assertNull(m);
 
         s = "[a#)";
-        m = ps.getLoadCaster().bytesToMap(s.getBytes());
+        m = ps.getLoadCaster().bytesToMap(s.getBytes(), rfs);
         assertNull(m);
 
         s = "(a,b)";
@@ -401,7 +397,9 @@ public class TestConversions {
         assertEquals("b", t.get(1).toString());
 
         s = "[a#(1,2,3)]";
-        m = ps.getLoadCaster().bytesToMap(s.getBytes());
+        schema = Utils.getSchemaFromString("m:map[]");
+        rfs = new ResourceSchema(schema).getFields()[0];
+        m = ps.getLoadCaster().bytesToMap(s.getBytes(), rfs);
         entry = m.entrySet().iterator().next();
         assertEquals("a", entry.getKey());
         assertTrue(entry.getValue() instanceof DataByteArray);

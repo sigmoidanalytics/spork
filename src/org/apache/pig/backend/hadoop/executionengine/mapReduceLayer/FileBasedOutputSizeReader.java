@@ -17,6 +17,8 @@
  */
 package org.apache.pig.backend.hadoop.executionengine.mapReduceLayer;
 
+import java.io.IOException;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -26,8 +28,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
 import org.apache.pig.impl.util.UriUtil;
 
-import java.io.IOException;
-
 /**
  * Class that computes the size of output for file-based systems.
  */
@@ -35,15 +35,31 @@ public class FileBasedOutputSizeReader implements PigStatsOutputSizeReader {
 
     private static final Log log = LogFactory.getLog(FileBasedOutputSizeReader.class);
 
-    /** 
+    /**
      * Returns whether the given POStore is supported by this output size reader
      * or not. We check whether the uri scheme of output file is one of hdfs,
      * local, and s3.
      * @param sto POStore
      */
     @Override
-    public boolean supports(POStore sto) {
-        return UriUtil.isHDFSFileOrLocalOrS3N(getLocationUri(sto));
+    public boolean supports(POStore sto, Configuration conf) {
+        boolean nullOrSupportedScheme = UriUtil.isHDFSFileOrLocalOrS3N(getLocationUri(sto), conf);
+        if (nullOrSupportedScheme) {
+            // Some store functions that do not have scheme
+            // do not support file-based output reader (e.g.HCatStorer),
+            // so they should be excluded.
+            String unsupported = conf.get(
+                    PigStatsOutputSizeReader.OUTPUT_SIZE_READER_UNSUPPORTED);
+            if (unsupported != null) {
+                String storeFuncName = sto.getStoreFunc().getClass().getCanonicalName();
+                for (String s : unsupported.split(",")) {
+                    if (s.equalsIgnoreCase(storeFuncName)) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return nullOrSupportedScheme;
     }
 
     /**
@@ -53,9 +69,9 @@ public class FileBasedOutputSizeReader implements PigStatsOutputSizeReader {
      */
     @Override
     public long getOutputSize(POStore sto, Configuration conf) throws IOException {
-        if (!supports(sto)) {
-            log.warn("'" + sto.getStoreFunc().getClass().getName()
-                    + "' is not supported by " + getClass().getName());
+        if (!supports(sto, conf)) {
+            log.warn("'" + sto.getStoreFunc().getClass().getCanonicalName()
+                    + "' is not supported by " + getClass().getCanonicalName());
             return -1;
         }
 

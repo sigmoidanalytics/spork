@@ -19,14 +19,996 @@
 Pig Change Log
 
 Trunk (unreleased changes)
+ 
+INCOMPATIBLE CHANGES
+ 
+IMPROVEMENTS
+
+PIG-4333: Split BigData tests into multiple groups (rohini)
+ 
+BUG FIXES
+
+PIG-4332: Remove redundant jars packaged into pig-withouthadoop.jar for hadoop 2 (rohini)
+
+PIG-4331: update README, '-x' option in usage to include tez (thejas via daijy)
+
+PIG-4327: Schema of map with value that has an alias can't be parsed again (mprim via daijy)
+
+PIG-4330: Regression test for PIG-3584 - AvroStorage does not correctly translate arrays of strings (brocknoland via daijy)
+
+PIG-3615: Update the way that JsonLoader/JsonStorage deal with BigDecimal (tyro89 via daijy)
+
+PIG-4329: Fetch optimization should be disabled when limit is not pushed up (lbendig via cheolsoo)
+
+PIG-3413: JsonLoader fails the pig job in case of malformed json input (eyal via daijy)
+
+PIG-4247: S3 properties are not picked up from core-site.xml in local mode (cheolsoo)
+
+PIG-4242: For indented xmls with multiline content (e.g. wikipedia) XMLLoader cuts out the begining of every line
+ (holdfenytolvaj via daijy)
+
+Release 0.14.1 - Unreleased
 
 INCOMPATIBLE CHANGES
+
+IMPROVEMENTS
+
+BUG FIXES
+
+PIG-4334: PigProcessor does not set pig.datetime.default.tz (rohini)
+
+PIG-4342: Pig 0.14 cannot identify the uppercase of DECLARE and DEFAULT (daijy)
+
+Release 0.14.0
+ 
+INCOMPATIBLE CHANGES
+ 
+IMPROVEMENTS
+
+PIG-4321: Documentation for 0.14 (daijy)
+
+PIG-4328: Upgrade Hive to 0.14 (daijy)
+
+PIG-4318: Make PigConfiguration naming consistent (rohini)
+
+PIG-4316: Port TestHBaseStorage to tez local mode (rohini)
+
+PIG-4224: Upload Tez payload history string to timeline server (daijy)
+
+PIG-3977: Get TezStats working for Oozie (rohini)
+
+PIG-3979: group all performance, garbage collection, and incremental aggregation (rohini)
+
+PIG-4253: Add a UniqueID UDF (daijy)
+
+PIG-4160: Provide a way to pass local jars in pig.additional.jars when using a remote
+ url for a script (acoliver via daijy)
+
+PIG-4246: HBaseStorage should implement getShipFiles (rohini)
+
+PIG-3456: Reduce threadlocal conf access in backend for each record (rohini)
+
+PIG-3861: duplicate jars get added to distributed cache (chitnis via rohini)
+
+PIG-4039: New interface for resetting static variables for jvm reuse (rohini)
+
+PIG-3870: STRSPLITTOBAG UDF (cryptoe via daijy)
+
+PIG-4080: Add Preprocessor commands and more to the black/whitelisting feature (prkommireddi via daijy)
+
+PIG-4162: Intermediate reducer parallelism in Tez should be higher (rohini)
+
+PIG-4186: Fix e2e run against new build of pig and some enhancements (rohini)
+
+PIG-3838: Organize tez code into subpackages (rohini)
+
+PIG-4069: Limit reduce task should start as soon as one map task finishes (rohini)
+
+PIG-4141: Ship UDF/LoadFunc/StoreFunc dependent jar automatically (daijy)
+
+PIG-4146: Create a target to run mr and tez unit test in one shot (daijy)
+
+PIG-4144: Make pigunit.PigTest work in tez mode (daijy)
+
+PIG-4128: New logical optimizer rule: ConstantCalculator (daijy)
+
+PIG-4124: Command for Python streaming udf should be configurable (cheolsoo)
+
+PIG-4114: Add Native operator to tez (daijy)
+
+PIG-4117: Implement merge cogroup in Tez (daijy)
+
+PIG-4119: Add message at end of each testcase with timestamp in Pig system tests (nmaheshwari via daijy)
+
+PIG-4008: Pig code change to enable Tez Local mode (airbots via daijy)
+
+PIG-4091: Predicate pushdown for ORC (rohini via daijy)
+
+PIG-4077: Some fixes and e2e test for OrcStorage (rohini)
+
+PIG-4054: Do not create job.jar when submitting job (daijy)
+
+PIG-4047: Break up pig withouthadoop and fat jar (daijy)
+
+PIG-4062: Add ascending order option to builtin TOP function (raj171 via cheolsoo)
+
+PIG-3558: ORC support for Pig (daijy)
+
+PIG-2122: Parameter Substitution doesn't work in the Grunt shell (daijy)
+
+PIG-4031: Provide Counter aggregation for Tez (daijy)
+
+PIG-4028: add a flag to control the ivy resolve/retrieve output (gkesavan via daijy)
+
+PIG-4015: Provide a way to disable auto-parallism in tez (daijy)
+
+PIG-3846: Implement automatic reducer parallelism (daijy)
+
+PIG-3939: SPRINTF function to format strings using a printf-style template (mrflip via cheolsoo)
+
+PIG-3970: Merge Tez branch into trunk (daijy)
+ 
+OPTIMIZATIONS
+ 
+BUG FIXES
+
+PIG-4335: Pig release tarball miss tez classes (daijy)
+
+PIG-4325: StackOverflow when spilling InternalCachedBag (daijy)
+
+PIG-4324: Remove jsch-LICENSE.txt (daijy)
+
+PIG-4267: ToDate has incorrect timezone offsets (bridiver via daijy)
+
+PIG-4319: Make LoadPredicatePushdown InterfaceAudience.Private till PIG-4093 (rohini)
+
+PIG-4312: TestStreamingUDF tez mode leave orphan process on Windows (daijy)
+
+PIG-4314: BigData_5 hang on some machine (daijy)
+
+PIG-4299: SpillableMemoryManager assumes tenured heap incorrectly (prkommireddi via daijy)
+
+PIG-4298: Descending order-by is broken in some cases when key is bytearrays (cheolsoo)
+
+PIG-4263: Move tez local mode unit tests to a separate target (daijy)
+
+PIG-4257: Fix several e2e tests on secure cluster (daijy)
+
+PIG-4261: Skip shipping local resources in tez local mode (daijy)
+
+PIG-4182: e2e tests Scripting_[1-12] fail on Windows (daijy)
+
+PIG-4259: Fix few issues related to Union, CROSS and auto parallelism in Tez (rohini)
+
+PIG-4250: Fix Security Risks found by Coverity (daijy)
+
+PIG-4258: Fix several e2e tests on Windows (daijy)
+
+PIG-4256: Fix StreamingPythonUDFs e2e test failure on Windows (daijy)
+
+PIG-4166: Collected group drops last record when combined with merge join (bridiver via daijy)
+
+PIG-2495: Using merge JOIN from a HBaseStorage produces an error (bridiver via daijy)
+
+PIG-4235: Fix unit test failures on Windows (daijy)
+
+PIG-4245: 1-1 edge vertices should use same jvm opts (rohini)
+
+PIG-4252: Tez container reuse fail when using script udf (daijy)
+
+PIG-4241: Auto local mode mistakenly converts large jobs to local mode when using with Hive tables (cheolsoo)
+
+PIG-4184: UDF backward compatibility issue after POStatus.STATUS_NULL refactory (daijy)
+
+PIG-4238: Property 'pig.job.converted.fetch' should be unset when fetch finishes (lbendig)
+
+PIG-4151: Pig Cannot Write Empty Maps to HBase (daijy)
+
+PIG-4181: Cannot launch tez e2e test on Windows (daijy)
+
+PIG-2834: MultiStorage requires unused constructor argument (daijy)
+
+PIG-4230: Documentation fix: first nested foreach example is incomplete (lbendig via daijy)
+
+PIG-4199: Mapreduce ACLs should be translated to Tez ACLs (rohini)
+
+PIG-4227: Streaming Python UDF handles bag outputs incorrectly (cheolsoo)
+
+PIG-4219: When parsing a schema, pig drops tuple inside of Bag if it contains only one field (lbendig via daijy)
+
+PIG-4226: Upgrade Tez to 0.5.1 (daijy)
+
+PIG-4220: MapReduce-based Rank failing with NPE due to missing Counters (knoguchi)
+
+PIG-3985: Multiquery execution of RANK with RANK BY causes NPE (rohini)
+
+PIG-4218: Pig OrcStorage fail to load a map with null key (daijy)
+
+PIG-4164: After Pig job finish, Pig client spend too much time retry to connect to AM (daijy)
+
+PIG-4212: Allow LIMIT of 0 for variableLimit (constant 0 is already allowed) (knoguchi)
+
+PIG-4196: Auto ship udf jar is broken (daijy)
+
+PIG-4214: Fix unit test fail TestMRJobStats (daijy)
+
+PIG-4217: Fix documentation in BuildBloom (praveenr019 via daijy)
+
+PIG-4215: Fix unit test failure TestParamSubPreproc and TestMacroExpansion (daijy)
+
+PIG-4175: PIG CROSS operation follow by STORE produces non-deterministic results each run (daijy)
+
+PIG-4202: Reset UDFContext state before OutputCommitter invocations in Tez (rohini)
+
+PIG-4205: e2e test property-check does not check all prerequisites (kellyzly via daijy)
+
+PIG-4180: e2e test Native_3 fail on Hadoop 2 (daijy)
+
+PIG-4178: HCatDDL_[1-3] fail on Windows (daijy)
+
+PIG-4046: PiggyBank DBStorage DATETIME should use setTimestamp with java.sql.Timestamp (sinchii via daijy)
+
+PIG-4050: HadoopShims.getTaskReports() can cause OOM with Hadoop 2 (rohini)
+
+PIG-4176: Fix tez e2e test Bloom_[1-3] (daijy)
+
+PIG-4195: Support loading char/varchar data in OrcStorage (daijy)
+
+PIG-4201: Native e2e tests fail when run against old version of pig (rohini)
+
+PIG-4197: Fix typo in Job Stats header: MinMapTIme => MinMapTime (jmartell7 via daijy)
+
+PIG-4194: ReadToEndLoader does not call setConf on pigSplit in initializeReader (shadanan via rohini)
+
+PIG-4187: Fix Orc e2e tests (daijy)
+
+PIG-4177: BigData_1 fail after PIG-4149 (daijy)
+
+PIG-3507: Pig fails to run in local mode on a Kerberos enabled Hadoop cluster (kellyzly via rohini)
+
+PIG-4171: Streaming UDF fails when direct fetch optimization is enabled (cheolsoo)
+
+PIG-4170: Multiquery with different type of key gives wrong result (daijy)
+
+PIG-4104: Accumulator UDF throws OOM in Tez (rohini)
+
+PIG-4169: NPE in ConstantCalculator (cheolsoo)
+
+PIG-4161: check for latest Hive snapshot dependencies (daijy)
+
+PIG-4102: Adding e2e tests and several improvements for Orc predicate pushdown (daijy)
+
+PIG-4156: [PATCH] fix NPE when running scripts stored on hdfs:// (acoliver via daijy)
+
+PIG-4159: TestGroupConstParallelTez and TestJobSubmissionTez should be excluded in Hadoop 20 unit tests (cheolsoo)
+
+PIG-4154: ScriptState#setScript(File) does not close resources (lars_francke via daijy)
+
+PIG-4155: Quitting grunt shell using CTRL-D character throws exception (abhishek.agarwal via daijy)
+
+PIG-4157: Pig compilation failure due to HIVE-7208 (daijy)
+
+PIG-4158: TestAssert is broken in trunk (cheolsoo)
+
+PIG-4143: Port more mini cluster tests to Tez - part 7 (daijy)
+
+PIG-4149: Rounding issue in FindQuantiles (daijy)
+
+PIG-4145: Port local mode tests to Tez - part1 (daijy)
+
+PIG-4076: Fix pom file (daijy)
+
+PIG-4140: VertexManagerEvent.getUserPayload returns ReadOnlyBuffer after TEZ-1449 (daijy)
+
+PIG-4136: No special handling jythonjar/jrubyjar in e2e tests after PIG-4047 (daijy)
+
+PIG-4137: Fix hadoopversion 23 compilation due to TEZ-1469 (daijy)
+
+PIG-4135: Fetch optimization should be disabled if plan contains no limit (cheolsoo)
+
+PIG-4061: Make Streaming UDF work in Tez (hotfix PIG-4061-3.patch)
+
+PIG-4134: TEZ-1449 broke the build (knoguchi)
+
+PIG-4132: TEZ-1246 and TEZ-1390 broke a build (knoguchi)
+
+PIG-4129: Pig -Dhadoopversion=23 compile fail after TEZ-1426 (daijy)
+
+PIG-4127: Build failure due to TEZ-1132 and TEZ-1416 (lbendig)
+
+PIG-4125: TEZ-1347 broke the build
+
+PIG-4123: Increase memory for TezMiniCluster (daijy)
+
+PIG-4122: Fix hadoopversion 23 compilation due to TEZ-1194 (daijy)
+
+PIG-4061: Make Streaming UDF work in Tez (daijy)
+
+PIG-4118: Fix hadoopversion 23 compilation due to TEZ-1237/TEZ-1407 (daijy)
+
+PIG-4109: register local jar fail on Windows when Pig script is remote (daijy)
+
+PIG-4116: Update Pig doc about Hadoop 2 Streaming Python UDF support (cheolsoo)
+
+PIG-4112: NPE in packager when union + group-by followed by replicated join in Tez (rohini via cheolsoo)
+
+PIG-4113: TEZ-1386 breaks hadoop 2 compilation in trunk (cheolsoo)
+
+PIG-4110: TEZ-1382 breaks Hadoop 2 compilation (cheolsoo)
+
+PIG-4105: Fix TestAvroStorage with ibm jdk (fang fang chen via daijy)
+
+PIG-4108: Pig -Dhadoopversion=23 compile fail after TEZ-1317 (daijy)
+
+PIG-4086: Fix Orc e2e tests for tez (daijy)
+
+PIG-4101: Lower tez.am.task.max.failed.attempts to 2 from 4 in Tez mini cluster (cheolsoo)
+
+PIG-4099: "ant copypom" failed with "could not find file $PIG_HOME/ivy/pig.pom to copy" (fang fang chen via cheolsoo)
+
+PIG-4098: Vertex Location Hint api update after TEZ-1041 (jeagles via cheolsoo)
+
+PIG-4088: TEZ-1346 breaks hadoop 2 compilation in trunk (cheolsoo)
+
+PIG-4089: TestMultiQuery.testMultiQueryJiraPig1169 fails in trunk after
+PIG-4079 in Hadoop 1 (cheolsoo)
+
+PIG-4085: TEZ-1303 broke hadoop 2 compilation in trunk (cheolsoo)
+
+PIG-4082: TEZ-1278 broke hadoop 2 compilation in trunk (cheolsoo)
+
+PIG-4079: Parallel clause is not honored in local mode (cheolsoo)
+
+PIG-4078: Port more mini cluster tests to Tez - part 6 (rohini)
+
+PIG-4071: Fix TestStore.testSetStoreSchema, TestParamSubPreproc.testGruntWithParamSub,
+ TestJobSubmission.testReducerNumEstimation (daijy)
+
+PIG-4074: mapreduce.client.submit.file.replication is not honored in cached files (cheolsoo)
+
+PIG-4052: TestJobControlSleep, TestInvokerSpeed are unreliable (daijy)
+
+PIG-4053: TestMRCompiler succeeded with sun jdk 1.6 while failed with sun jdk 1.7 (daijy)
+
+PIG-3982: ant target test-tez should depend on jackson-pig-3039-test-download (daijy)
+
+PIG-4064: Fix tez auto parallelism test failures (daijy)
+
+PIG-4075: TEZ-1311 broke Hadoop2 compilation (cheolsoo)
+
+PIG-4070: Change from TezJobConfig to TezRuntimeConfiguration (rohini)
+
+PIG-4068: ObjectCache causes ClassCastException (cheolsoo)
+
+PIG-4067: TestAllLoader in piggybank fails with new hive version (rohini)
+
+PIG-4065: Fix failing unit tests in Tez (rohini)
+
+PIG-4060: Refactor TezJob and TezLauncher (cheolsoo)
+
+PIG-2689: JsonStorage fails to find schema when LimitAdjuster runs (rohini)
+
+PIG-4056: Remove PhysicalOperator.setAlias (rohini)
+
+PIG-4058: Use single config in Tez for input and output (rohini)
+
+PIG-3886: UdfDistributedCache_1 fails in tez branch (cheolsoo)
+
+PIG-4055 Build broke after TEZ-1130 API rename (knoguchi)
+
+PIG-3935: Port more mini cluster tests to Tez - part 5 (rohini)
+
+PIG-3984: PigServer.shutdown removes the tez resource folder (daijy via rohini)
+
+PIG-4048: TEZ-692 has a incompatible API change removing TezSession (rohini)
+
+PIG-4044: Pig should use avro-mapred-hadoop2.jar instead of avro-mapred.jar when compile with hadoop 2 (daijy)
+
+PIG-4043: JobClient.getMap/ReduceTaskReports() causes OOM for jobs with a large number of tasks (cheolsoo)
+
+PIG-4036: Fix e2e failures - JobManagement_3, CmdErrors_3 and BigData_4 (daijy)
+
+PIG-4041: org.apache.pig.backend.hadoop.executionengine.tez.util.MRToTezHelper compiling error (jeagles via cheolsoo)
+
+PIG-4038: SPRINTF should return NULL on any NULL input (mrflip via daijy)
+
+PIG-4025: TestLoadFuncWrapper, TestLoadFuncMetaDataWrapper,TestStoreFuncWrapper
+ and TestStoreFuncMetadataWrapper fail on IBM JDK (ahireanup via daijy)
+
+PIG-4024: TestPigStreamingUDF and TestPigStreaming fail on IBM JDK (ahireanup via daijy)
+
+PIG-4023: BigDec/Int sort is broken (ahireanup via daijy)
+
+PIG-4003: Error is thrown by JobStats.getOutputSize() when storing to a Hive table (cheolsoo)
+
+PIG-4035: Fix CollectedGroup e2e tests for tez (daijy)
+
+PIG-4034: Exclude TestTezAutoParallelism when -Dhadoopversion=20 (cheolsoo)
+
+PIG-4033: Fix MergeSparseJoin e2e tests on tez (daijy)
+
+PIG-3478: Make StreamingUDF work for Hadoop 2 (lbendig via daijy)
+
+PIG-4032: BloomFilter fails with s3 path in Hadoop 2.4 (cheolsoo)
+
+PIG-4018: Schema validation fails with UNION ONSCHEMA (daijy)
+
+PIG-4022: Fix tez e2e test SkewedJoin_6 (daijy)
+
+PIG-4001: POPartialAgg aggregates too aggressively when multiple values aggregated (tmwoodruff via cheolsoo)
+
+PIG-4027: Always check for latest Tez snapshot dependencies (lbendig via cheolsoo)
+
+PIG-4020: Fix tez e2e tests MapPartialAgg_[2-4], StreamingPerformance_[6-7] (daijy)
+
+PIG-4019: Compilation broken after TEZ-1169 (daijy)
+
+PIG-4014: Fix Rank e2e test failures on tez (daijy)
+
+PIG-4013: Order by multiple column fail on Tez (daijy)
+
+PIG-3983: TestGrunt.testKeepGoigFailed fail on tez mode (daijy)
+
+PIG-3959: Skewed join followed by replicated join fails in Tez (cheolsoo)
+
+PIG-3995: Tez unit tests shouldn't run when -Dhadoopversion=20 (cheolsoo)
+
+PIG-3986: PigSplit to support multiple split class (tongjie via cheolsoo)
+
+PIG-3988: PigStorage: CommandLineParser is not thread safe (tmwoodruff via cheolsoo)
+
+PIG-2409: Pig show wrong tracking URL for hadoop 2 (lbendig via rohini)
+
+PIG-3978: Container reuse does not across PigServer (daijy)
+
+PIG-3974: E2E test data generation fails in cluster mode (lbendig via cheolsoo)
+
+PIG-3969: Javascript UDF fails if no output schema is defined (lbendig via cheolsoo)
+
+PIG-3971: Pig on tez fails to run in Oozie in secure cluster (rohini)
+
+PIG-3968: OperatorPlan.serialVersionUID is not defined (daijy)
+
+
+Release 0.13.1 - Unreleased
+
+INCOMPATIBLE CHANGES
+ 
+IMPROVEMENTS
+
+OPTIMIZATIONS
+ 
+BUG FIXES
+
+PIG-4139: pig query throws error java.lang.NoSuchFieldException: jobsInProgress on MRv1 (satish via cheolsoo)
+
+PIG-4133: Need to update the default $HCAT_HOME dir in the PIG script (mnarayan via cheolsoo)
+
+PIG-4106: Describe shouldn't trigger execution in batch mode (cheolsoo)
+
+
+Release 0.13.0
+ 
+INCOMPATIBLE CHANGES
+
+PIG-3996: Delete zebra from svn (cheolsoo)
+
+PIG-3898: Refactor PPNL for non-MR execution engine (cheolsoo)
+
+PIG-3485: Remove CastUtils.bytesToMap(byte[] b) method from LoadCaster interface (cheolsoo) 
+
+PIG-3419: Pluggable Execution Engine (achalsoni81 via cheolsoo)
+
+PIG-2207: Support custom counters for aggregating warnings from different udfs (aniket486)
+
+IMPROVEMENTS
+
+PIG-3892: Pig distribution for hadoop 2 (daijy)
+
+PIG-4006: Make the interval of DAGStatus report configurable (cheolsoo)
+
+PIG-3999: Document PIG-3388 (lbendig via cheolsoo)
+
+PIG-3954: Document use of user level jar cache (aniket486)
+
+PIG-3752: Fix e2e Parallel test for Windows (daijy)
+
+PIG-3966: Document variable input arguments of UDFs (lbendig via aniket486)
+
+PIG-3963: Documentation for BagToString UDF (mrflip via daijy)
+
+PIG-3929: pig.temp.dir should allow to substitute vars as hadoop configuration does (aniket486)
+
+PIG-3913: Pig should use job's jobClient wherever possible (fixes local mode counters) (aniket486)
+
+PIG-3941: Piggybank's Over UDF returns an output schema with named fields (mrflip via cheolsoo)
+
+PIG-3545: Seperate validation rules from optimizer (daijy)
+
+PIG-3745: Document auto local mode for pig (aniket486)
+
+PIG-3932: Document ROUND_TO builtin UDF (mrflip via cheolsoo)
+
+PIG-3926: ROUND_TO function: rounds double/float to fixed number of decimal places (mrflip via cheolsoo)
+
+PIG-3901: Organize the Pig properties file and document all properties (mrflip via cheolsoo)
+
+PIG-3867: Added hadoop home to build classpath for build pig with unit test on windows (Sergey Svinarchuk via gates)
+
+PIG-3914: Change TaskContext to abstract class (cheolsoo)
+
+PIG-3672: Pig should not check for hardcoded file system implementations (rohini)
+
+PIG-3860: Refactor PigStatusReporter and PigLogger for non-MR execution engine (cheolsoo)
+
+PIG-3865: Remodel the XMLLoader to work to be faster and more maintainable (aseldawy via daijy)
+
+PIG-3737: Bundle dependent jars in distribution in %PIG_HOME%/lib folder (daijy)
+
+PIG-3771: Piggybank Avrostorage makes a lot of namenode calls in the backend (rohini)
+
+PIG-3851: Upgrade jline to 2.11 (daijy)
+
+PIG-3884: Move multi store counters to PigStatsUtil from MRPigStatsUtil (rohini)
+
+PIG-3591: Refactor POPackage to separate MR specific code from packaging (mwagner via cheolsoo)
+
+PIG-3449: Move JobCreationException to org.apache.pig.backend.hadoop.executionengine (cheolsoo)
+
+PIG-3765: Ability to disable Pig commands and operators (prkommireddi)
+
+PIG-3731: Ability to specify local-mode specific configuration (useful for local/auto-local mode) (aniket486)
+
+PIG-3793: Provide info on number of LogicalRelationalOperator(s) used in the script through LogicalPlanData (prkommireddi)
+
+PIG-3778: Log list of running jobs along with progress (rohini)
+
+PIG-3675: Documentation for AccumuloStorage (elserj via daijy)
+
+PIG-3648: Make the sample size for RandomSampleLoader configurable (cheolsoo)
+
+PIG-259: allow store to overwrite existing directroy (nezihyigitbasi via daijy)
+
+PIG-2672: Optimize the use of DistributedCache (aniket486)
+
+PIG-3238: Pig current releases lack a UDF Stuff(). This UDF deletes a specified length of characters
+ and inserts another set of characters at a specified starting point (nezihyigitbasi via daijy)
+
+PIG-3299: Provide support for LazyOutputFormat to avoid creating empty files (lbendig via daijy)
+
+PIG-3642: Direct HDFS access for small jobs (fetch) (lbendig via cheolsoo)
+
+PIG-3730: Performance issue in SelfSpillBag (rajesh.balamohan via rohini)
+
+PIG-3654: Add class cache to PigContext (tmwoodruff via daijy)
+
+PIG-3463: Pig should use hadoop local mode for small jobs (aniket486)
+
+PIG-3573: Provide StoreFunc and LoadFunc for Accumulo (elserj via daijy)
+
+PIG-3653: Add support for pre-deployed jars (tmwoodruff via daijy)
+
+PIG-3645: Move FileLocalizer.setR() calls to unit tests (cheolsoo)
+
+PIG-3637: PigCombiner creating log spam (rohini)
+
+PIG-3632: Add option to configure cacheBlocks in HBaseStorage (rohini)
+
+PIG-3619: Provide XPath function (Saad Patel via gates)
+
+PIG-3590: remove PartitionFilterOptimizer from trunk (aniket486)
+
+PIG-3580: MIN, MAX and AVG functions for BigDecimal and BigInteger (harichinnan via cheolsoo)
+
+PIG-3569: SUM function for BigDecimal and BigInteger (harichinnan via rohini)
+
+PIG-3505: Make AvroStorage sync interval take default from io.file.buffer.size (rohini)
+
+PIG-3563: support adding archives to the distributed cache (jdonofrio via cheolsoo)
+
+PIG-3388: No support for Regex for row filter in org.apache.pig.backend.hadoop.hbase.HBaseStorage (lbendig via cheolsoo)
+
+PIG-3522: Remove shock from pig (daijy)
+
+PIG-3295: Casting from bytearray failing after Union even when each field is from a single Loader (knoguchi)
+
+PIG-3444: CONCAT with 2+ input parameters fail (lbendig via daijy)
+
+PIG-3117: A debug mode in which pig does not delete temporary files (ihadanny via cheolsoo)
+
+PIG-3484: Make the size of pig.script property configurable (cheolsoo)
+ 
+OPTIMIZATIONS
+
+PIG-3882: Multiquery off mode execution is not done in batch and very inefficient (rohini)
+ 
+BUG FIXES
+
+PIG-4037: TestHBaseStorage, TestAccumuloPigCluster has failures with hadoopversion=23 (daijy)
+
+PIG-4005: depend on hbase-hadoop2-compat rather than hbase-hadoop1-compat when hbaseversion is 95 (daijy)
+
+PIG-4021: Fix TestHBaseStorage failure after auto local mode change (PIG-3463) (daijy)
+
+PIG-4029: TestMRCompiler is broken after PIG-3874 (daijy)
+
+PIG-4030: TestGrunt, TestPigRunner fail after PIG-3892 (daijy)
+
+PIG-3975: Multiple Scalar reference calls leading to missing records (knoguchi via rohini)
+
+PIG-4017: NPE thrown from JobControlCompiler.shipToHdfs (cheolsoo)
+
+PIG-3997: Issue on Pig docs: Testing and Diagnostics (zjffdu via cheolsoo)
+
+PIG-3998: Documentation fix: invalid page links, wrong Groovy udf example (lbendig via cheolsoo)
+
+PIG-4000: Minor documentation fix for PIG-3642 (lbendig via cheolsoo)
+
+PIG-3991: TestErrorHandling.tesNegative7 is broken in trunk/branch-0.13 (cheolsoo)
+
+PIG-3990: ant docs is broken in trunk/branch-0.13 (cheolsoo)
+
+PIG-3989: PIG_OPTS does not work with some version of HADOOP (daijy)
+
+PIG-3739: The Warning_4 e2e test is broken in trunk (aniket486)
+
+PIG-3976: Typo correction in JobStats breaks Oozie (rohini)
+
+PIG-3874: FileLocalizer temp path can sometimes be non-unique (chitnis via cheolsoo)
+
+PIG-3967: Grunt fail if we running more statement after first store (daijy)
+
+PIG-3915: MapReduce queries in Pigmix outputs different results than Pig's (keren3000 via daijy)
+
+PIG-3955: Remove url.openStream() file descriptor leak from JCC (aniket486)
+
+PIG-3958: TestMRJobStats is broken in 0.13 and trunk (aniket486)
+
+PIG-3949: HiveColumnarStorage compile failure with Hive 0.14.0 (daijy)
+
+PIG-3960: Compile fail against Hadoop 2.4.0 after PIG-3913 (daijy)
+
+PIG-3956: UDF profile is often misleading (cheolsoo)
+
+PIG-3950: Removing empty file PColFilterExtractor.java speeds up rebuilds (mrflip via cheolsoo)
+
+PIG-3940: NullPointerException writing .pig_header for field with null name in JsonMetadata.java (mrflip via cheolsoo)
+
+PIG-3944: PigNullableWritable toString method throws NPE on null value (mauzhang via cheolsoo)
+
+PIG-3936: DBStorage fails on storing nulls for non varchar columns (jeremykarn via cheolsoo) 
+
+PIG-3945: Ant not sending hadoopversion to piggybank sub-ant (mrflip via cheolsoo)
+
+PIG-3942: Util.buildPp() is incompatible with Non-MR execution engine (cheolsoo)
+
+PIG-3902: PigServer creates cycle (thedatachef via cheolsoo)
+
+PIG-3930: "java.io.IOException: Cannot initialize Cluster" in local mode with hadoopversion=23 dependencies (jira.shegalov via cheolsoo)
+
+PIG-3921: Obsolete entries in piggybank javadoc build script (mrflip via cheolsoo)
+
+PIG-3923: Gitignore file should ignore all generated artifacts (mrflip via cheolsoo)
+
+PIG-3922: Increase Forrest heap size to avoid OutOfMemoryError building docs (mrflip via cheolsoo)
+
+PIG-3916: isEmpty should not be early terminating (rohini)
+
+PIG-3859: auto local mode should not modify reducer configuration (aniket486)
+
+PIG-3909: Type Casting issue (daijy)
+
+PIG-3905: 0.12.1 release can't be build for Hadoop2 (daijy)
+
+PIG-3894: Datetime function AddDuration, SubtractDuration and all Between functions don't check for null values in the input tuple (jennythompson via cheolsoo)
+
+PIG-3889: Direct fetch doesn't set job submission timestamps (cheolsoo)
+
+PIG-3895: Pigmix run script has compilation error (rohini)
+
+PIG-3885: AccumuloStorage incompatible with Accumulo 1.6.0 (elserj via daijy)
+
+PIG-3888: Direct fetch doesn't differentiate between frontend and backend sides (lbendig via daijy)
+
+PIG-3887: TestMRJobStats is broken in trunk (cheolsoo)
+
+PIG-3868: Fix Iterator_1 e2e test on windows (ssvinarchukhorton via rohini)
+
+PIG-3871: Replace org.python.google.* with com.google.* in imports (cheolsoo)
+
+PIG-3858: PigLogger/PigStatusReporter is not set for fetch tasks (lbendig via cheolsoo)
+
+PIG-3798: Registered jar in pig script are appended to the classpath multiple times (cheolsoo)
+
+PIG-3844: Make ScriptState InheritableThreadLocal for threads that need it (amatsukawa via cheolsoo)
+
+PIG-3837: ant pigperf target is broken in trunk (cheolsoo)
+
+PIG-3836: Pig signature has has guava version dependency (amatsukawa via cheolsoo)
+
+PIG-3832: Fix piggybank test compilation failure after PIG-3449 (rohini)
+
+PIG-3807: Pig creates wrong schema after dereferencing nested tuple fields with sorts (daijy)
+
+PIG-3802: Fix TestBlackAndWhitelistValidator failures (prkommireddi)
+
+PIG-3815: Hadoop bug causes to pig to fail silently with jar cache (aniket486)
+
+PIG-3816: Incorrect Javadoc for launchPlan() method (kyungho via prkommireddi)
+
+PIG-3673: Divide by zero error in runpigmix.pl script (suhassatish via daijy)
+
+PIG-3805: ToString(datetime [, format string]) doesn't work without the second argument (jennythompson via daijy)
+
+PIG-3809: AddForEach optimization doesn't set the alias of the added foreach (cheolsoo)
+
+PIG-3811: PigServer.registerScript() wraps exception incorrectly on parsing errors (prkommireddi)
+
+PIG-3806: PigServer constructor throws NPE after PIG-3765 (aniket486)
+
+PIG-3801: Auto local mode does not call storeSchema (aniket486)
+
+PIG-3754: InputSizeReducerEstimator.getTotalInputFileSize reports incorrect size (aniket486)
+
+PIG-3679: e2e StreamingPythonUDFs_10 fails in trunk (cheolsoo)
+
+PIG-3776: Conflicting versions of jline is present in trunk (cheolsoo)
+
+PIG-3674: Fix TestAccumuloPigCluster on Hadoop 2 (elserj via daijy)
+
+PIG-3740: Document direct fetch optimization (lbendig via cheolsoo)
+
+PIG-3746: NPE is thrown if Pig fails before PigStats is intialized (cheolsoo)
+
+PIG-3747: Update skewed join documentation (cheolsoo)
+
+PIG-3755: auto local mode selection does not check lower bound for size (aniket486)
+
+PIG-3447: Compiler warning message dropped for CastLineageSetter and others with no enum kind (knoguchi via cheolsoo)
+
+PIG-3627: Json storage : Doesn't work in cases , where other Store Functions (like PigStorage / AvroStorage)
+ do work (ssvinarchukhorton via daijy)
+
+PIG-3606: Pig script throws error when searching for hcatalog jars in latest hive (deepesh via daijy)
+
+PIG-3623: HBaseStorage: setting loadKey and noWAL to false doesn't have any affect (nezihyigitbasi via rohini)
+
+PIG-3744: SequenceFileLoader does not support BytesWritable (rohini)
+
+PIG-3726: Ranking empty records leads to NullPointerException (jarcec via daijy)
+
+PIG-3652: Pigmix parser (PigPerformanceLoader) deletes chars during parsing (keren3000 via daijy)
+
+PIG-3722: Udf deserialization for registered classes fails in local_mode (aniket486)
+
+PIG-3641: Split "otherwise" producing incorrect output when combined with ColumnPruning (knoguchi)
+
+PIG-3682: mvn-inst target does not install pig-h2.jar into local .m2 (raluri via aniket486)
+
+PIG-3511: Security: Pig temporary directories might have world readable permissions (rohini)
+
+PIG-3664: Piggy Bank XPath UDF can't be called (nezihyigitbasi via daijy)
+
+PIG-3662: Static loadcaster in BinStorage can cause exception (lbendig via rohini)
+
+PIG-3617: problem with temp file deletion in MAPREDUCE operator (nezihyigitbasi via cheolsoo)
+
+PIG-3649: POPartialAgg incorrectly calculates size reduction when multiple values aggregated (tmwoodruff via daijy)
+
+PIG-3650: Fix for PIG-3100 breaks column pruning (tmwoodruff via daijy)
+
+PIG-3643: Nested Foreach with UDF and bincond is broken (cheolsoo)
+
+PIG-3616: TestBuiltIn.testURIwithCurlyBrace() silently fails (lbendig via cheolsoo)
+
+PIG-3608: ClassCastException when looking up a value from AvroMapWrapper using a Utf8 key (rding)
+
+PIG-3639: TestRegisteredJarVisibility is broken in trunk (cheolsoo)
+
+PIG-3640: Retain intermediate files for debugging purpose in batch mode (cheolsoo)
+
+PIG-3609: ClassCastException when calling compareTo method on AvroBagWrapper (rding via cheolsoo)
+
+PIG-3584: AvroStorage does not correctly translate arrays of strings (jadler via cheolsoo)
+
+PIG-3633: AvroStorage tests are failing when running against Avro 1.7.5 (jarcec via cheolsoo)
+
+PIG-3612: Storing schema does not work cross cluster with PigStorage and JsonStorage (rohini)
+
+PIG-3607: PigRecordReader should report progress for each inputsplit processed (rohini)
+
+PIG-3566: Cannot set useMatches of REGEX_EXTRACT_ALL and REGEX_EXTRACT (nezihyigitbasi via cheolsoo)
+
+PIG-2132: [Piggybank] MIN and MAX functions should ignore nulls (rekhajoshm via cheolsoo)
+
+PIG-3581: Incorrect scope resolution with nested foreach (aniket486)
+
+PIG-3285: Jobs using HBaseStorage fail to ship dependency jars (ndimiduk via cheolsoo)
+
+PIG-3582: Document SUM, MIN, MAX, and AVG functions for BigInteger and BigDecimal (harichinnan via cheolsoo)
+
+PIG-3525: PigStats.get() and ScriptState.get() shouldn't return MR-specific objects (cheolsoo)
+
+PIG-3568: Define the semantics of POStatus.STATUS_NULL (mwagner via cheolsoo)
+
+PIG-3561: Clean up PigStats and JobStats after PIG-3419 (cheolsoo)
+
+PIG-3553: HadoopJobHistoryLoader fails to load job history on hadoop v 1.2 (lgiri via cheolsoo)
+
+PIG-3559: Trunk is broken by PIG-3522 (cheolsoo)
+
+PIG-3551: Minor typo on pig latin basics page (elserj via aniket486)
+
+PIG-3526: Unions with Enums do not work with AvroStorage (jadler via cheolsoo)
+
+PIG-3377: New AvroStorage throws NPE when storing untyped map/array/bag (jadler via cheolsoo)
+
+PIG-3542: Javadoc of REGEX_EXTRACT_ALL (nyigitba via daijy)
+
+PIG-3518: Need to ship jruby.jar in the release (daijy)
+
+PIG-3524: Clean up Launcher and MapReduceLauncher after PIG-3419 (cheolsoo)
+
+PIG-3515: Shell commands are limited from OS buffer (andronat via cheolsoo)
+
+PIG-3520: Provide backward compatibility for PigRunner and PPNL after PIG-3419 (daijy via cheolsoo)
+
+PIG-3519: Remove dependency on uber avro-tools jar (jarcec via cheolsoo)
+
+PIG-3451: EvalFunc<T> ctor reflection to determine value of type param T is brittle (hazen via aniket486)
+
+PIG-3509: Exception swallowing in TOP (vrajaram via aniket486)
+
+PIG-3506: FLOOR documentation references CEIL function instead of FLOOR (seshness via daijy)
+
+PIG-3497: JobControlCompiler should only do reducer estimation when the job has a reduce phase (amatsukawa via aniket486)
+
+PIG-3469: Skewed join can cause unrecoverable NullPointerException when one of its inputs is missing (Jarek Jarcec Cecho  via xuefuz)
+
+PIG-3496: Propagate HBase 0.95 jars to the backend (Jarek Jarcec Cecho  via xuefuz)
+
+
+Release 0.12.1 (unreleased changes)
+
+IMPROVEMENTS
+
+PIG-3529: Upgrade HBase dependency from 0.95-SNAPSHOT to 0.96 (jarcec via daijy)
+
+PIG-3552: UriUtil used by reducer estimator should support viewfs (amatsukawa via aniket486)
+
+PIG-3549: Print hadoop jobids for failed, killed job (aniket486)
+
+PIG-3047: Check the size of a relation before adding it to distributed cache in Replicated join (aniket486)
+
+PIG-3480: TFile-based tmpfile compression crashes in some cases (dvryaboy via aniket486)
+
+BUG FIXES
+
+PIG-3661: Piggybank AvroStorage fails if used in more than one load or store statement (rohini)
+
+PIG-3819: e2e tests containing "perl -e "print $_;" fails on Hadoop 2 (daijy)
+
+PIG-3813: Rank column is assigned different uids everytime when schema is reset (cheolsoo)
+
+PIG-3833: Relation loaded by AvroStorage with schema is projected incorrectly in foreach statement (jeongjinku via cheolsoo)
+
+PIG-3794: pig -useHCatalog fails using pig command line interface on HDInsight (ehans via daijy)
+
+PIG-3827: Custom partitioner is not picked up with secondary sort optimization (daijy)
+
+PIG-3826: Outer join with PushDownForEachFlatten generates wrong result (daijy)
+
+PIG-3820: TestAvroStorage fail on some OS (daijy)
+
+PIG-3818: PIG-2499 is accidently reverted (daijy)
+
+PIG-3516: pig does not bring in joda-time as dependency in its pig-template.xml (daijy)
+
+PIG-3753: LOGenerate generates null schema (daijy)
+
+PIG-3782: PushDownForEachFlatten + ColumnMapKeyPrune with user defined schema failing due to incorrect UID assignment (knoguchi via daijy)
+
+PIG-3779: Assert constructs ConstantExpression with null when no comment is given (thedatachef via cheolsoo)
+
+PIG-3777: Pig 12.0 Documentation (karinahauser via daijy)
+
+PIG-3774: Piggybank Over UDF get wrong result (daijy)
+
+PIG-3657: New partition filter extractor fails with NPE (cheolsoo)
+
+PIG-3347: Store invocation brings side effect (daijy)
+
+PIG-3670: Fix assert in Pig script (daijy)
+
+PIG-3741: Utils.setTmpFileCompressionOnConf can cause side effect for SequenceFileInterStorage (aniket486)
+
+PIG-3677: ConfigurationUtil.getLocalFSProperties can return an inconsistent property set (rohini)
+
+PIG-3621: Python Avro library can't read Avros made with builtin AvroStorage (rusell.jurney via cheolsoo)
+
+PIG-3592: Should not try to create success file for non-fs schemes like hbase (rohini)
+
+PIG-3572: Fix all unit test for during build pig with Hadoop 2.X on Windows (ssvinarchukhorton via daijy)
+
+PIG-2629: Wrong Usage of Scalar which is null causes high namenode operation (rohini)
+
+PIG-3593: Import jython standard module fail on cluster (daijy)
+
+PIG-3576: NPE due to PIG-3549 when job never gets submitted (lbendig via cheolsoo)
+
+PIG-3567: LogicalPlanPrinter throws OOM for large scripts (aniket486)
+
+PIG-3579: pig.script's deserialized version does not maintain line numbers (jgzhang via aniket486)
+
+PIG-3570: Rollback PIG-3060 (daijy)
+
+PIG-3530: Some e2e tests is broken due to PIG-3480 (daijy)
+
+PIG-3492: ColumnPrune dropping used column due to LogicalRelationalOperator.fixDuplicateUids changes not propagating (knoguchi via daijy)
+
+PIG-3325: Adding a tuple to a bag is slow (dvryaboy via aniket486)
+
+PIG-3512: Reducer estimater is broken by PIG-3497
+
+PIG-3510: New filter extractor fails with more than one filter statement (aniket486 via cheolsoo)
+
+
+Release 0.12.0
+
+INCOMPATIBLE CHANGES
+
+PIG-3082: outputSchema of a UDF allows two usages when describing a Tuple schema (jcoveney)
 
 PIG-3191: [piggybank] MultiStorage output filenames are not sortable (Danny Antonelli via jcoveney)
 
 PIG-3174: Remove rpm and deb artifacts from build.xml (gates)
 
 IMPROVEMENTS
+
+PIG-3503: More document for Pig 0.12 new features (daijy)
+
+PIG-3445: Make Parquet format available out of the box in Pig (lbendig via aniket486)
+
+PIG-3483: Document ASSERT keyword (aniket486 via daijy)
+
+PIG-3470: Print configuration variables in grunt (lbendig via daijy)
+
+PIG-3493: Add max/min for datetime (tyro89 via daijy)
+
+PIG-3479: Fix BigInt, BigDec, Date serialization. Improve perf of PigNullableWritable deserilization (dvryaboy)
+
+PIG-3461: Rewrite PartitionFilterOptimizer to make it work for all the cases (aniket486)
+
+PIG-2417: Streaming UDFs - allow users to easily write UDFs in scripting languages with no
+          JVM implementation. (jeremykarn via daijy)
+
+PIG-3199: Provide a method to retriever name of loader/storer in PigServer (prkommireddi via daijy)
+
+PIG-3367: Add assert keyword (operator) in pig (aniket486)
+
+PIG-3235: Avoid extra byte array copies in streaming (rohini)
+
+PIG-3065: pig output format/committer should support recovery for hadoop 0.23 (daijy)
+
+PIG-3390: Make pig working with HBase 0.95 (jarcec via daijy)
+
+PIG-3431: Return more information for parsing related exceptions. (jeremykarn via daijy)
+
+PIG-3430: Add xml format for explaining MapReduce Plan. (jeremykarn via daijy)
+
+PIG-3048: Add mapreduce workflow information to job configuration (billie.rinaldi via daijy)
+
+PIG-3436: Make pigmix run with Hadoop2 (rohini)
+
+PIG-3424: Package import list should consider class name as is first even if -Dudf.import.list is passed (rohini)
+
+PIG-3204: Change script parsing to parse entire script instead of line by line (rohini)
+
+PIG-3359: Register Statements and Param Substitution in Macros (jpacker via cheolsoo)
+
+PIG-3182: Pig currently lacks functions to trim the whitespace only on one hand side (sarutak via cheolsoo)
+
+PIG-3163: Pig current releases lack a UDF endsWith. This UDF tests if a given string ends with the specified suffix (sriramkrishnan via cheolsoo)
 
 PIG-3015: Rewrite of AvroStorage (jadler via cheolsoo)
 
@@ -142,8 +1124,6 @@ PIG-2764: Add a biginteger and bigdecimal type to pig (jcoveney)
 
 PIG-3073: POUserFunc creating log spam for large scripts (jcoveney)
 
-PIG-3082: outputSchema of a UDF allows two usages when describing a Tuple schema (jcoveney)
-
 PIG-3124:  Push FLATTENs After FILTERs If Possible (nwhite via daijy)
 
 PIG-3086: Allow A Prefix To Be Added To URIs In PigUnit Tests (nwhite via gates)
@@ -196,9 +1176,89 @@ PIG-2910: Add function to read schema from outout of Schema.toString() (initialc
 
 OPTIMIZATIONS
 
+PIG-3395: Large filter expression makes Pig hang (cheolsoo)
+
+PIG-3123: Simplify Logical Plans By Removing Unneccessary Identity Projections (njw45 via cheolsoo)
+
 PIG-3013: BinInterSedes improve chararray sort performance (rohini)
 
 BUG FIXES
+
+PIG-3504: Fix e2e Describe_cmdline_12 (cheolsoo via daijy)
+
+PIG-3128: Document the BigInteger and BigDecimal data type (daijy via cheolsoo)
+
+PIG-3495: Streaming udf e2e tests failures on Windows (daijy)
+
+PIG-3292: Logical plan invalid state: duplicate uid in schema during self-join to get cross product (cheolsoo via daijy)
+
+PIG-3491: Fix e2e failure Jython_Diagnostics_4 (daijy)
+
+PIG-3114: Duplicated macro name error when using pigunit (daijy)
+
+PIG-3370: Add New Reserved Keywords To The Pig Docs (cheolsoo)
+
+PIG-3487: Fix syntax errors in nightly.conf (arpitgupta via daijy)
+
+PIG-3458: ScalarExpression lost with multiquery optimization (knoguchi)
+
+PIG-3360: Some intermittent negative e2e tests fail on hadoop 2 (daijy)
+
+PIG-3468: PIG-3123 breaks e2e test Jython_Diagnostics_2 (daijy)
+
+PIG-3471: Add a base abstract class for ExecutionEngine (cheolsoo)
+
+PIG-3466: Race Conditions in InternalDistinctBag during proactive spill (cheolsoo)
+
+PIG-3464: Mark ExecType and ExecutionEngine interfaces as evolving (cheolsoo)
+
+PIG-3454: Update JsonLoader/JsonStorage (tyro89 via daijy)
+
+PIG-3333: Fix remaining Windows core unit test failures (daijy)
+
+PIG-3426: Add support for removing s3 files (jeremykarn via daijy)
+
+PIG-3349: Document ToString(Datetime, String) UDF (cheolsoo)
+
+PIG-3374: CASE and IN fail when expression includes dereferencing operator (cheolsoo)
+
+PIG-2606: union/ join operations are not accepting same alias as multiple inputs (hsubramaniyan via daijy)
+
+PIG-3379: Alias reuse in nested foreach causes PIG script to fail (xuefuz via daijy)
+
+PIG-3432: typo in log message in SchemaTupleFrontend (epishkin via cheolsoo)
+
+PIG-3410: LimitOptimizer is applied before PartitionFilterOptimizer (aniket486)
+
+PIG-3405: Top UDF documentation indicates improper use (aniket486 via cheolsoo)
+
+PIG-3425: Hive jdo api jar referenced in pig script throws error (deepesh via cheolsoo)
+
+PIG-3422: AvroStorage failed to read paths separated by commas (yuanlid via rohini)
+
+PIG-3420: Failed to retrieve map values from data loaded by AvroStorage (yuanlid via rohini)
+
+PIG-3414: QueryParserDriver.parseSchema(String) silently returns a wrong result when a comma is missing in the schema definition (cheolsoo)
+
+PIG-3412: jsonstorage breaks when tuple does not have as many columns as schema (aesilberstein via cheolsoo)
+
+PIG-3243: Documentation error (sarutak via cheolsoo)
+
+PIG-3210: Pig fails to start when it cannot write log to log files (mengsungwu via cheolsoo)
+
+PIG-3392: Document STARTSWITH and ENDSWITH UDFs (sriramkrishnan via cheolsoo)
+
+PIG-3393: STARTSWITH udf doesn't override outputSchema method (sriramkrishnan via cheolsoo)
+
+PIG-3389: "Set job.name" does not work with dump command (cheolsoo)
+
+PIG-3387: Miss spelling in test code "TestBuiltin.java" (sarutak via cheolsoo)
+
+PIG-3384: Missing negation in UDF doc sample code (ddamours via cheolsoo)
+
+PIG-3369: unit test TestImplicitSplitOnTuple.testImplicitSplitterOnTuple failed when using hadoopversion=23 (dreambird via cheolsoo)
+
+PIG-3375: CASE does not preserve the order of when branches (cheolsoo)
 
 PIG-3364: Case expression fails with an even number of when branches (cheolsoo)
 
@@ -284,8 +1344,6 @@ PIG-2265: Test case TestSecondarySort failure (daijy)
 
 PIG-3060: FLATTEN in nested foreach fails when the input contains an empty bag (daijy)
 
-PIG-2247: Pig parser does not detect multiple arguments with the same name passed to macro (dreambird via daijy)
-
 PIG-3249: Pig startup script prints out a wrong version of hadoop when using fat jar (prkommireddi via daijy)
 
 PIG-3110: pig corrupts chararrays with trailing whitespace when converting them to long (prkommireddi via daijy)
@@ -297,8 +1355,6 @@ PIG-3208: [zebra] TFile should not set io.compression.codec.lzo.buffersize (ekoo
 PIG-3172: Partition filter push down does not happen when there is a non partition key map column filter (rohini)
 
 PIG-3205: Passing arguments to python script does not work with -f option (rohini)
-
-PIG-2507: Semicolon in paramenters for UDF results in parsing error (tnachen via daijy)
 
 PIG-3239: Unable to return multiple values from a macro using SPLIT (dreambird via cheolsoo)
 
@@ -391,11 +1447,21 @@ INCOMPATIBLE CHANGES
 
 IMPROVEMENTS
 
+PIG-3380: Fix e2e test float precision related test failures when run with -Dpig.exec.mapPartAgg=true (anlilin via rohini)
+
 OPTIMIZATIONS
 
 PIG-2769: a simple logic causes very long compiling time on pig 0.10.0 (njw45 via dvryaboy) (prev. applied to 0.12)
 
 BUG FIXES
+
+PIG-3455: Pig 0.11.1 OutOfMemory error (rohini)
+
+PIG-3435: Custom Partitioner not working with MultiQueryOptimizer (knoguchi via daijy)
+
+PIG-3385: DISTINCT no longer uses custom partitioner (knoguchi via daijy)
+
+PIG-2507: Semicolon in paramenters for UDF results in parsing error (tnachen via daijy)
 
 PIG-3341: Strict datetime parsing and improve performance of loading datetime values (rohini)
 

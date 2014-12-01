@@ -41,8 +41,12 @@ tokens {
     FUNC_EVAL;
     INVOKE;
     INVOKER_FUNC_EVAL;
+    IN_LHS;
+    IN_RHS;
     CASE_COND;
     CASE_EXPR;
+    CASE_EXPR_LHS;
+    CASE_EXPR_RHS;
     CAST_EXPR;
     COL_RANGE;
     BIN_EXPR;
@@ -208,6 +212,9 @@ catch(RecognitionException re) {
 query : statement* EOF -> ^( QUERY statement* )
 ;
 
+schema: field_def_list EOF
+;
+
 // STATEMENTS
 
 statement : SEMI_COLON!
@@ -216,7 +223,8 @@ statement : SEMI_COLON!
           | inline_clause SEMI_COLON!
           | import_clause SEMI_COLON!
           | realias_clause SEMI_COLON!
-          | rel_cache_clause SEMI_COLON!
+          | register_clause SEMI_COLON!
+          | assert_clause SEMI_COLON!
           // semicolons after foreach_complex_statement are optional for backwards compatibility, but to keep
           // the grammar unambiguous if there is one then we'll parse it as a single, standalone semicolon
           // (which matches the first statement rule)
@@ -251,10 +259,6 @@ foreach_plan_simple : GENERATE flatten_generated_item ( COMMA flatten_generated_
 // MACRO grammar
 
 macro_content : LEFT_CURLY ( macro_content | ~(LEFT_CURLY | RIGHT_CURLY) )* RIGHT_CURLY
-;
-
-rel_cache_clause : CACHE IDENTIFIER
-    -> ^(CACHE IDENTIFIER)
 ;
 
 macro_param_clause : LEFT_PAREN ( identifier_plus (COMMA identifier_plus)* )? RIGHT_PAREN
@@ -325,7 +329,7 @@ explicit_bag_type : BAG! implicit_bag_type
 explicit_bag_type_cast : BAG LEFT_CURLY explicit_tuple_type_cast? RIGHT_CURLY -> ^( BAG_TYPE_CAST explicit_tuple_type_cast? )
 ;
 
-implicit_map_type : LEFT_BRACKET type? RIGHT_BRACKET -> ^( MAP_TYPE type? )
+implicit_map_type : LEFT_BRACKET ( ( identifier_plus COLON )? type )? RIGHT_BRACKET -> ^( MAP_TYPE identifier_plus? type? )
 ;
 
 explicit_map_type : MAP! implicit_map_type
@@ -349,6 +353,9 @@ explicit_type_cast : simple_type | explicit_map_type | explicit_tuple_type_cast 
 // CLAUSES
 
 import_clause : IMPORT^ QUOTEDSTRING
+;
+
+register_clause : REGISTER^ QUOTEDSTRING (USING identifier_plus AS identifier_plus)?
 ;
 
 define_clause : DEFINE^ IDENTIFIER ( cmd | func_clause | macro_clause)
@@ -469,6 +476,9 @@ previous_rel : ARROBA
 ;
 
 store_clause : STORE^ rel INTO! QUOTEDSTRING ( USING! func_clause )?
+;
+
+assert_clause : ASSERT^ rel BY! cond ( COMMA! QUOTEDSTRING )?
 ;
 
 filter_clause : FILTER^ rel BY! cond
@@ -661,9 +671,12 @@ unary_cond
     }
     : exp1 = expr
         ( ( IS NOT? NULL -> ^( NULL $exp1 NOT? ) )
-        | ( IN LEFT_PAREN ( expr ( COMMA expr )* ) RIGHT_PAREN -> ^( IN expr+ ) )
+        | ( IN LEFT_PAREN ( rhs_operand ( COMMA rhs_operand )* ) RIGHT_PAREN -> ^( IN ^( IN_LHS expr ) ^( IN_RHS rhs_operand )+ ) )
         | ( rel_op exp2 = expr -> ^( rel_op $exp1 $exp2 ) )
         | ( -> ^(BOOL_COND expr) ) )
+;
+
+rhs_operand : expr
 ;
 
 expr : multi_expr ( ( PLUS | MINUS )^ multi_expr )*
@@ -752,7 +765,8 @@ cast_expr
           | identifier_plus func_name_suffix? LEFT_PAREN ( real_arg ( COMMA real_arg )* )? RIGHT_PAREN projection* -> ^( FUNC_EVAL identifier_plus func_name_suffix? real_arg* ) projection*
           | func_name_without_columns LEFT_PAREN ( real_arg ( COMMA real_arg )* )? RIGHT_PAREN projection* -> ^( FUNC_EVAL func_name_without_columns real_arg* ) projection*
           | CASE ( (WHEN)=> WHEN cond THEN expr ( WHEN cond THEN expr )* ( ELSE expr )? END projection* -> ^( CASE_COND ^(WHEN cond+) ^(THEN expr+) ) projection*
-                 | expr WHEN expr THEN expr ( WHEN expr THEN expr )* ( ELSE expr )? END projection* -> ^( CASE_EXPR expr+ ) projection*
+                 | expr WHEN rhs_operand THEN rhs_operand ( WHEN rhs_operand THEN rhs_operand )* ( ELSE rhs_operand )? END projection*
+                 -> ^( CASE_EXPR ^(CASE_EXPR_LHS expr) ^(CASE_EXPR_RHS rhs_operand)+ ) projection*
                  )
           | paren_expr
           | curly_expr
@@ -961,6 +975,7 @@ nested_op_input_list : nested_op_input ( COMMA nested_op_input )*
 // extended identifier, handling the keyword and identifier conflicts. Ugly but there is no other choice.
 eid_without_columns : rel_str_op
     | IMPORT
+    | REGISTER
     | RETURNS
     | DEFINE
     | LOAD
@@ -1014,6 +1029,7 @@ eid_without_columns : rel_str_op
     | FULL
     | REALIAS
     | BOOL_COND
+    | ASSERT
 ;
 
 eid : eid_without_columns

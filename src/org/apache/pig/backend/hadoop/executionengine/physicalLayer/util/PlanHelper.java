@@ -19,6 +19,7 @@ package org.apache.pig.backend.hadoop.executionengine.physicalLayer.util;
 
 import java.net.URI;
 import java.util.LinkedList;
+import java.util.List;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -51,7 +52,6 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.expressionOpe
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhyPlanVisitor;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POCollectedGroup;
-import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POCombinerPackage;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POCross;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.PODemux;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.PODistinct;
@@ -59,19 +59,19 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOpe
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POFilter;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POForEach;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POGlobalRearrange;
-import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POJoinPackage;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLimit;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLoad;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLocalRearrange;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POMergeCogroup;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POMergeJoin;
-import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POMultiQueryPackage;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.PONative;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POOptimizedForEach;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPackage;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPartialAgg;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPartitionRearrange;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPoissonSample;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPreCombinerLocalRearrange;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POReservoirSample;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSkewedJoin;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSort;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSplit;
@@ -79,6 +79,7 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOpe
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStream;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POUnion;
 import org.apache.pig.impl.plan.DependencyOrderWalker;
+import org.apache.pig.impl.plan.OperatorKey;
 import org.apache.pig.impl.plan.VisitorException;
 
 import com.google.common.collect.Lists;
@@ -124,14 +125,33 @@ public class PlanHelper {
      * @return a LinkedList of operators contained within the plan which implement the supplied class; empty if no such ops exist.
      * @throws VisitorException
      */
-    public static <C extends PhysicalOperator> LinkedList<C> getPhysicalOperators(PhysicalPlan plan,
+    public static <C> LinkedList<C> getPhysicalOperators(PhysicalPlan plan,
             Class<C> opClass) throws VisitorException {
         OpFinder<C> finder = new OpFinder<C>(plan, opClass);
         finder.visit();
         return finder.getFoundOps();
     }
 
-    private static class OpFinder<C extends PhysicalOperator> extends PhyPlanVisitor {
+    /**
+     * Finds POLocalRearrange from POSplit sub-plan
+     * @param plan physical plan
+     * @param rearrangeKey operator key of the POLocalRearrange
+     * @return POLocalRearrange with the specified operator key which is in a sub-plan of POSplit
+     * @throws VisitorException
+     */
+    public static PhysicalPlan getLocalRearrangePlanFromSplit(PhysicalPlan plan, OperatorKey rearrangeKey) throws VisitorException {
+        List<POSplit> splits = PlanHelper.getPhysicalOperators(plan, POSplit.class);
+        for (POSplit split : splits) {
+            for (PhysicalPlan subPlan : split.getPlans()) {
+                if (subPlan.getOperator(rearrangeKey) != null) {
+                    return subPlan;
+                }
+            }
+        }
+        return plan;
+    }
+
+    private static class OpFinder<C> extends PhyPlanVisitor {
 
         final Class<C> opClass;
         private LinkedList<C> foundOps = Lists.newLinkedList();
@@ -150,8 +170,9 @@ public class PlanHelper {
             return !foundOps.isEmpty();
         }
 
+        @Override
         @SuppressWarnings("unchecked")
-        private void visit(PhysicalOperator op) {
+        public void visit(PhysicalOperator op) {
             if (opClass.isAssignableFrom(op.getClass())) {
                 foundOps.add((C) op);
             }
@@ -205,20 +226,6 @@ public class PlanHelper {
         @Override
         public void visitPackage(POPackage pkg) throws VisitorException {
             super.visitPackage(pkg);
-            visit(pkg);
-        }
-
-        @Override
-        public void visitCombinerPackage(POCombinerPackage pkg)
-                throws VisitorException {
-            super.visitCombinerPackage(pkg);
-            visit(pkg);
-        }
-
-        @Override
-        public void visitMultiQueryPackage(POMultiQueryPackage pkg)
-                throws VisitorException {
-            super.visitMultiQueryPackage(pkg);
             visit(pkg);
         }
 
@@ -400,13 +407,6 @@ public class PlanHelper {
         }
 
         @Override
-        public void visitJoinPackage(POJoinPackage joinPackage)
-                throws VisitorException {
-            super.visitJoinPackage(joinPackage);
-            visit(joinPackage);
-        }
-
-        @Override
         public void visitCast(POCast cast) {
             super.visitCast(cast);
             visit(cast);
@@ -471,15 +471,27 @@ public class PlanHelper {
 
         @Override
         public void visitPreCombinerLocalRearrange(
-                POPreCombinerLocalRearrange preCombinerLocalRearrange) {
+                POPreCombinerLocalRearrange preCombinerLocalRearrange) throws VisitorException {
             super.visitPreCombinerLocalRearrange(preCombinerLocalRearrange);
             visit(preCombinerLocalRearrange);
         }
 
         @Override
-        public void visitPartialAgg(POPartialAgg poPartialAgg) {
+        public void visitPartialAgg(POPartialAgg poPartialAgg) throws VisitorException {
             super.visitPartialAgg(poPartialAgg);
             visit(poPartialAgg);
+        }
+
+        @Override
+        public void visitReservoirSample(POReservoirSample reservoirSample) throws VisitorException {
+            super.visitReservoirSample(reservoirSample);
+            visit(reservoirSample);
+        }
+        
+        @Override
+        public void visitPoissonSample(POPoissonSample poissonSample) throws VisitorException {
+            super.visitPoissonSample(poissonSample);
+            visit(poissonSample);
         }
     }
 

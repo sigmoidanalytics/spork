@@ -18,6 +18,7 @@
 package org.apache.pig.test;
 
 import static junit.framework.Assert.assertEquals;
+import static org.apache.pig.builtin.mock.Storage.bag;
 import static org.apache.pig.builtin.mock.Storage.resetData;
 import static org.apache.pig.builtin.mock.Storage.tuple;
 import static org.junit.Assert.fail;
@@ -195,6 +196,82 @@ public class TestCase {
         assertEquals(tuple(5,"4n+1"), out.get(4));
         assertEquals(tuple(6,"4n+2"), out.get(5));
         assertEquals(tuple(7,"4n+3"), out.get(6));
+    }
+
+    /**
+     * Verify that CASE statement preserves the order of conditions.
+     * @throws Exception
+     */
+    @Test
+    public void testOrderOfConditions() throws Exception {
+        PigServer pigServer = new PigServer(ExecType.LOCAL);
+        Data data = resetData(pigServer);
+
+        data.set("foo",
+                tuple(1),
+                tuple(5),
+                tuple(10),
+                tuple(15),
+                tuple(20),
+                tuple(25),
+                tuple(30)
+                );
+
+        pigServer.registerQuery("A = LOAD 'foo' USING mock.Storage() AS (i:int);");
+        pigServer.registerQuery("B = FOREACH A GENERATE i, (" +
+                "  CASE " +
+                "    WHEN i > 20 THEN '> 20'" + // Conditions are not mutually exclusive
+                "    WHEN i > 10 THEN '> 10'" +
+                "    ELSE             '> 0'" +
+                "  END" +
+                ");");
+        pigServer.registerQuery("STORE B INTO 'bar' USING mock.Storage();");
+
+        List<Tuple> out = data.get("bar");
+        assertEquals(7, out.size());
+        assertEquals(tuple(1,"> 0"),   out.get(0));
+        assertEquals(tuple(5,"> 0"),   out.get(1));
+        assertEquals(tuple(10,"> 0"),  out.get(2));
+        assertEquals(tuple(15,"> 10"), out.get(3));
+        assertEquals(tuple(20,"> 10"), out.get(4));
+        assertEquals(tuple(25,"> 20"), out.get(5));
+        assertEquals(tuple(30,"> 20"), out.get(6));
+    }
+
+    /**
+     * Verify that CASE statement works when expressions contain dereference operators.
+     * @throws Exception
+     */
+    @Test
+    public void testWithDereferenceOperator() throws Exception {
+        PigServer pigServer = new PigServer(ExecType.LOCAL);
+        Data data = resetData(pigServer);
+
+        data.set("foo",
+                tuple("a","x",1),
+                tuple("a","y",1),
+                tuple("b","x",2),
+                tuple("b","y",2),
+                tuple("c","x",3),
+                tuple("c","y",3)
+                );
+
+        pigServer.registerQuery("A = LOAD 'foo' USING mock.Storage() AS (c1:chararray, c2:chararray, i:int);");
+        pigServer.registerQuery("B = GROUP A BY (c1, i);");
+        pigServer.registerQuery("C = FOREACH B GENERATE group.i, (" +
+                "  CASE group.i % 3" +
+                "    WHEN 0 THEN '3n'" +
+                "    WHEN 1 THEN '3n+1'" +
+                "    ELSE        '3n+2'" +
+                "  END" +
+                "), A.(c1, c2);");
+        pigServer.registerQuery("STORE C INTO 'bar' USING mock.Storage();");
+
+        List<Tuple> out = data.get("bar");
+        assertEquals(3, out.size());
+        assertEquals(tuple(1, "3n+1", bag(tuple("a","x"), tuple("a","y"))), out.get(0));
+        assertEquals(tuple(2, "3n+2", bag(tuple("b","x"), tuple("b","y"))), out.get(1));
+        assertEquals(tuple(3, "3n",   bag(tuple("c","x"), tuple("c","y"))), out.get(2));
     }
 
     /**

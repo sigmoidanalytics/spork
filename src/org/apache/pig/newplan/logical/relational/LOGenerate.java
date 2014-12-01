@@ -33,6 +33,8 @@ import org.apache.pig.newplan.logical.relational.LogicalSchema.LogicalFieldSchem
 public class LOGenerate extends LogicalRelationalOperator {
      private List<LogicalExpressionPlan> outputPlans;
      private boolean[] flattenFlags;
+     // mUserDefinedSchema is the original input from the user, we don't suppose
+     // to store uid in mUserDefinedSchema
      private List<LogicalSchema> mUserDefinedSchema = null;
      private List<LogicalSchema> outputPlanSchemas = null;
      // If LOGenerate generate new uid, cache it here.
@@ -144,11 +146,12 @@ public class LOGenerate extends LogicalRelationalOperator {
                         fs.stampFieldSchema();
                         mergedSchema.addField(new LogicalFieldSchema(fs));
                     }
-                    if(mergedSchema.size() == 1 && mergedSchema.getField(0).type == DataType.NULL){
-                        //this is the use case where a new alias has been specified by user
-                        mergedSchema.getField(0).type = DataType.BYTEARRAY;
+                    for (LogicalFieldSchema fs : mergedSchema.getFields()) {
+                        if (fs.type == DataType.NULL){
+                            //this is the use case where a new alias has been specified by user
+                            fs.type = DataType.BYTEARRAY;
+                        }
                     }
-                
                 } else {
 
                     // Merge uid with the exp field schema
@@ -191,10 +194,6 @@ public class LOGenerate extends LogicalRelationalOperator {
         if (schema==null || schema.size()==0) {
             schema = null;
             outputPlanSchemas = null;
-        }
-        
-        if (schema != null) {
-            LogicalRelationalOperator.fixDuplicateUids(schema.getFields());
         }
         
         return schema;

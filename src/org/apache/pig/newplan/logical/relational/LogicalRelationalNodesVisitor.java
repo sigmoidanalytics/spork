@@ -98,7 +98,4 @@ public abstract class LogicalRelationalNodesVisitor extends PlanVisitor {
 
     public void visit(LONative nativeMR) throws FrontendException{
     }
-
-    public void visit(LOCache loCache) throws FrontendException {
-    }
 }

@@ -262,18 +262,18 @@ public class BoundScript {
 
     private PigStats exec(String query) throws IOException {
         LOG.info("Query to run:\n" + query);
-        List<PigProgressNotificationListener> listeners = ScriptState.get()
-                .getAllListeners();
-        ScriptState.start("embedded", scriptContext.getPigContext());
+        List<PigProgressNotificationListener> listeners = ScriptState.get().getAllListeners();
+        PigContext pc = scriptContext.getPigContext();
+        ScriptState scriptState = pc.getExecutionEngine().instantiateScriptState();
+        ScriptState.start(scriptState);
         ScriptState.get().setScript(query);
         for (PigProgressNotificationListener listener : listeners) {
             ScriptState.get().registerListener(listener);
         }
         PigServer pigServer = new PigServer(scriptContext.getPigContext(), false);
         pigServer.setBatchOn();
-        GruntParser grunt = new GruntParser(new StringReader(query));
+        GruntParser grunt = new GruntParser(new StringReader(query), pigServer);
         grunt.setInteractive(false);
-        grunt.setParams(pigServer);
         try {
             grunt.parseStopOnError(true);
         } catch (ParseException e) {
@@ -282,13 +282,12 @@ public class BoundScript {
         pigServer.executeBatch();
         return PigStats.get();
     }
-        
-    private void registerQuery(PigServer pigServer, String pl) throws IOException {                
-        GruntParser grunt = new GruntParser(new StringReader(pl));
+
+    private void registerQuery(PigServer pigServer, String pl) throws IOException {
+        GruntParser grunt = new GruntParser(new StringReader(pl), pigServer);
         grunt.setInteractive(false);
-        grunt.setParams(pigServer);
         pigServer.setBatchOn();
-        try {
+      try {
             grunt.parseStopOnError(true);
         } catch (ParseException e) {
             throw new IOException("Failed to parse query: " + pl, e);
@@ -329,15 +328,16 @@ public class BoundScript {
         
         @Override
         public PigStats call() throws Exception {
-            LOG.info("Query to run:\n" + query);          
-            ScriptState.start("embedded", scriptContext.getPigContext());
+            LOG.info("Query to run:\n" + query);
+            PigContext pc = scriptContext.getPigContext();
+            ScriptState scriptState = pc.getExecutionEngine().instantiateScriptState();
+            ScriptState.start(scriptState);
             ScriptState.get().setScript(query);
             ScriptState.get().registerListener(adaptor);
             PigServer pigServer = new PigServer(ctx, true);
             pigServer.setBatchOn();
-            GruntParser grunt = new GruntParser(new StringReader(query));
+            GruntParser grunt = new GruntParser(new StringReader(query), pigServer);
             grunt.setInteractive(false);
-            grunt.setParams(pigServer);
             try {
                 grunt.parseStopOnError(true);
             } catch (ParseException e) {
@@ -347,5 +347,5 @@ public class BoundScript {
             return PigStats.get();
         }
     }
-          
+
 }

@@ -20,7 +20,6 @@ package org.apache.pig.backend.hadoop.executionengine.mapReduceLayer;
 import java.io.IOException;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.mapreduce.Counter;
 import org.apache.hadoop.mapreduce.OutputFormat;
 import org.apache.hadoop.mapreduce.RecordWriter;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
@@ -29,7 +28,6 @@ import org.apache.pig.StoreFuncInterface;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStoreImpl;
 import org.apache.pig.backend.hadoop.executionengine.shims.HadoopShims;
-import org.apache.pig.backend.hadoop.executionengine.util.MapRedUtil;
 import org.apache.pig.tools.pigstats.PigStatsUtil;
 import org.apache.pig.tools.pigstats.PigStatusReporter;
 /**
@@ -37,48 +35,45 @@ import org.apache.pig.tools.pigstats.PigStatusReporter;
  * collector/record writer. It sets up a modified job configuration to
  * force a write to a specific subdirectory of the main output
  * directory. This is done so that multiple output directories can be
- * used in the same job. 
+ * used in the same job.
  */
-@SuppressWarnings("unchecked")
 public class MapReducePOStoreImpl extends POStoreImpl {
-            
-    private TaskAttemptContext context;
-    
-    private PigStatusReporter reporter;
 
-    private RecordWriter writer;
-           
-    public MapReducePOStoreImpl(TaskInputOutputContext context) {
+    private TaskAttemptContext context;
+    private PigStatusReporter reporter;
+    private RecordWriter<?,?> writer;
+
+    public MapReducePOStoreImpl(TaskInputOutputContext<?,?,?,?> context) {
         // get a copy of the Configuration so that changes to the
         // configuration below (like setting the output location) do
         // not affect the caller's copy
         Configuration outputConf = new Configuration(context.getConfiguration());
-        PigStatusReporter.setContext(context);
         reporter = PigStatusReporter.getInstance();
-       
+        reporter.setContext(new MRTaskContext(context));
+
         // make a copy of the Context to use here - since in the same
         // task (map or reduce) we could have multiple stores, we should
         // make this copy so that the same context does not get over-written
         // by the different stores.
-        
-        this.context = HadoopShims.createTaskAttemptContext(outputConf, 
+
+        this.context = HadoopShims.createTaskAttemptContext(outputConf,
                 context.getTaskAttemptID());
     }
-    
+
     @Override
-    public StoreFuncInterface createStoreFunc(POStore store) 
+    public StoreFuncInterface createStoreFunc(POStore store)
             throws IOException {
- 
+
         StoreFuncInterface storeFunc = store.getStoreFunc();
 
         // call the setStoreLocation on the storeFunc giving it the
         // Job. Typically this will result in the OutputFormat of the
         // storeFunc storing the output location in the Configuration
-        // in the Job. The PigOutFormat.setLocation() method will merge 
+        // in the Job. The PigOutFormat.setLocation() method will merge
         // this modified Configuration into the configuration of the
         // Context we have
         PigOutputFormat.setLocation(context, store);
-        OutputFormat outputFormat = storeFunc.getOutputFormat();
+        OutputFormat<?,?> outputFormat = storeFunc.getOutputFormat();
 
         // create a new record writer
         try {
@@ -86,9 +81,9 @@ public class MapReducePOStoreImpl extends POStoreImpl {
         } catch (InterruptedException e) {
             throw new IOException(e);
         }
- 
+
         storeFunc.prepareToWrite(writer);
-        
+
         return storeFunc;
     }
 
@@ -115,10 +110,8 @@ public class MapReducePOStoreImpl extends POStoreImpl {
             writer = null;
         }
     }
-    
-    public Counter createRecordCounter(POStore store) {
-        String name = PigStatsUtil.getMultiStoreCounterName(store);
-        return (name == null) ? null : reporter.getCounter(
-                PigStatsUtil.MULTI_STORE_COUNTER_GROUP, name); 
+
+    public void incrRecordCounter(String name, long incr) {
+        reporter.incrCounter(PigStatsUtil.MULTI_STORE_COUNTER_GROUP, name, incr);
     }
 }

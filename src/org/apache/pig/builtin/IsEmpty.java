@@ -22,7 +22,6 @@ import java.util.Map;
 
 import org.apache.pig.FilterFunc;
 import org.apache.pig.PigException;
-import org.apache.pig.TerminatingAccumulator;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.data.DataBag;
 import org.apache.pig.data.DataType;
@@ -32,14 +31,12 @@ import org.apache.pig.data.Tuple;
 /**
  * Determine whether a bag or map is empty.
  */
-public class IsEmpty extends FilterFunc implements TerminatingAccumulator<Boolean> {
-
-    private boolean isEmpty = true;
+public class IsEmpty extends FilterFunc {
 
     @Override
     public Boolean exec(Tuple input) throws IOException {
         try {
-            Object values = input.get(0);        
+            Object values = input.get(0);
             if (values instanceof DataBag)
                 return ((DataBag)values).size() == 0;
             else if (values instanceof Map)
@@ -56,23 +53,7 @@ public class IsEmpty extends FilterFunc implements TerminatingAccumulator<Boolea
     }
 
     @Override
-    public boolean isFinished() {
-        return !isEmpty;
+    public boolean allowCompileTimeCalculation() {
+        return true;
     }
-
-    @Override
-    public void accumulate(Tuple b) throws IOException {
-        isEmpty &= exec(b);
-    }
-
-    @Override
-    public void cleanup() {
-        isEmpty = true;
-    }
-
-    @Override
-    public Boolean getValue() {
-        return isEmpty;
-    }
-
 }

@@ -17,7 +17,7 @@
  */
 package org.apache.pig.data;
 
-import static org.apache.pig.PigConfiguration.SHOULD_USE_SCHEMA_TUPLE;
+import static org.apache.pig.PigConfiguration.PIG_SCHEMA_TUPLE_ENABLED;
 import static org.apache.pig.PigConstants.SCHEMA_TUPLE_ON_BY_DEFAULT;
 
 import java.io.File;
@@ -33,16 +33,12 @@ import java.util.Set;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.pig.ExecType;
 import org.apache.pig.PigConstants;
-import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigMapReduce;
-import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.data.SchemaTupleClassGenerator.GenContext;
 import org.apache.pig.data.utils.StructuresHelper.SchemaKey;
 import org.apache.pig.data.utils.StructuresHelper.Triple;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.logicalLayer.schema.Schema;
-import org.apache.pig.impl.util.ObjectSerializer;
 
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -61,7 +57,7 @@ public class SchemaTupleBackend {
     private URLClassLoader classLoader;
     private Map<Triple<SchemaKey, Boolean, GenContext>, SchemaTupleFactory> schemaTupleFactoriesByTriple = Maps.newHashMap();
     private Map<Integer, SchemaTupleFactory> schemaTupleFactoriesById = Maps.newHashMap();
-    private static Configuration jConf;
+    private Configuration jConf;
 
     private File codeDir;
 
@@ -94,7 +90,7 @@ public class SchemaTupleBackend {
             throw new RuntimeException("Unable to make URLClassLoader for tempDir: "
                     + codeDir.getAbsolutePath());
         }
-        SchemaTupleBackend.jConf = jConf;
+        this.jConf = jConf;
         this.isLocal = isLocal;
     }
 
@@ -154,8 +150,8 @@ public class SchemaTupleBackend {
             return;
         }
         // Step one is to see if there are any classes in the distributed cache
-        if (!jConf.getBoolean(SHOULD_USE_SCHEMA_TUPLE, SCHEMA_TUPLE_ON_BY_DEFAULT)) {
-            LOG.info("Key [" + SHOULD_USE_SCHEMA_TUPLE +"] was not set... will not generate code.");
+        if (!jConf.getBoolean(PIG_SCHEMA_TUPLE_ENABLED, SCHEMA_TUPLE_ON_BY_DEFAULT)) {
+            LOG.info("Key [" + PIG_SCHEMA_TUPLE_ENABLED +"] was not set... will not generate code.");
             return;
         }
         // Step two is to copy everything from the distributed cache if we are in distributed mode
@@ -187,14 +183,22 @@ public class SchemaTupleBackend {
             LOG.info("Attempting to read file: " + s);
             // The string is the symlink into the distributed cache
             File src = new File(s);
-            FileInputStream fin = new FileInputStream(src);
-            FileOutputStream fos = new FileOutputStream(new File(codeDir, s));
+            FileInputStream fin = null;
+            FileOutputStream fos = null;
+            try {
+                fin = new FileInputStream(src);
+                fos = new FileOutputStream(new File(codeDir, s));
 
-            fin.getChannel().transferTo(0, src.length(), fos.getChannel());
-
-            fin.close();
-            fos.close();
-            LOG.info("Successfully copied file to local directory.");
+                fin.getChannel().transferTo(0, src.length(), fos.getChannel());
+                LOG.info("Successfully copied file to local directory.");
+            } finally {
+                if (fin != null) {
+                    fin.close();
+                }
+                if (fos != null) {
+                    fos.close();
+                }
+            }
         }
     }
 
@@ -268,7 +272,7 @@ public class SchemaTupleBackend {
     private static SchemaTupleBackend stb;
 
     public static void initialize(Configuration jConf, PigContext pigContext) throws IOException {
-        initialize(jConf, pigContext, false);
+        initialize(jConf, pigContext, pigContext.getExecType().isLocal());
     }
 
     public static void initialize(Configuration jConf, PigContext pigContext, boolean isLocal) throws IOException {
@@ -281,33 +285,23 @@ public class SchemaTupleBackend {
             stbInstance.copyAndResolve();
             stb = stbInstance;
         }
-        LOG.info("stb : "+stb);
     }
 
     public static SchemaTupleFactory newSchemaTupleFactory(Schema s, boolean isAppendable, GenContext context)  {
-    	LOG.info("stb 1 : "+stb);
-    	if (stb == null) {
+        if (stb == null) {
             // It is possible (though ideally should be avoided) for this to be called on the frontend if
             // the Tuple processing path of the POPlan is invoked (perhaps for optimization purposes)
-//            throw new RuntimeException("context: initialize was not called! Even when SchemaTuple feature is not set, it should be called.");
-    		SchemaTupleBackend stbInstance = new SchemaTupleBackend(jConf, false);    		
-    		try { 
-    			stbInstance.copyAndResolve();
- 			} 
-    		catch(Exception e) { e.printStackTrace(); }
-    		
-    		stb = stbInstance;
-        }        	
+            throw new RuntimeException("initialize was not called! Even when SchemaTuple feature is not set, it should be called.");
+        }
         return stb.internalNewSchemaTupleFactory(s, isAppendable, context);
     }
 
     protected static SchemaTupleFactory newSchemaTupleFactory(int id) {
-    	LOG.info("stb 2 : "+stb);
-    	if (stb == null) {
+        if (stb == null) {
             // It is possible (though ideally should be avoided) for this to be called on the frontend if
             // the Tuple processing path of the POPlan is invoked (perhaps for optimization purposes)
             throw new RuntimeException("initialize was not called! Even when SchemaTuple feature is not set, it should be called.");
-        }        
+        }
         return stb.internalNewSchemaTupleFactory(id);
     }
 }

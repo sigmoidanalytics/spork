@@ -16,15 +16,16 @@
  */
 package org.apache.pig.backend.hadoop.hbase;
 
-import java.io.ByteArrayOutputStream;
 import java.io.DataInput;
 import java.io.DataOutput;
-import java.io.DataOutputStream;
 import java.io.IOException;
-import java.math.BigDecimal;
-import java.math.BigInteger;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.UndeclaredThrowableException;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -38,6 +39,8 @@ import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.GnuParser;
 import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.Option;
+import org.apache.commons.cli.OptionBuilder;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.logging.Log;
@@ -54,15 +57,15 @@ import org.apache.hadoop.hbase.filter.CompareFilter.CompareOp;
 import org.apache.hadoop.hbase.filter.FamilyFilter;
 import org.apache.hadoop.hbase.filter.Filter;
 import org.apache.hadoop.hbase.filter.FilterList;
+import org.apache.hadoop.hbase.filter.QualifierFilter;
+import org.apache.hadoop.hbase.filter.RegexStringComparator;
 import org.apache.hadoop.hbase.filter.RowFilter;
 import org.apache.hadoop.hbase.filter.WhileMatchFilter;
-import org.apache.hadoop.hbase.filter.QualifierFilter;
 import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
 import org.apache.hadoop.hbase.mapreduce.TableInputFormat;
 import org.apache.hadoop.hbase.mapreduce.TableMapReduceUtil;
 import org.apache.hadoop.hbase.mapreduce.TableOutputFormat;
 import org.apache.hadoop.hbase.mapreduce.TableSplit;
-import org.apache.hadoop.hbase.util.Base64;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.mapred.JobConf;
@@ -73,6 +76,7 @@ import org.apache.hadoop.mapreduce.OutputFormat;
 import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.RecordWriter;
 import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.pig.CollectableLoadFunc;
 import org.apache.pig.LoadCaster;
 import org.apache.pig.LoadFunc;
 import org.apache.pig.LoadPushDown;
@@ -81,9 +85,10 @@ import org.apache.pig.OrderedLoadFunc;
 import org.apache.pig.ResourceSchema;
 import org.apache.pig.ResourceSchema.ResourceFieldSchema;
 import org.apache.pig.StoreFuncInterface;
-import org.apache.pig.backend.hadoop.datastorage.ConfigurationUtil;
+import org.apache.pig.StoreResources;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigSplit;
 import org.apache.pig.backend.hadoop.hbase.HBaseTableInputFormat.HBaseTableIFBuilder;
+import org.apache.pig.builtin.FuncUtils;
 import org.apache.pig.builtin.Utf8StorageConverter;
 import org.apache.pig.data.DataBag;
 import org.apache.pig.data.DataByteArray;
@@ -135,7 +140,8 @@ import com.google.common.collect.Lists;
  * <code>buddies</code> column family in the <code>SampleTableCopy</code> table.
  *
  */
-public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPushDown, OrderedLoadFunc {
+public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPushDown, OrderedLoadFunc, StoreResources,
+        CollectableLoadFunc {
 
     private static final Log LOG = LogFactory.getLog(HBaseStorage.class);
 
@@ -166,8 +172,9 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
     private String delimiter_;
     private boolean ignoreWhitespace_;
     private final long limit_;
+    private final boolean cacheBlocks_;
     private final int caching_;
-    private final boolean noWAL_;
+    private boolean noWAL_;
     private final long minTimestamp_;
     private final long maxTimestamp_;
     private final long timestamp_;
@@ -177,29 +184,33 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
     protected transient byte[] lt_;
     protected transient byte[] lte_;
 
+    private String regex_;
     private LoadCaster caster_;
 
     private ResourceSchema schema_;
     private RequiredFieldList requiredFieldList;
 
     private static void populateValidOptions() {
-        validOptions_.addOption("loadKey", false, "Load Key");
+        Option loadKey = OptionBuilder.hasOptionalArgs(1).withArgName("loadKey").withLongOpt("loadKey").withDescription("Load Key").create();
+        validOptions_.addOption(loadKey);
         validOptions_.addOption("gt", true, "Records must be greater than this value " +
                 "(binary, double-slash-escaped)");
         validOptions_.addOption("lt", true, "Records must be less than this value (binary, double-slash-escaped)");
         validOptions_.addOption("gte", true, "Records must be greater than or equal to this value");
         validOptions_.addOption("lte", true, "Records must be less than or equal to this value");
+        validOptions_.addOption("regex", true, "Record must match this regular expression");
+        validOptions_.addOption("cacheBlocks", true, "Set whether blocks should be cached for the scan");
         validOptions_.addOption("caching", true, "Number of rows scanners should cache");
         validOptions_.addOption("limit", true, "Per-region limit");
         validOptions_.addOption("delim", true, "Column delimiter");
         validOptions_.addOption("ignoreWhitespace", true, "Ignore spaces when parsing columns");
         validOptions_.addOption("caster", true, "Caster to use for converting values. A class name, " +
                 "HBaseBinaryConverter, or Utf8StorageConverter. For storage, casters must implement LoadStoreCaster.");
-        validOptions_.addOption("noWAL", false, "Sets the write ahead to false for faster loading. To be used with extreme caution since this could result in data loss (see http://hbase.apache.org/book.html#perf.hbase.client.putwal).");
+        Option noWal = OptionBuilder.hasOptionalArgs(1).withArgName("noWAL").withLongOpt("noWAL").withDescription("Sets the write ahead to false for faster loading. To be used with extreme caution since this could result in data loss (see http://hbase.apache.org/book.html#perf.hbase.client.putwal).").create();
+        validOptions_.addOption(noWal);
         validOptions_.addOption("minTimestamp", true, "Record must have timestamp greater or equal to this value");
         validOptions_.addOption("maxTimestamp", true, "Record must have timestamp less then this value");
         validOptions_.addOption("timestamp", true, "Record must have timestamp equal to this value");
-
     }
 
     /**
@@ -233,9 +244,11 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
      * <li>-lt=maxKeyVal
      * <li>-gte=minKeyVal
      * <li>-lte=maxKeyVal
+     * <li>-regex=match regex on KeyVal
      * <li>-limit=numRowsPerRegion max number of rows to retrieve per region
      * <li>-delim=char delimiter to use when parsing column names (default is space or comma)
      * <li>-ignoreWhitespace=(true|false) ignore spaces when parsing column names (default true)
+     * <li>-cacheBlocks=(true|false) Set whether blocks should be cached for the scan (default false).
      * <li>-caching=numRows  number of rows to cache (faster scans, more memory).
      * <li>-noWAL=(true|false) Sets the write ahead to false for faster loading.
      * <li>-minTimestamp= Scan's timestamp for min timeRange
@@ -255,11 +268,17 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
             configuredOptions_ = parser_.parse(validOptions_, optsArr);
         } catch (ParseException e) {
             HelpFormatter formatter = new HelpFormatter();
-            formatter.printHelp( "[-loadKey] [-gt] [-gte] [-lt] [-lte] [-columnPrefix] [-caching] [-caster] [-noWAL] [-limit] [-delim] [-ignoreWhitespace] [-minTimestamp] [-maxTimestamp] [-timestamp]", validOptions_ );
+            formatter.printHelp( "[-loadKey] [-gt] [-gte] [-lt] [-lte] [-regex] [-columnPrefix] [-cacheBlocks] [-caching] [-caster] [-noWAL] [-limit] [-delim] [-ignoreWhitespace] [-minTimestamp] [-maxTimestamp] [-timestamp]", validOptions_ );
             throw e;
         }
 
-        loadRowKey_ = configuredOptions_.hasOption("loadKey");
+		loadRowKey_ = false;
+		if (configuredOptions_.hasOption("loadKey")) {
+			String value = configuredOptions_.getOptionValue("loadKey");
+			if ("true".equalsIgnoreCase(value) || "".equalsIgnoreCase(value) || value == null ) {//the empty string and null check is for backward compat.
+				loadRowKey_ = true;
+			}
+		}
 
         delimiter_ = ",";
         if (configuredOptions_.getOptionValue("delim") != null) {
@@ -296,13 +315,20 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
         LOG.debug("Using caster " + caster_.getClass());
 
         caching_ = Integer.valueOf(configuredOptions_.getOptionValue("caching", "100"));
+        cacheBlocks_ = Boolean.valueOf(configuredOptions_.getOptionValue("cacheBlocks", "false"));
         limit_ = Long.valueOf(configuredOptions_.getOptionValue("limit", "-1"));
-        noWAL_ = configuredOptions_.hasOption("noWAL");
+        noWAL_ = false;
+		if (configuredOptions_.hasOption("noWAL")) {
+			String value = configuredOptions_.getOptionValue("noWAL");
+			if ("true".equalsIgnoreCase(value) || "".equalsIgnoreCase(value) || value == null) {//the empty string and null check is for backward compat.
+				noWAL_ = true;
+			}
+		}
 
         if (configuredOptions_.hasOption("minTimestamp")){
             minTimestamp_ = Long.parseLong(configuredOptions_.getOptionValue("minTimestamp"));
         } else {
-            minTimestamp_ = Long.MIN_VALUE;
+            minTimestamp_ = 0;
         }
 
         if (configuredOptions_.hasOption("maxTimestamp")){
@@ -376,8 +402,7 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
     private void initScan() throws IOException{
         scan = new Scan();
 
-        // Map-reduce jobs should not run with cacheBlocks
-        scan.setCacheBlocks(false);
+        scan.setCacheBlocks(cacheBlocks_);
         scan.setCaching(caching_);
 
         // Set filters, if any.
@@ -411,6 +436,10 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
             // setStopRow call will limit the number of regions we need to scan
             addFilter(new WhileMatchFilter(new RowFilter(CompareOp.LESS_OR_EQUAL, new BinaryComparator(lte_))));
         }
+        if (configuredOptions_.hasOption("regex")) {
+            regex_ = Utils.slashisize(configuredOptions_.getOptionValue("regex"));
+            addFilter(new RowFilter(CompareOp.EQUAL, new RegexStringComparator(regex_)));
+        }
         if (configuredOptions_.hasOption("minTimestamp") || configuredOptions_.hasOption("maxTimestamp")){
             scan.setTimeRange(minTimestamp_, maxTimestamp_);
         }
@@ -441,7 +470,7 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
      * addFamily on the scan
      */
     private void addFiltersWithoutColumnPrefix(List<ColumnInfo> columnInfos) {
-        // Need to check for mixed types in a family, so we don't call addColumn 
+        // Need to check for mixed types in a family, so we don't call addColumn
         // after addFamily on the same family
         Map<String, List<ColumnInfo>> groupedMap = groupByFamily(columnInfos);
         for (Entry<String, List<ColumnInfo>> entrySet : groupedMap.entrySet()) {
@@ -459,7 +488,7 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
                                 + Bytes.toString(columnInfo.getColumnFamily()) + ":"
                                 + Bytes.toString(columnInfo.getColumnName()));
                     }
-                    scan.addColumn(columnInfo.getColumnFamily(), columnInfo.getColumnName());                    
+                    scan.addColumn(columnInfo.getColumnFamily(), columnInfo.getColumnName());
                 }
             } else {
                 String family = entrySet.getKey();
@@ -467,7 +496,7 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
                     LOG.debug("Adding column family to scan via addFamily with cf:name = "
                             + family);
                 }
-                scan.addFamily(Bytes.toBytes(family));                
+                scan.addFamily(Bytes.toBytes(family));
             }
         }
     }
@@ -677,6 +706,7 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
         .withLte(lte_)
         .withConf(m_conf)
         .build();
+        inputFormat.setScan(scan);
         return inputFormat;
     }
 
@@ -695,7 +725,6 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
         Properties udfProps = getUDFProperties();
         job.getConfiguration().setBoolean("pig.noSplitCombination", true);
 
-        initialiseHBaseClassLoaderResources(job);
         m_conf = initializeLocalJobConfig(job);
         String delegationTokenSet = udfProps.getProperty(HBASE_TOKEN_SET);
         if (delegationTokenSet == null) {
@@ -722,16 +751,61 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
                     new String[] {contextSignature});
             p.setProperty(contextSignature + "_projectedFields", ObjectSerializer.serialize(requiredFieldList));
         }
-        m_conf.set(TableInputFormat.SCAN, convertScanToString(scan));
     }
 
-    private void initialiseHBaseClassLoaderResources(Job job) throws IOException {
-        // Make sure the HBase, ZooKeeper, and Guava jars get shipped.
-        TableMapReduceUtil.addDependencyJars(job.getConfiguration(),
-            org.apache.hadoop.hbase.client.HTable.class,
-            com.google.common.collect.Lists.class,
-            org.apache.zookeeper.ZooKeeper.class);
+    @Override
+    public List<String> getShipFiles() {
+        // Depend on HBase to do the right thing when available, as of HBASE-9165
+        try {
+            Method addHBaseDependencyJars =
+              TableMapReduceUtil.class.getMethod("addHBaseDependencyJars", Configuration.class);
+            if (addHBaseDependencyJars != null) {
+                Configuration conf = new Configuration();
+                addHBaseDependencyJars.invoke(null, conf);
+                if (conf.get("tmpjars") != null) {
+                    String[] tmpjars = conf.getStrings("tmpjars");
+                    List<String> shipFiles = new ArrayList<String>(tmpjars.length);
+                    for (String tmpjar : tmpjars) {
+                        shipFiles.add(new URL(tmpjar).getPath());
+                    }
+                    return shipFiles;
+                }
+            }
+        } catch (NoSuchMethodException e) {
+            LOG.debug("TableMapReduceUtils#addHBaseDependencyJars not available."
+              + " Falling back to previous logic.", e);
+        } catch (IllegalAccessException e) {
+            LOG.debug("TableMapReduceUtils#addHBaseDependencyJars invocation"
+              + " not permitted. Falling back to previous logic.", e);
+        } catch (InvocationTargetException e) {
+            LOG.debug("TableMapReduceUtils#addHBaseDependencyJars invocation"
+              + " failed. Falling back to previous logic.", e);
+        } catch (MalformedURLException e) {
+            LOG.debug("TableMapReduceUtils#addHBaseDependencyJars tmpjars"
+                    + " had malformed url. Falling back to previous logic.", e);
+        }
 
+        List<Class> classList = new ArrayList<Class>();
+        classList.add(org.apache.hadoop.hbase.client.HTable.class); // main hbase jar or hbase-client
+        classList.add(org.apache.hadoop.hbase.mapreduce.TableSplit.class); // main hbase jar or hbase-server
+        classList.add(com.google.common.collect.Lists.class); // guava
+        classList.add(org.apache.zookeeper.ZooKeeper.class); // zookeeper
+        // Additional jars that are specific to v0.95.0+
+        addClassToList("org.cloudera.htrace.Trace", classList); // htrace
+        addClassToList("org.apache.hadoop.hbase.protobuf.generated.HBaseProtos", classList); // hbase-protocol
+        addClassToList("org.apache.hadoop.hbase.TableName", classList); // hbase-common
+        addClassToList("org.apache.hadoop.hbase.CompatibilityFactory", classList); // hbase-hadoop-compar
+        addClassToList("org.jboss.netty.channel.ChannelFactory", classList); // netty
+        return FuncUtils.getShipFiles(classList);
+    }
+
+    private void addClassToList(String className, List<Class> classList) {
+        try {
+            Class klass = Class.forName(className);
+            classList.add(klass);
+        } catch (ClassNotFoundException e) {
+            LOG.debug("Skipping adding jar for class: " + className);
+        }
     }
 
     private JobConf initializeLocalJobConfig(Job job) {
@@ -807,19 +881,6 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
         return location;
     }
 
-    private static String convertScanToString(Scan scan) {
-        try {
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            DataOutputStream dos = new DataOutputStream(out);
-            scan.write(dos);
-            return Base64.encodeBytes(out.toByteArray());
-        } catch (IOException e) {
-            LOG.error(e);
-            return "";
-        }
-
-    }
-
     /**
      * Set up the caster to use for reading values out of, and writing to, HBase.
      */
@@ -885,7 +946,7 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
             if (LOG.isDebugEnabled()) {
                 LOG.debug("putNext - tuple: " + i + ", value=" + t.get(i) +
                         ", cf:column=" + columnInfo);
-        }
+            }
 
             if (!columnInfo.isColumnMap()) {
                 put.add(columnInfo.getColumnFamily(), columnInfo.getColumnName(),
@@ -893,21 +954,25 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
                         DataType.findType(t.get(i)) : fieldSchemas[i].getType()));
             } else {
                 Map<String, Object> cfMap = (Map<String, Object>) t.get(i);
-                for (String colName : cfMap.keySet()) {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("putNext - colName=" + colName +
-                                  ", class: " + colName.getClass());
+                if (cfMap!=null) {
+                    for (String colName : cfMap.keySet()) {
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("putNext - colName=" + colName +
+                                      ", class: " + colName.getClass());
+                        }
+                        // TODO deal with the fact that maps can have types now. Currently we detect types at
+                        // runtime in the case of storing to a cf, which is suboptimal.
+                        put.add(columnInfo.getColumnFamily(), Bytes.toBytes(colName.toString()), ts,
+                                objToBytes(cfMap.get(colName), DataType.findType(cfMap.get(colName))));
                     }
-                    // TODO deal with the fact that maps can have types now. Currently we detect types at
-                    // runtime in the case of storing to a cf, which is suboptimal.
-                    put.add(columnInfo.getColumnFamily(), Bytes.toBytes(colName.toString()), ts,
-                            objToBytes(cfMap.get(colName), DataType.findType(cfMap.get(colName))));
                 }
             }
         }
 
         try {
-            writer.write(null, put);
+            if (!put.isEmpty()) {
+                writer.write(null, put);
+            }
         } catch (InterruptedException e) {
             throw new IOException(e);
         }
@@ -984,7 +1049,6 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
             schema_ = (ResourceSchema) ObjectSerializer.deserialize(serializedSchema);
         }
 
-        initialiseHBaseClassLoaderResources(job);
         m_conf = initializeLocalJobConfig(job);
         // Not setting a udf property and getting the hbase delegation token
         // only once like in setLocation as setStoreLocation gets different Job
@@ -1051,7 +1115,7 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
                 ( requiredFields.size() < 1 || requiredFields.get(0).getIndex() != 0)) {
                 loadRowKey_ = false;
             projOffset = 0;
-            }
+        }
 
         for (int i = projOffset; i < requiredFields.size(); i++) {
             int fieldIndex = requiredFields.get(i).getIndex();
@@ -1062,34 +1126,30 @@ public class HBaseStorage extends LoadFunc implements StoreFuncInterface, LoadPu
             LOG.debug("pushProjection After Projection: loadRowKey is " + loadRowKey_) ;
             for (ColumnInfo colInfo : newColumns) {
                 LOG.debug("pushProjection -- col: " + colInfo);
-        }
+            }
         }
         setColumnInfoList(newColumns);
         return new RequiredFieldResponse(true);
     }
 
-    @Override
-    public WritableComparable<InputSplit> getSplitComparable(InputSplit split)
-            throws IOException {
-        return new WritableComparable<InputSplit>() {
-            TableSplit tsplit = new TableSplit();
-
-            @Override
-            public void readFields(DataInput in) throws IOException {
-                tsplit.readFields(in);
-}
-
-            @Override
-            public void write(DataOutput out) throws IOException {
-                tsplit.write(out);
-            }
-
-            @Override
-            public int compareTo(InputSplit split) {
-                return tsplit.compareTo((TableSplit) split);
-            }
-        };
+    public void ensureAllKeyInstancesInSameSplit() throws IOException {
+        /** 
+         * no-op because hbase keys are unique 
+         * This will also work with things like DelimitedKeyPrefixRegionSplitPolicy
+         * if you need a partial key match to be included in the split
+         */
+        LOG.debug("ensureAllKeyInstancesInSameSplit");
     }
+
+    @Override
+    public WritableComparable<TableSplit> getSplitComparable(InputSplit split) throws IOException {
+        if (split instanceof TableSplit) {
+            return new TableSplitComparable((TableSplit) split);
+        } else {
+            throw new RuntimeException("LoadFunc expected split of type TableSplit but was " + split.getClass().getName());
+        }
+    }
+ 
 
     /**
      * Class to encapsulate logic around which column names were specified in each

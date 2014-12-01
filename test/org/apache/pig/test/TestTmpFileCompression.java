@@ -17,36 +17,37 @@
  */
 package org.apache.pig.test;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.Properties;
-
-import java.io.BufferedReader;
-import java.io.FileReader;
-
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.mapreduce.TaskAttemptContext;
-import org.apache.hadoop.mapreduce.TaskAttemptID;
 import org.apache.hadoop.mapreduce.lib.input.FileSplit;
-import org.apache.pig.ExecType;
+import org.apache.log4j.FileAppender;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+import org.apache.log4j.SimpleLayout;
+import org.apache.pig.PigConfiguration;
 import org.apache.pig.PigRunner;
 import org.apache.pig.PigServer;
 import org.apache.pig.backend.hadoop.executionengine.shims.HadoopShims;
-import org.apache.pig.data.DataBag;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.data.TupleFactory;
+import org.apache.pig.impl.io.InterStorage;
+import org.apache.pig.impl.io.SequenceFileInterStorage;
 import org.apache.pig.impl.io.TFileRecordReader;
 import org.apache.pig.impl.io.TFileRecordWriter;
 import org.apache.pig.impl.io.TFileStorage;
-import org.apache.pig.impl.io.InterStorage;
 import org.apache.pig.tools.pigstats.OutputStats;
 import org.apache.pig.tools.pigstats.PigStats;
 import org.junit.After;
@@ -54,22 +55,17 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 
-import org.apache.log4j.FileAppender;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
-import org.apache.log4j.SimpleLayout;
-
 public class TestTmpFileCompression {
     private PigServer pigServer;
-    static MiniCluster cluster = MiniCluster.buildCluster();
+    static MiniGenericCluster cluster = MiniGenericCluster.buildCluster(MiniGenericCluster.EXECTYPE_MR);
     File logFile;
 
     @Before
     public void setUp() throws Exception {
-        pigServer = new PigServer(ExecType.MAPREDUCE, cluster.getProperties());
+        pigServer = new PigServer(cluster.getExecType(), cluster.getProperties());
     }
 
-    private void resetLog(Class clazz) throws Exception {
+    private void resetLog(Class<?> clazz) throws Exception {
         if (logFile != null)
             logFile.delete();
         Logger logger = Logger.getLogger(clazz);
@@ -92,6 +88,7 @@ public class TestTmpFileCompression {
             while ((line = reader.readLine()) != null) {
                 logMessage = logMessage + line + "\n";
             }
+            reader.close();
             for (int i = 0; i < messages.length; i++) {
                 if (!logMessage.contains(messages[i])) return false;
             }
@@ -131,7 +128,7 @@ public class TestTmpFileCompression {
         if (!iter.hasNext()) fail("No Output received");
         int cnt = 0;
         while (iter.hasNext()) {
-            Tuple t = iter.next();
+            iter.next();
             ++cnt;
         }
         assertEquals(20, cnt);
@@ -190,13 +187,34 @@ public class TestTmpFileCompression {
         Util.deleteFile(cluster, input1);
         Util.deleteFile(cluster, input2);
         assertTrue(checkLogFileMessage(new String[] {
-            "Pig Internal storage in use"
+            InterStorage.useLog
         }));
     }
 
     @Test
-    public void testImplicitSplit() throws Exception {
+    public void testImplicitSplitTFile() throws Exception {
         resetLog(TFileStorage.class);
+        pigServer.getPigContext().getProperties().setProperty(
+                        PigConfiguration.PIG_ENABLE_TEMP_FILE_COMPRESSION, "true");
+        pigServer.getPigContext().getProperties().setProperty(
+                        PigConfiguration.PIG_TEMP_FILE_COMPRESSION_CODEC, "gz");
+        testImplicitSplit(TFileStorage.useLog);
+    }
+
+    @Test
+    public void testImplicitSplitSeqFile() throws Exception {
+        resetLog(SequenceFileInterStorage.class);
+        pigServer.getPigContext().getProperties().setProperty(
+                        PigConfiguration.PIG_ENABLE_TEMP_FILE_COMPRESSION, "true");
+        pigServer.getPigContext().getProperties().setProperty(
+                PigConfiguration.PIG_TEMP_FILE_COMPRESSION_STORAGE, "seqfile");
+        // bzip2 does not need native-hadoop
+        pigServer.getPigContext().getProperties().setProperty(
+                PigConfiguration.PIG_TEMP_FILE_COMPRESSION_CODEC, "bzip2");
+           testImplicitSplit(SequenceFileInterStorage.useLog);
+    }
+
+    private void testImplicitSplit(String assertLog) throws Exception {
         int LOOP_SIZE = 20;
         String[] input = new String[LOOP_SIZE];
         for (int i = 1; i <= LOOP_SIZE; i++) {
@@ -204,10 +222,6 @@ public class TestTmpFileCompression {
         }
         String inputFileName = "testImplicitSplit-input.txt";
         Util.createInputFile(cluster, inputFileName, input);
-        pigServer.getPigContext().getProperties().setProperty(
-                        "pig.tmpfilecompression", "true");
-        pigServer.getPigContext().getProperties().setProperty(
-                        "pig.tmpfilecompression.codec", "gz");
         pigServer.registerQuery("A = LOAD '" + inputFileName + "';");
         pigServer.registerQuery("B = filter A by $0<=10;");
         pigServer.registerQuery("C = filter A by $0>10;");
@@ -216,21 +230,42 @@ public class TestTmpFileCompression {
         if (!iter.hasNext()) fail("No Output received");
         int cnt = 0;
         while (iter.hasNext()) {
-            Tuple t = iter.next();
+            iter.next();
             ++cnt;
         }
         assertEquals(20, cnt);
         Util.deleteFile(cluster, inputFileName);
         assertTrue(checkLogFileMessage(new String[] {
-            "TFile storage in use"
+            assertLog
         }));
     }
 
     @Test
-    public void testImplicitSplitInCoGroup() throws Exception {
+    public void testImplicitSplitInCoGroupTFile() throws Exception {
+        resetLog(TFileStorage.class);
+        pigServer.getPigContext().getProperties().setProperty(
+                        PigConfiguration.PIG_ENABLE_TEMP_FILE_COMPRESSION, "true");
+        pigServer.getPigContext().getProperties().setProperty(
+                        PigConfiguration.PIG_TEMP_FILE_COMPRESSION_CODEC, "gz");
+        testImplicitSplitInCoGroup(TFileStorage.useLog);
+    }
+
+    @Test
+    public void testImplicitSplitInCoGroupSeqFile() throws Exception {
+        resetLog(SequenceFileInterStorage.class);
+        pigServer.getPigContext().getProperties().setProperty(
+                        PigConfiguration.PIG_ENABLE_TEMP_FILE_COMPRESSION, "true");
+        pigServer.getPigContext().getProperties().setProperty(
+                PigConfiguration.PIG_TEMP_FILE_COMPRESSION_STORAGE, "seqfile");
+        pigServer.getPigContext().getProperties().setProperty(
+                PigConfiguration.PIG_TEMP_FILE_COMPRESSION_CODEC, "bzip2");
+        testImplicitSplitInCoGroup(SequenceFileInterStorage.useLog);
+    }
+
+    private void testImplicitSplitInCoGroup(String assertLog) throws Exception {
         // this query is similar to the one reported in JIRA - PIG-537
         // Create input file
-        resetLog(TFileStorage.class);
+
         String input1 = "testImplicitSplitInCoGroup-input1.txt";
         String input2 = "testImplicitSplitInCoGroup-input2.txt";
         Util.createInputFile(cluster, input1, new String[] {
@@ -239,10 +274,7 @@ public class TestTmpFileCompression {
         Util.createInputFile(cluster, input2, new String[] {
                         "a:first", "b:second", "c:third"
         });
-        pigServer.getPigContext().getProperties().setProperty(
-                        "pig.tmpfilecompression", "true");
-        pigServer.getPigContext().getProperties().setProperty(
-                        "pig.tmpfilecompression.codec", "gz");
+
         pigServer.registerQuery("a = load '" + input1 + "' using PigStorage(':') as (name:chararray, marks:int);");
         pigServer.registerQuery("b = load '" + input2 + "' using PigStorage(':') as (name:chararray, rank:chararray);");
         pigServer.registerQuery("c = cogroup a by name, b by name;");
@@ -279,11 +311,11 @@ public class TestTmpFileCompression {
         Util.deleteFile(cluster, input1);
         Util.deleteFile(cluster, input2);
         assertTrue(checkLogFileMessage(new String[] {
-            "TFile storage in use"
+            assertLog
         }));
     }
 
-    
+
     // PIG-1977
     @Test
     public void testTFileRecordReader() throws Exception {
@@ -292,34 +324,34 @@ public class TestTmpFileCompression {
             w.println("1\tthis is a test for compression of temp files");
         }
         w.close();
-        
+
         Util.copyFromLocalToCluster(cluster, "1.txt", "1.txt");
-        
+
         PrintWriter w1 = new PrintWriter(new FileWriter("tfile.pig"));
         w1.println("A = load '1.txt' as (a0:int, a1:chararray);");
         w1.println("B = group A by a0;");
         w1.println("store B into 'tfile' using org.apache.pig.impl.io.TFileStorage();");
         w1.close();
-        
+
         PrintWriter w2 = new PrintWriter(new FileWriter("tfile2.pig"));
         w2.println("A = load 'tfile' using org.apache.pig.impl.io.TFileStorage() as (a:int, b:bag{(b0:int, b1:chararray)});");
         w2.println("B = foreach A generate flatten($1);");
         w2.println("store B into '2.txt';");
         w2.close();
-        
+
         try {
             String[] args = { "-Dpig.tmpfilecompression.codec=gz",
                     "-Dtfile.io.chunk.size=100", "tfile.pig" };
             PigStats stats = PigRunner.run(args, null);
-     
+
             assertTrue(stats.isSuccessful());
- 
+
             String[] args2 = { "-Dpig.tmpfilecompression.codec=gz",
                     "-Dtfile.io.chunk.size=100", "tfile2.pig" };
             PigStats stats2 = PigRunner.run(args2, null);
 
             assertTrue(stats2.isSuccessful());
-            
+
             OutputStats os = stats2.result("B");
             Iterator<Tuple> iter = os.iterator();
             int count = 0;
@@ -329,11 +361,11 @@ public class TestTmpFileCompression {
                 assertEquals(expected, iter.next().toString());
             }
             assertEquals(30, count);
-            
+
         } finally {
-            new File("tfile.pig").delete(); 
-            new File("tfile2.pig").delete(); 
-            new File("1.txt").delete(); 
+            new File("tfile.pig").delete();
+            new File("tfile2.pig").delete();
+            new File("1.txt").delete();
         }
     }
 
@@ -392,6 +424,7 @@ public class TestTmpFileCompression {
                 }
                 assertEquals("Last value does not match",
                             curval, LOOP_SIZE );
+                reader.close();
             } finally {
                 tFile.delete();
             }

@@ -55,6 +55,9 @@ query : ^( QUERY statement* )
 
 statement : general_statement
           | split_statement { sb.append(";\n"); }
+          | import_statement { sb.append(";\n"); }
+          | register_statement { sb.append(";\n"); }
+          | assert_statement { sb.append(";\n"); }
           | realias_statement
 ;
 
@@ -62,6 +65,32 @@ split_statement : split_clause
 ;
 
 realias_statement : realias_clause
+;
+
+import_statement : ^( IMPORT QUOTEDSTRING ) {
+                       sb.append(" ").append($IMPORT.text).append(" ").append($QUOTEDSTRING.text);
+                   }
+;
+
+register_statement : ^( REGISTER QUOTEDSTRING {
+                            sb.append($REGISTER.text).append(" ").append($QUOTEDSTRING.text);
+                        } scripting_udf_clause? )
+;
+
+assert_statement : assert_clause
+;
+
+scripting_udf_clause : scripting_language_clause scripting_namespace_clause
+;
+
+scripting_language_clause : (USING IDENTIFIER) {
+                                sb.append(" ").append($USING.text).append(" ").append($IDENTIFIER.text);
+                            }
+;
+
+scripting_namespace_clause : (AS IDENTIFIER) {
+                                 sb.append(" ").append($AS.text).append(" ").append($IDENTIFIER.text);
+                             }
 ;
 
 // For foreach statement that with complex inner plan.
@@ -99,6 +128,7 @@ op_clause : define_clause
           | split_clause
           | foreach_clause
           | cube_clause
+          | assert_clause
 ;
 
 define_clause
@@ -192,7 +222,7 @@ bag_type
     : ^( BAG_TYPE { sb.append("bag{"); } ( { sb.append("T:"); } IDENTIFIER? tuple_type )? ) { sb.append("}"); }
 ;
 
-map_type : ^( MAP_TYPE { sb.append("map["); } type? ) { sb.append("]"); }
+map_type : ^( MAP_TYPE { sb.append("map["); } IDENTIFIER? type? ) { sb.append("]"); }
 ;
 
 func_clause
@@ -204,9 +234,15 @@ func_name
     : eid ( ( PERIOD { sb.append($PERIOD.text); } | DOLLAR { sb.append($DOLLAR.text); } ) eid )*
 ;
 
-func_args
-    : a=QUOTEDSTRING { sb.append($a.text); }
-        (b=QUOTEDSTRING { sb.append(", ").append($b.text); } )*
+func_args : func_first_arg_clause (func_next_arg_clause)*
+;
+
+func_first_arg_clause :   QUOTEDSTRING { sb.append($QUOTEDSTRING.text); }
+                        | MULTILINE_QUOTEDSTRING { sb.append($MULTILINE_QUOTEDSTRING.text); }
+;
+
+func_next_arg_clause :    QUOTEDSTRING { sb.append(", ").append($QUOTEDSTRING.text); }
+                        | MULTILINE_QUOTEDSTRING { sb.append(", ").append($MULTILINE_QUOTEDSTRING.text); }
 ;
 
 cube_clause
@@ -271,6 +307,14 @@ store_clause
     : ^( STORE { sb.append($STORE.text).append(" "); } rel { sb.append(" INTO "); } filename ( { sb.append(" USING "); } func_clause)? )
 ;
 
+comment
+    : QUOTEDSTRING { sb.append($QUOTEDSTRING.text); }
+;
+
+assert_clause
+    : ^( ASSERT { sb.append($ASSERT.text).append(" "); } rel {sb.append(" BY ("); } cond { sb.append(")"); } ( { sb.append(" comment: "); } comment)?  )
+;
+
 filter_clause
     : ^( FILTER { sb.append($FILTER.text).append(" "); } rel { sb.append(" BY ("); } cond { sb.append(")"); } )
 ;
@@ -287,7 +331,9 @@ cond
 ;
 
 in_eval
-    : ^( IN { sb.append(" " + $IN.text + "("); } expr ( { sb.append(", "); } expr )+ { sb.append(") "); } )
+    : ^( IN { sb.append(" " + $IN.text + "("); }
+         ( ^( IN_LHS expr ) ^( IN_RHS { sb.append(", "); } expr ) )
+         ( ^( IN_LHS { sb.append(", "); } expr ) ^( IN_RHS  { sb.append(", "); } expr ) )* { sb.append(") "); } )
 ;
 
 func_eval
@@ -364,7 +410,9 @@ bin_expr
 ;
 
 case_expr
-    : ^( CASE_EXPR { sb.append(" CASE ("); } expr ( { sb.append(", "); } expr )+ { sb.append(") "); } )
+    : ^( CASE_EXPR { sb.append(" CASE ("); }
+         ( ^( CASE_EXPR_LHS expr ) ( ^( CASE_EXPR_RHS { sb.append(", "); } expr ) )+ )
+         ( ^( CASE_EXPR_LHS { sb.append(", "); } expr ) ( ^( CASE_EXPR_RHS { sb.append(", "); } expr ) )+ )* { sb.append(")"); } )
 ;
 
 case_cond
@@ -691,6 +739,7 @@ eid : rel_str_op
     | TOTUPLE    { sb.append($TOTUPLE.text); }
     | IN         { sb.append($IN.text); }
     | CASE       { sb.append($CASE.text); }
+    | ASSERT     { sb.append($ASSERT.text); }
 ;
 
 // relational operator

@@ -22,6 +22,8 @@ use TestDeployer;
 use strict;
 use English;
 
+use Util;
+
 our @ISA = "TestDeployer";
 
 ###########################################################################
@@ -242,7 +244,7 @@ sub generateData
     );
 
 	# Create the HDFS directories
-	$self->runPigCmd($cfg, $log, "fs -mkdir $cfg->{'inpathbase'}");
+	$self->runPigCmd($cfg, $log, "fs -mkdir -p $cfg->{'inpathbase'}");
 
     foreach my $table (@tables) {
 		print "Generating data for $table->{'name'}\n";
@@ -354,11 +356,18 @@ sub runPigCmd($$$$)
 
     my @pigCmd = "";
 
+	my $pigbin = "";
     if ($cfg->{'usePython'} eq "true") {
-      @pigCmd = ("$cfg->{'pigpath'}/bin/pig.py");
+      $pigbin = "$cfg->{'pigpath'}/bin/pig.py";
+    } elsif (Util::isCygwin()) {
+      $pigbin = "$cfg->{'pigpath'}/bin/pig.cmd";
+      $pigbin =~ s/\\/\//g;
+      $pigbin = `cygpath -u $pigbin`;
+      chomp($pigbin);
     } else {
-      @pigCmd = ("$cfg->{'pigpath'}/bin/pig");
+      $pigbin = "$cfg->{'pigpath'}/bin/pig";
     }
+	@pigCmd = ($pigbin);
     push(@pigCmd, '-e');
     push(@pigCmd, split(' ', $c));
 

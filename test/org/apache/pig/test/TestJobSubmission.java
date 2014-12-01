@@ -30,37 +30,34 @@ import junit.framework.Assert;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HBaseTestingUtility;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.MiniHBaseCluster;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.mapred.jobcontrol.Job;
 import org.apache.hadoop.mapred.jobcontrol.JobControl;
-import org.apache.pig.ExecType;
 import org.apache.pig.PigServer;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.datastorage.ConfigurationUtil;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.JobControlCompiler;
-import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.JobCreationException;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MapReduceOper;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.MROperPlan;
-import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLoad;
-import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPackage;
-import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
-import org.apache.pig.data.DataType;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.io.FileLocalizer;
 import org.apache.pig.impl.util.ConfigurationValidator;
 import org.apache.pig.test.utils.GenPhyOp;
 import org.junit.After;
 import org.junit.AfterClass;
+import org.junit.Assume;
 import org.junit.Before;
-import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 
-public class TestJobSubmission {
+@Ignore
+abstract public class TestJobSubmission {
 
 
     static PigContext pc;
@@ -74,11 +71,11 @@ public class TestJobSubmission {
     String curDir;
     String inpDir;
     String golDir;
-    static MiniCluster cluster = MiniCluster.buildCluster();
+    static MiniGenericCluster cluster = null;
 
-    @BeforeClass
-    public static void onetimeSetUp() throws Exception {
-        pc = new PigContext(ExecType.MAPREDUCE, cluster.getProperties());
+    public static void oneTimeSetUp() throws Exception {
+        cluster = MiniGenericCluster.buildCluster();
+        pc = new PigContext(cluster.getExecType(), cluster.getProperties());
         try {
             pc.connect();
         } catch (ExecException e) {
@@ -87,9 +84,6 @@ public class TestJobSubmission {
         }
         GenPhyOp.setPc(pc);
         Util.copyFromLocalToCluster(cluster, "test/org/apache/pig/test/data/passwd", "/passwd");
-
-        Configuration conf = cluster.getConfiguration();
-
     }
 
     @Before
@@ -100,7 +94,7 @@ public class TestJobSubmission {
         if (Util.WINDOWS) {
             inpDir="/"+FileLocalizer.parseCygPath(inpDir, FileLocalizer.STYLE_WINDOWS);
             golDir="/"+FileLocalizer.parseCygPath(golDir, FileLocalizer.STYLE_WINDOWS);
-	}
+        }
     }
 
     @After
@@ -109,383 +103,34 @@ public class TestJobSubmission {
 
     @AfterClass
     public static void oneTimeTearDown() throws Exception {
-        cluster.shutDown();
-    }
-
-/*    private void generateInput(int numTuples) throws ExecException{
-
-        DataBag inpDb = GenRandomData.genRandSmallTupDataBag(r, numTuples, 1000);
-
-        POProject proj = new POProject(new OperatorKey("", r.nextLong()));
-        Tuple t = new DefaultTuple();
-        t.append(inpDb);
-        proj.attachInput(t);
-        proj.setColumn(0);
-        proj.setOverloaded(true);
-        proj.setResultType(DataType.TUPLE);
-
-        List<PhysicalOperator> inps = new ArrayList<PhysicalOperator>();
-        inps.add(proj);
-
-        POStore str = new POStore(new OperatorKey("", r.nextLong()));
-        str.setInputs(inps);
-
-        FileSpec fSpec = new FileSpec(ldFile, new FuncSpec(PigStorage.class.getName()));
-
-        str.setSFile(fSpec);
-        str.setPc(pc);
-        str.store();
-    }
-
-    private void setUp1(boolean gen) throws Exception {
-        ldFile = "file:" + inpDir + "jsTst1.txt";
-        expFile = ldFile;
-        stFile = "jsTst1";
-        grpName = "jobSubTst1";
-
-        if(gen){
-            generateInput(100);
-            return;
+        if (cluster!=null) {
+            cluster.shutDown();
         }
-
-        hadoopLdFile = FileLocalizer.hadoopify(ldFile, pc);
-
-        FileSpec LFSpec = new FileSpec(hadoopLdFile,new FuncSpec(PigStorage.class.getName()));
-        FileSpec SFSpec = new FileSpec(stFile, new FuncSpec(PigStorage.class.getName()));
-
-        POLoad ld = new POLoad(new OperatorKey("", r.nextLong()), true);
-        POStore st = new POStore(new OperatorKey("", r.nextLong()));
-        ld.setPc(pc);
-        ld.setLFile(LFSpec);
-        st.setPc(pc);
-        st.setSFile(SFSpec);
-
-        php.add(ld);
-        php.add(st);
-        php.connect(ld, st);
-     }
-
-//    @Test
-    public void testCompile1() throws Exception {
-        boolean gen = false;
-
-        setUp1(gen);
-
-        if(gen)
-            return;
-
-        submit();
-
-        assertEquals(true, FileLocalizer.fileExists(stFile, pc));
-
-        FileSpec fSpecExp = new FileSpec(expFile, new FuncSpec(PigStorage.class.getName()));
-        FileSpec fSpecAct = new FileSpec(stFile, new FuncSpec(PigStorage.class.getName()));
-
-        assertEquals(true, TestHelper.areFilesSame(fSpecExp, fSpecAct, pc));
     }
-
-    private void setUp2(boolean gen) throws Exception {
-        ldFile = "file:" + inpDir + "jsTst2.txt";
-        expFile = ldFile;
-        stFile = "jsTst2";
-        grpName = "jobSubTst2";
-
-        if(gen){
-            generateInput(1000);
-            return;
-        }
-
-        hadoopLdFile = FileLocalizer.hadoopify(ldFile, pc);
-
-        FileSpec LFSpec = new FileSpec(hadoopLdFile, new FuncSpec(PigStorage.class.getName()));
-        FileSpec SFSpec = new FileSpec(stFile,new FuncSpec(PigStorage.class.getName()));
-
-        POLoad ld = new POLoad(new OperatorKey("", r.nextLong()), true);
-        POStore st = new POStore(new OperatorKey("", r.nextLong()));
-        ld.setPc(pc);
-        ld.setLFile(LFSpec);
-        st.setPc(pc);
-        st.setSFile(SFSpec);
-
-        php.add(ld);
-        php.add(st);
-        php.connect(ld, st);
-     }
-
-//    @Test
-    public void testCompile2() throws Exception {
-        boolean gen = false;
-
-        setUp2(gen);
-
-        if(gen)
-            return;
-
-        submit();
-
-        assertEquals(true, FileLocalizer.fileExists(stFile, pc));
-
-        FileSpec fSpecExp = new FileSpec(expFile,new FuncSpec(PigStorage.class.getName()));
-        FileSpec fSpecAct = new FileSpec(stFile,new FuncSpec(PigStorage.class.getName()));
-
-        assertEquals(true, TestHelper.areFilesSame(fSpecExp, fSpecAct, pc));
-    }
-
-    private void setUp3(boolean gen) throws Exception {
-        ldFile = "file:" + inpDir + "jsTst1.txt";
-        expFile = "file:" + golDir + "jsTst3";
-        stFile = "jsTst3";
-        grpName = "jobSubTst3";
-
-        if(gen){
-            generateInput(1000);
-            return;
-        }
-
-        hadoopLdFile = FileLocalizer.hadoopify(ldFile, pc);
-
-        FileSpec LFSpec = new FileSpec(hadoopLdFile, new FuncSpec(PigStorage.class.getName()));
-        FileSpec SFSpec = new FileSpec(stFile, new FuncSpec(PigStorage.class.getName()));
-
-        POLoad ld = new POLoad(new OperatorKey("", r.nextLong()), true);
-        POStore st = new POStore(new OperatorKey("", r.nextLong()));
-        ld.setPc(pc);
-        ld.setLFile(LFSpec);
-        st.setPc(pc);
-        st.setSFile(SFSpec);
-
-        int[] flds = {0,1};
-        Tuple sample = new DefaultTuple();
-        sample.append(new String("S"));
-        sample.append(new Integer("10"));
-
-        POForEach fe = GenPhyOp.topForEachOPWithPlan(flds , sample);
-
-        POFilter fl = GenPhyOp.topFilterOpWithProj(1, 500, GenPhyOp.LT);
-
-        php.add(ld);
-        php.add(fe);
-        php.connect(ld, fe);
-
-        php.add(fl);
-        php.connect(fe, fl);
-
-        php.add(st);
-        php.connect(fl, st);
-     }
-
-//    @Test
-    public void testCompile3() throws Exception {
-        boolean gen = false;
-
-        setUp3(gen);
-
-        if(gen)
-            return;
-
-        submit();
-
-        assertEquals(true, FileLocalizer.fileExists(stFile, pc));
-
-        FileSpec fSpecExp = new FileSpec(expFile, new FuncSpec(PigStorage.class.getName(), new String[]{","}));
-        FileSpec fSpecAct = new FileSpec(stFile,new FuncSpec(PigStorage.class.getName()));
-
-        assertEquals(true, TestHelper.areFilesSame(fSpecExp, fSpecAct, pc));
-    }
-
-    private void setUp4(boolean gen) throws Exception {
-        ldFile = "file:" + inpDir + "jsTst1.txt";
-        expFile = "file:" + golDir + "jsTst4";
-        stFile = "jsTst4";
-        grpName = "jobSubTst4";
-
-        if(gen){
-            generateInput(1000);
-            return;
-        }
-
-        hadoopLdFile = FileLocalizer.hadoopify(ldFile, pc);
-
-        FileSpec LFSpec = new FileSpec(hadoopLdFile,new FuncSpec(PigStorage.class.getName()));
-        FileSpec SFSpec = new FileSpec(stFile,new FuncSpec(PigStorage.class.getName()));
-
-        POLoad ld = new POLoad(new OperatorKey("", r.nextLong()), true);
-        POStore st = new POStore(new OperatorKey("", r.nextLong()));
-        ld.setPc(pc);
-        ld.setLFile(LFSpec);
-        st.setPc(pc);
-        st.setSFile(SFSpec);
-
-        POSplit spl = GenPhyOp.topSplitOp();
-        POFilter fl1 = GenPhyOp.topFilterOpWithProjWithCast(1, 200, GenPhyOp.LT);
-        POFilter fl2 = GenPhyOp.topFilterOpWithProjWithCast(1, 800, GenPhyOp.GT);
-
-        POUnion un = GenPhyOp.topUnionOp();
-
-        php.add(ld);
-        php.add(spl);
-        php.connect(ld, spl);
-
-        php.add(fl1);
-        php.connect(spl, fl1);
-
-        php.add(fl2);
-        php.connect(spl, fl2);
-
-        php.add(un);
-        php.connect(fl1, un);
-        php.connect(fl2, un);
-
-        php.add(st);
-        php.connect(un, st);
-     }
-
-//    @Test
-    public void testCompile4() throws Exception {
-        boolean gen = false;
-
-        setUp4(gen);
-
-        if(gen)
-            return;
-
-        submit();
-
-        assertEquals(true, FileLocalizer.fileExists(stFile, pc));
-
-        FileSpec fSpecExp = new FileSpec(expFile, new FuncSpec(PigStorage.class.getName(), new String[]{","}));
-        FileSpec fSpecAct = new FileSpec(stFile,new FuncSpec(PigStorage.class.getName()));
-
-        assertEquals(true, TestHelper.areFilesSame(fSpecExp, fSpecAct, pc));
-
-    }
-
-    private void setUp5(boolean gen) throws Exception {
-        ldFile = "file:" + inpDir + "jsTst5.txt";
-        expFile = ldFile;
-        stFile = "jsTst5";
-        grpName = "jobSubTst5";
-
-        if(gen){
-            generateInput(1000);
-            return;
-        }
-
-        hadoopLdFile = FileLocalizer.hadoopify(ldFile, pc);
-
-        FileSpec LFSpec = new FileSpec(hadoopLdFile, new FuncSpec(PigStorage.class.getName(), new String[]{","}));
-        FileSpec SFSpec = new FileSpec(stFile,new FuncSpec(PigStorage.class.getName()));
-
-        POLoad ld = new POLoad(new OperatorKey("", r.nextLong()), true);
-        POStore st = new POStore(new OperatorKey("", r.nextLong()));
-        ld.setPc(pc);
-        ld.setLFile(LFSpec);
-        st.setPc(pc);
-        st.setSFile(SFSpec);
-
-        Tuple sample = new DefaultTuple();
-        sample.append("S");
-        sample.append(1);
-        POLocalRearrange lr = GenPhyOp.topLocalRearrangeOPWithPlan(0, 1, sample);
-
-        POGlobalRearrange gr = GenPhyOp.topGlobalRearrangeOp();
-
-        POPackage pk = GenPhyOp.topPackageOp();
-        pk.setKeyType(DataType.INTEGER);
-        pk.setNumInps(1);
-        boolean[] inner = {false};
-        pk.setInner(inner);
-
-        POForEach fe = GenPhyOp.topForEachOPWithPlan(1);
-
-        php.add(ld);
-        php.add(lr);
-        php.connect(ld, lr);
-
-        php.add(gr);
-        php.connect(lr, gr);
-
-        php.add(pk);
-        php.connect(gr, pk);
-
-        php.add(fe);
-        php.connect(pk, fe);
-
-        php.add(st);
-        php.connect(fe, st);
-     }
-
-    @Test
-    public void testCompile5() throws Exception {
-        boolean gen = false;
-
-        setUp5(gen);
-
-        if(gen)
-            return;
-
-        submit();
-
-        assertEquals(true, FileLocalizer.fileExists(stFile, pc));
-
-        FileSpec fSpecExp = new FileSpec(expFile, new FuncSpec(PigStorage.class.getName(), new String[]{","}));
-        FileSpec fSpecAct = new FileSpec(stFile,new FuncSpec(PigStorage.class.getName()));
-
-        assertEquals(true, TestHelper.areFilesSame(fSpecExp, fSpecAct, pc));
-
-    }*/
 
     @Test
     public void testJobControlCompilerErr() throws Exception {
-        String query = "a = load 'input';" + "b = order a by $0;" + "store b into 'output';";
-        PigServer pigServer = new PigServer(ExecType.MAPREDUCE, cluster.getProperties());
+        String query = "a = load '/passwd' as (a1:bag{(t:chararray)});" + "b = order a by a1;" + "store b into 'output';";
+        PigServer pigServer = new PigServer(cluster.getExecType(), cluster.getProperties());
         PhysicalPlan pp = Util.buildPp(pigServer, query);
-        POStore store = GenPhyOp.dummyPigStorageOp();
-        pp.addAsLeaf(store);
-        MROperPlan mrPlan = Util.buildMRPlan(pp, pc);
-        
-        for(MapReduceOper mro: mrPlan.getLeaves()) {
-            if(mro.reducePlan != null) {
-                PhysicalOperator po = mro.reducePlan.getRoots().get(0);
-                if(po instanceof POPackage) {
-                    ((POPackage)po).setKeyType(DataType.BAG);
-                    mro.setGlobalSort(true);
-                }
-            }
-        }
-        
-        ConfigurationValidator.validatePigProperties(pc.getProperties());
-        Configuration conf = ConfigurationUtil.toConfiguration(pc.getProperties());
-        JobControlCompiler jcc = new JobControlCompiler(pc, conf);
-        try {
-            jcc.compile(mrPlan, "Test");
-        } catch (JobCreationException jce) {
-            assertTrue(jce.getErrorCode() == 1068);
-        }
+        checkJobControlCompilerErrResult(pp, pc);
     }
+
+    abstract protected void checkJobControlCompilerErrResult(PhysicalPlan pp, PigContext pc) throws Exception;
 
     @Test
     public void testDefaultParallel() throws Throwable {
         pc.defaultParallel = 100;
 
-        String query = "a = load 'input';" + "b = group a by $0;" + "store b into 'output';";
-        PigServer ps = new PigServer(ExecType.MAPREDUCE, cluster.getProperties());
+        String query = "a = load '/passwd';" + "b = group a by $0;" + "store b into 'output';";
+        PigServer ps = new PigServer(cluster.getExecType(), cluster.getProperties());
         PhysicalPlan pp = Util.buildPp(ps, query);
-        MROperPlan mrPlan = Util.buildMRPlan(pp, pc);
-
-        ConfigurationValidator.validatePigProperties(pc.getProperties());
-        Configuration conf = ConfigurationUtil.toConfiguration(pc.getProperties());
-        JobControlCompiler jcc = new JobControlCompiler(pc, conf);
-
-        JobControl jobControl = jcc.compile(mrPlan, "Test");
-        Job job = jobControl.getWaitingJobs().get(0);
-        int parallel = job.getJobConf().getNumReduceTasks();
-
-        assertEquals(100, parallel);
-        Util.assertParallelValues(100, -1, -1, 100, job.getJobConf());
+        checkDefaultParallelResult(pp, pc);
 
         pc.defaultParallel = -1;
     }
+
+    abstract protected void checkDefaultParallelResult(PhysicalPlan pp, PigContext pc) throws Exception;
 
     @Test
     public void testDefaultParallelInSort() throws Throwable {
@@ -493,7 +138,7 @@ public class TestJobSubmission {
         // more thorough tests can be found in TestNumberOfReducers.java
 
         String query = "a = load 'input';" + "b = order a by $0 parallel 100;" + "store b into 'output';";
-        PigServer ps = new PigServer(ExecType.MAPREDUCE, cluster.getProperties());
+        PigServer ps = new PigServer(cluster.getExecType(), cluster.getProperties());
         PhysicalPlan pp = Util.buildPp(ps, query);
         MROperPlan mrPlan = Util.buildMRPlan(pp, pc);
 
@@ -517,10 +162,10 @@ public class TestJobSubmission {
         // default_parallel is considered only at runtime, so here we only test requested parallel
         // more thorough tests can be found in TestNumberOfReducers.java
         String query = "a = load 'input';" +
-                       "b = load 'input';" +
-                       "c = join a by $0, b by $0 using 'skewed' parallel 100;" +
-                       "store c into 'output';";
-        PigServer ps = new PigServer(ExecType.MAPREDUCE, cluster.getProperties());
+                "b = load 'input';" +
+                "c = join a by $0, b by $0 using 'skewed' parallel 100;" +
+                "store c into 'output';";
+        PigServer ps = new PigServer(cluster.getExecType(), cluster.getProperties());
         PhysicalPlan pp = Util.buildPp(ps, query);
         MROperPlan mrPlan = Util.buildMRPlan(pp, pc);
 
@@ -541,19 +186,20 @@ public class TestJobSubmission {
 
     @Test
     public void testReducerNumEstimation() throws Exception{
-        // skip this test for 23 until HBASE-4850
-        if (Util.isHadoop23() || Util.isHadoop2_0())
-            return;
+        // Skip the test for Tez. Tez use a different mechanism.
+        // Equivalent test is in TestTezAutoParallelism
+        Assume.assumeTrue("Skip this test for TEZ",
+                Util.isMapredExecType(cluster.getExecType()));
         // use the estimation
-        Configuration conf = cluster.getConfiguration();
+        Configuration conf = HBaseConfiguration.create(new Configuration());
         HBaseTestingUtility util = new HBaseTestingUtility(conf);
         int clientPort = util.startMiniZKCluster().getClientPort();
         util.startMiniHBaseCluster(1, 1);
 
         String query = "a = load '/passwd';" +
-                       "b = group a by $0;" +
-                       "store b into 'output';";
-        PigServer ps = new PigServer(ExecType.MAPREDUCE, cluster.getProperties());
+                "b = group a by $0;" +
+                "store b into 'output';";
+        PigServer ps = new PigServer(cluster.getExecType(), cluster.getProperties());
         PhysicalPlan pp = Util.buildPp(ps, query);
         MROperPlan mrPlan = Util.buildMRPlan(pp, pc);
 
@@ -620,14 +266,18 @@ public class TestJobSubmission {
 
     @Test
     public void testReducerNumEstimationForOrderBy() throws Exception{
-       // use the estimation
+        // Skip the test for Tez. Tez use a different mechanism.
+        // Equivalent test is in TestTezAutoParallelism
+        Assume.assumeTrue("Skip this test for TEZ",
+                Util.isMapredExecType(cluster.getExecType()));
+        // use the estimation
         pc.getProperties().setProperty("pig.exec.reducers.bytes.per.reducer", "100");
         pc.getProperties().setProperty("pig.exec.reducers.max", "10");
 
         String query = "a = load '/passwd';" +
-                       "b = order a by $0;" +
-                       "store b into 'output';";
-        PigServer ps = new PigServer(ExecType.MAPREDUCE, cluster.getProperties());
+                "b = order a by $0;" +
+                "store b into 'output';";
+        PigServer ps = new PigServer(cluster.getExecType(), cluster.getProperties());
         PhysicalPlan pp = Util.buildPp(ps, query);
 
         MROperPlan mrPlan = Util.buildMRPlanWithOptimizer(pp, pc);
@@ -698,7 +348,7 @@ public class TestJobSubmission {
         Util.copyFromLocalToCluster(cluster, "test/org/apache/pig/test/data/passwd", ((POLoad) sort.mapPlan.getRoots().get(0)).getLFile().getFileName());
 
         //First job is just foreach with projection, mapper-only job, so estimate gets ignored
-        Util.assertParallelValues(-1, -1, reducer, 0, jobControl.getWaitingJobs().get(0).getJobConf());
+        Util.assertParallelValues(-1, -1, -1, 0, jobControl.getWaitingJobs().get(0).getJobConf());
 
         jcc.updateMROpPlan(jobControl.getReadyJobs());
         jobControl = jcc.compile(mrPlan, query);
@@ -714,17 +364,17 @@ public class TestJobSubmission {
         //Third job is the order, which uses the estimated number of reducers
         Util.assertParallelValues(-1, -1, reducer, reducer, jobControl.getWaitingJobs().get(0).getJobConf());
     }
-    
+
     @Test
     public void testToUri() throws Exception {
         Class<JobControlCompiler> jobControlCompilerClass = JobControlCompiler.class;
         Method toURIMethod = jobControlCompilerClass.getDeclaredMethod("toURI", Path.class);
         toURIMethod.setAccessible(true);
-        
+
         Path p1 = new Path("/tmp/temp-1510081022/tmp-1308657145#pigsample_1889145873_1351808882314");
         URI uri1 = (URI)toURIMethod.invoke(null, p1);
         Assert.assertEquals(uri1.toString(), "/tmp/temp-1510081022/tmp-1308657145#pigsample_1889145873_1351808882314");
-        
+
         Path p2 = new Path("C:/Program Files/GnuWin32/bin/head.exe#pigsample_1889145873_1351808882314");
         URI uri2 = (URI)toURIMethod.invoke(null, p2);
         Assert.assertTrue(uri2.toString().equals("C:/Program%20Files/GnuWin32/bin/head.exe#pigsample_1889145873_1351808882314")||

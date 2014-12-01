@@ -20,6 +20,7 @@ package org.apache.pig.test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -55,11 +56,11 @@ public class TestUDF {
 
     static File TempScriptFile = null;
 
-    static MiniCluster cluster = MiniCluster.buildCluster();
+    static MiniGenericCluster cluster = MiniGenericCluster.buildCluster();
 
     @Before
     public void setUp() throws Exception {
-        FileLocalizer.setInitialized(false);
+        Util.resetStateForExecModeSwitch();
         TempScriptFile = File.createTempFile("temp_jira_851", ".pig");
         FileWriter writer = new FileWriter(TempScriptFile);
         for (String line : ScriptStatement) {
@@ -82,6 +83,7 @@ public class TestUDF {
         Iterator<Tuple> iterator = pig.openIterator("B");
         while (iterator.hasNext()) {
             Tuple tuple = iterator.next();
+            @SuppressWarnings("unchecked")
             Map<Object, Object> result = (Map<Object, Object>) tuple.get(0);
             assertEquals(result, MyUDFReturnMap.map);
         }
@@ -92,7 +94,7 @@ public class TestUDF {
         Util.createInputFile(cluster, "a.txt", new String[] { "dummy",
                 "dummy" });
         FileLocalizer.deleteTempFiles();
-        PigServer pig = new PigServer(ExecType.MAPREDUCE, cluster
+        PigServer pig = new PigServer(cluster.getExecType(), cluster
                 .getProperties());
         pig.registerQuery("A = LOAD 'a.txt';");
         pig.registerQuery("B = FOREACH A GENERATE org.apache.pig.test.utils.MyUDFReturnMap();");
@@ -100,6 +102,7 @@ public class TestUDF {
         Iterator<Tuple> iterator = pig.openIterator("B");
         while (iterator.hasNext()) {
             Tuple tuple = iterator.next();
+            @SuppressWarnings("unchecked")
             Map<Object, Object> result = (Map<Object, Object>) tuple.get(0);
             assertEquals(result, MyUDFReturnMap.map);
         }
@@ -107,7 +110,7 @@ public class TestUDF {
 
     @Test
     public void testUDFMultiLevelOutputSchema() throws Exception {
-        PigServer pig = new PigServer(ExecType.MAPREDUCE, cluster.getProperties());
+        PigServer pig = new PigServer(cluster.getExecType(), cluster.getProperties());
         pig.registerQuery("A = LOAD 'a.txt';");
         pig.registerQuery("B = FOREACH A GENERATE org.apache.pig.test.utils.MultiLevelDerivedUDF1();");
         pig.registerQuery("C = FOREACH A GENERATE org.apache.pig.test.utils.MultiLevelDerivedUDF2();");
@@ -212,6 +215,21 @@ public class TestUDF {
         pig.dumpSchema("d");
     }
 
+    @Test
+    public void testEvalFuncGetVarArgToFunc() throws Exception {
+        String input = "udf_test_jira_3444.txt";
+        Util.createLocalInputFile(input, new String[]{"dummy"});
+        PigServer pigServer = new PigServer(ExecType.LOCAL);
+        pigServer.registerQuery("A = LOAD '"+input+"' USING PigStorage(',') AS (x:chararray);");
+        pigServer.registerQuery("B = FOREACH A GENERATE org.apache.pig.test.TestUDF$UdfWithFuncSpecWithVarArgs(3);");
+        pigServer.registerQuery("C = FOREACH A GENERATE org.apache.pig.test.TestUDF$UdfWithFuncSpecWithVarArgs(1,2,3,4);");
+
+        Iterator<Tuple> it = pigServer.openIterator("B");
+        assertEquals(Integer.valueOf(3),(Integer)it.next().get(0));
+        it = pigServer.openIterator("C");
+        assertEquals(Integer.valueOf(10), (Integer)it.next().get(0));
+    }
+
     @Test(expected = FrontendException.class)
     public void testEnsureProperSchema2() throws Exception {
         PigServer pig = new PigServer(ExecType.LOCAL);
@@ -239,6 +257,7 @@ public class TestUDF {
             return schemaString;
         }
 
+        @Override
         public Schema outputSchema(Schema input) {
             return schema;
         }
@@ -270,6 +289,62 @@ public class TestUDF {
             l.add(new FuncSpec(this.getClass().getName(), new String[]{"4"}, new Schema(new Schema.FieldSchema(null,DataType.DOUBLE))));
             l.add(new FuncSpec(this.getClass().getName(), new String[]{"5"}, new Schema(new Schema.FieldSchema(null,DataType.FLOAT))));
             return l;
+        }
+    }
+
+    public static class UdfWithFuncSpecWithVarArgs extends EvalFunc<Integer> {
+        public UdfWithFuncSpecWithVarArgs() {}
+
+        @Override
+        public Integer exec(Tuple input) throws IOException {
+            int res = 0;
+            if (input == null || input.size() == 0) {
+                return res;
+            }
+            for (int i = 0; i < input.size(); i++) {
+                res += (Integer)input.get(i);
+            }
+            return res;
+        }
+
+        @Override
+        public SchemaType getSchemaType() {
+            return SchemaType.VARARG;
+        }
+
+        @Override
+        public List<FuncSpec> getArgToFuncMapping() throws FrontendException {
+            List<FuncSpec> l = new ArrayList<FuncSpec>();
+            Schema s1 = new Schema(new Schema.FieldSchema(null,DataType.INTEGER));
+            l.add(new FuncSpec(this.getClass().getName(), s1));
+            return l;
+        }
+    }
+
+    @Test
+    // See PIG-4184
+    public void testUDFNullInput() throws Exception {
+        PigServer pig = new PigServer(ExecType.LOCAL);
+        File inputFile = Util.createInputFile("tmp", "", 
+                new String[] {"\t", "2\t3"});
+        pig.registerQuery("a = load '"
+                + Util.generateURI(inputFile.toString(), pig.getPigContext())
+                + "' as (i1:int, i2:int);");
+        pig.registerQuery("b = foreach a generate " + IntToBool.class.getName() + "(i1);");
+
+        Iterator<Tuple> iter = pig.openIterator("b");
+        assertEquals(iter.next().toString(), "(false)");
+        assertEquals(iter.next().toString(), "(true)");
+        assertFalse(iter.hasNext());
+    }
+
+    public static class IntToBool extends EvalFunc<Boolean> {
+        @Override
+        public Boolean exec(Tuple input) throws IOException {
+            if (input == null || input.size() == 0)
+                return null;
+            Integer val = (Integer)input.get(0);
+            return (val == null || val == 0) ? false : true;
         }
     }
 }

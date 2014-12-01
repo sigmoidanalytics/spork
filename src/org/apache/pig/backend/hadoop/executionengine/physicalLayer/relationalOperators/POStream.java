@@ -20,7 +20,6 @@ package org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOp
 
 import java.io.IOException;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -32,9 +31,7 @@ import org.apache.pig.impl.plan.OperatorKey;
 import org.apache.pig.impl.plan.VisitorException;
 import org.apache.pig.impl.streaming.ExecutableManager;
 import org.apache.pig.impl.streaming.StreamingCommand;
-import org.apache.pig.impl.util.IdentityHashSet;
 import org.apache.pig.pen.util.ExampleTuple;
-import org.apache.pig.pen.util.LineageTracer;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.POStatus;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
@@ -61,6 +58,14 @@ public class POStream extends PhysicalOperator {
     protected boolean allInputFromPredecessorConsumed = false;
 
     protected boolean allOutputFromBinaryProcessed = false;
+
+    /**
+     * This flag indicates whether streaming is done through fetching. If set,
+     * {@link FetchLauncher} pulls out the data from the pipeline. Therefore we need to
+     * skip the case in {@link #getNextTuple()} which is called by map() or reduce() when
+     * processing the next tuple.
+     */
+    private boolean isFetchable;
 
     public POStream(OperatorKey k, ExecutableManager executableManager, 
                       StreamingCommand command, Properties properties) {
@@ -170,8 +175,8 @@ public class POStream extends PhysicalOperator {
             // if we are here, we haven't consumed all input to be sent
             // to the streaming binary - check if we are being called
             // from close() on the map or reduce
-            if(this.parentPlan.endOfAllInput) {
-                Result r = getNextHelper((Tuple)null);
+            Result r = getNextHelper((Tuple)null);
+            if(isFetchable || this.parentPlan.endOfAllInput) {
                 if(r.returnStatus == POStatus.STATUS_EOP) {
                     // we have now seen *ALL* possible input
                     // check if we ever had any real input
@@ -219,7 +224,6 @@ public class POStream extends PhysicalOperator {
                 // we are not being called from close() - so
                 // we must be called from either map() or reduce()
                 // get the next Result from helper
-                Result r = getNextHelper((Tuple)null);
                 if(r.returnStatus == POStatus.STATUS_EOS) {
                     // If we received EOS, it means all output
                     // from the streaming binary has been sent to us
@@ -373,4 +377,19 @@ public class POStream extends PhysicalOperator {
       }
       return (Tuple) out;
     }
+
+    /**
+     * @return true if streaming is done through fetching
+     */
+    public boolean isFetchable() {
+        return isFetchable;
+    }
+
+    /**
+     * @param isFetchable - whether fetching is applied on POStream
+     */
+    public void setFetchable(boolean isFetchable) {
+        this.isFetchable = isFetchable;
+    }
+
 }

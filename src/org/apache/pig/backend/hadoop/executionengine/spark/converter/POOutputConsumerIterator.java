@@ -5,13 +5,11 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.POStatus;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.Result;
 import org.apache.pig.data.Tuple;
 
-abstract class POOutputConsumerIterator implements
-        java.util.Iterator<Tuple> {
+abstract class POOutputConsumerIterator implements java.util.Iterator<Tuple> {
     private final java.util.Iterator<Tuple> input;
     private Result result = null;
     private boolean returned = true;
     private boolean finished = false;
-    private Tuple vt;
 
     POOutputConsumerIterator(java.util.Iterator<Tuple> input) {
         this.input = input;
@@ -32,8 +30,8 @@ abstract class POOutputConsumerIterator implements
                     finished = true;
                     return;
                 }
-                vt = input.next();
-                attach(vt);
+                Tuple v1 = input.next();
+                attach(v1);
             }
             result = getNextResult();
             returned = false;
@@ -53,7 +51,7 @@ abstract class POOutputConsumerIterator implements
                 }
                 break;
             case POStatus.STATUS_ERR:
-                throw new RuntimeException("Error while processing "+result);
+                throw new RuntimeException("Error while processing " + result);
             }
         } catch (ExecException e) {
             throw new RuntimeException(e);
@@ -72,11 +70,12 @@ abstract class POOutputConsumerIterator implements
         if (finished) {
             throw new RuntimeException("Passed the end. call hasNext() first");
         }
-        if (result == null || result.returnStatus!=POStatus.STATUS_OK) {
-            throw new RuntimeException("Unexpected response code in ForEach: " + result);
+        if (result == null || result.returnStatus != POStatus.STATUS_OK) {
+            throw new RuntimeException("Unexpected response code in ForEach: "
+                    + result);
         }
         returned = true;
-        return (Tuple)result.result;
+        return (Tuple) result.result;
     }
 
     @Override

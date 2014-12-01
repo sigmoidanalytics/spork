@@ -30,7 +30,26 @@ import java.util.Set;
 
 import org.apache.pig.PigException;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
-import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.*;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.MultiQueryPackager;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POCollectedGroup;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POCounter;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.PODemux;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POFRJoin;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POFilter;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POForEach;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POGlobalRearrange;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLimit;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLoad;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLocalRearrange;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPackage;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPartialAgg;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.PORank;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSkewedJoin;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSort;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSplit;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POUnion;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.Packager;
 import org.apache.pig.impl.plan.DepthFirstWalker;
 import org.apache.pig.impl.plan.Operator;
 import org.apache.pig.impl.plan.OperatorPlan;
@@ -46,7 +65,7 @@ public class PlanPrinter<O extends Operator, P extends OperatorPlan<O>> extends
     String TABMore = "|   ";
 
     String LSep = "|\n|---";
-    
+
     String USep = "|   |\n|   ";
 
     int levelCntr = -1;
@@ -58,7 +77,7 @@ public class PlanPrinter<O extends Operator, P extends OperatorPlan<O>> extends
     public PlanPrinter(P plan) {
         super(plan, new DepthFirstWalker<O, P>(plan));
     }
-    
+
     public PlanPrinter(P plan, PrintStream stream) {
         super(plan, new DepthFirstWalker<O, P>(plan));
         this.stream = stream;
@@ -124,7 +143,7 @@ public class PlanPrinter<O extends Operator, P extends OperatorPlan<O>> extends
         sb.delete(sb.length() - "\n".length(), sb.length());
         return sb.toString();
     }
-    
+
     private String planString(PhysicalPlan pp){
         StringBuilder sb = new StringBuilder();
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -136,7 +155,7 @@ public class PlanPrinter<O extends Operator, P extends OperatorPlan<O>> extends
         sb.append(shiftStringByTabs(baos.toString(), 2));
         return sb.toString();
     }
-    
+
     private String planString(List<PhysicalPlan> lep){
         StringBuilder sb = new StringBuilder();
         if(lep!=null)
@@ -175,11 +194,14 @@ public class PlanPrinter<O extends Operator, P extends OperatorPlan<O>> extends
           else if(node instanceof POForEach){
             sb.append(planString(((POForEach)node).getInputPlans()));
           }
-          else if (node instanceof POMultiQueryPackage) {
-              List<POPackage> pkgs = ((POMultiQueryPackage)node).getPackages();
-              for (POPackage pkg : pkgs) {
-                  sb.append(LSep + pkg.name() + "\n");
+          else if(node instanceof POPackage){
+            Packager pkgr = ((POPackage) node).getPkgr();
+            if(pkgr instanceof MultiQueryPackager){
+              List<Packager> pkgrs = ((MultiQueryPackager) pkgr).getPackagers();
+              for (Packager child : pkgrs){
+                  sb.append(LSep + child.name() + "\n");
               }
+            }
           }
           else if(node instanceof POFRJoin){
             POFRJoin frj = (POFRJoin)node;
@@ -193,13 +215,19 @@ public class PlanPrinter<O extends Operator, P extends OperatorPlan<O>> extends
               POSkewedJoin skewed = (POSkewedJoin)node;
               MultiMap<PhysicalOperator, PhysicalPlan> joinPlans = skewed.getJoinPlans();
               if(joinPlans!=null) {
-            	  List<PhysicalPlan> inner_plans = new ArrayList<PhysicalPlan>();
-            	  inner_plans.addAll(joinPlans.values());                
-                  sb.append(planString(inner_plans));                
+                  List<PhysicalPlan> inner_plans = new ArrayList<PhysicalPlan>();
+                  inner_plans.addAll(joinPlans.values());
+                  sb.append(planString(inner_plans));
               }
-            }
+          }
+          else if(node instanceof POLimit) {
+              PhysicalPlan limitPlan = ((POLimit)node).getLimitPlan();
+              if (limitPlan != null) {
+                  sb.append(planString(limitPlan));
+              }
+          }
         }
-        
+
         if (node instanceof POSplit) {
             sb.append(planString(((POSplit)node).getPlans()));
         }
@@ -210,13 +238,13 @@ public class PlanPrinter<O extends Operator, P extends OperatorPlan<O>> extends
             plans.addAll(pl);
             sb.append(planString(plans));
         }
-        
+
         List<O> originalPredecessors = mPlan.getPredecessors(node);
         if (originalPredecessors == null)
             return sb.toString();
-        
+
         List<O> predecessors =  new ArrayList<O>(originalPredecessors);
-        
+
         Collections.sort(predecessors);
         int i = 0;
         for (O pred : predecessors) {
@@ -280,5 +308,5 @@ public class PlanPrinter<O extends Operator, P extends OperatorPlan<O>> extends
     public void visitStartMap(POUnion op) {
         stream.print(op.name() + "   ");
     }
-    
+
 }

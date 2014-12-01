@@ -21,8 +21,6 @@ import java.io.IOException;
 import java.util.Iterator;
 import java.util.Properties;
 
-import junit.framework.Assert;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.Job;
@@ -34,6 +32,7 @@ import org.apache.pig.LoadFunc;
 import org.apache.pig.PigException;
 import org.apache.pig.PigServer;
 import org.apache.pig.backend.executionengine.ExecException;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRConfiguration;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigSplit;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.MROperPlan;
 import org.apache.pig.data.BagFactory;
@@ -45,6 +44,7 @@ import org.apache.pig.impl.util.LogUtils;
 import org.apache.pig.test.utils.TestHelper;
 import org.junit.After;
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -53,14 +53,14 @@ public class TestMergeJoin {
     private static final String INPUT_FILE = "testMergeJoinInput.txt";
     private static final String INPUT_FILE2 = "testMergeJoinInput2.txt";
     private PigServer pigServer;
-    private static MiniCluster cluster = MiniCluster.buildCluster();
+    private static MiniGenericCluster cluster = MiniGenericCluster.buildCluster();
 
     public TestMergeJoin() throws ExecException{
 
         Properties props = cluster.getProperties();
-        props.setProperty("mapred.map.max.attempts", "1");
-        props.setProperty("mapred.reduce.max.attempts", "1");
-        pigServer = new PigServer(ExecType.MAPREDUCE, props);
+        props.setProperty(MRConfiguration.MAP_MAX_ATTEMPTS, "1");
+        props.setProperty(MRConfiguration.REDUCE_MAX_ATTEMPTS, "1");
+        pigServer = new PigServer(cluster.getExecType(), props);
     }
     /**
      * @throws java.lang.Exception

@@ -19,42 +19,43 @@ package org.apache.pig.test;
 
 import java.io.File;
 import java.util.Iterator;
-import java.util.Random;
 
-import junit.framework.Assert;
-
-import org.apache.pig.ExecType;
+import org.apache.hadoop.util.Shell;
 import org.apache.pig.PigServer;
 import org.apache.pig.data.BagFactory;
+import org.apache.pig.data.DataType;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.data.TupleFactory;
-import org.apache.pig.impl.io.FileLocalizer;
+import org.apache.pig.impl.logicalLayer.schema.Schema;
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
 public class TestScriptUDF{
-    static MiniCluster cluster = MiniCluster.buildCluster();
+    static MiniGenericCluster cluster = MiniGenericCluster.buildCluster();
     private PigServer pigServer;
 
     TupleFactory mTf = TupleFactory.getInstance();
     BagFactory mBf = BagFactory.getInstance();
-    
+
     @Before
     public void setUp() throws Exception{
-        FileLocalizer.setR(new Random());
-        pigServer = new PigServer(ExecType.MAPREDUCE, cluster.getProperties());
+        pigServer = new PigServer(cluster.getExecType(), cluster.getProperties());
     }
-    
+
     @AfterClass
     public static void oneTimeTearDown() throws Exception {
         cluster.shutDown();
     }
-    
+
     // See PIG-928
     @Test
     public void testJavascriptExampleScript() throws Exception{
         String[] script = {
+                "function simple(word) {",
+                "return word;",
+                "}",
                 "helloworld.outputSchema = \"word:chararray\";",
                 "function helloworld() {",
                 "return 'Hello, World';",
@@ -76,24 +77,34 @@ public class TestScriptUDF{
         // Test the namespace
         pigServer.registerCode("testJavascriptExampleScript.js", "javascript", "myfuncs");
         pigServer.registerQuery("A = LOAD 'table_testJavascriptExampleScript' as (a0:chararray, a1:long);");
-        pigServer.registerQuery("B = foreach A generate myfuncs.helloworld(), myfuncs.complex($0);");
+        pigServer.registerQuery("B = foreach A generate myfuncs.simple($0), myfuncs.helloworld(), myfuncs.complex($0);");
 
         Iterator<Tuple> iter = pigServer.openIterator("B");
         Assert.assertTrue(iter.hasNext());
         Tuple t = iter.next();
 
-        Assert.assertEquals(((Tuple)t.get(1)).get(1), 3);
+        Assert.assertEquals(((Tuple)t.get(2)).get(1), 3);
 
         Assert.assertTrue(iter.hasNext());
         t = iter.next();
 
-        Assert.assertEquals(((Tuple)t.get(1)).get(1), 3);
+        Assert.assertEquals(((Tuple)t.get(2)).get(1), 3);
 
         Assert.assertTrue(iter.hasNext());
         t = iter.next();
 
-        Assert.assertEquals(((Tuple)t.get(1)).get(1), 5);
+        Assert.assertEquals(((Tuple)t.get(2)).get(1), 5);
 
+        //test output schema
+        Schema outputSchema = pigServer.dumpSchema("B");
+
+        Assert.assertEquals(new Schema.FieldSchema(null, DataType.BYTEARRAY), outputSchema.getField(0));
+        Assert.assertEquals(new Schema.FieldSchema("word", DataType.CHARARRAY), outputSchema.getField(1));
+        
+        Schema inner = new Schema();
+        inner.add(new Schema.FieldSchema("word", DataType.CHARARRAY));
+        inner.add(new Schema.FieldSchema("num", DataType.LONG));
+        Assert.assertEquals(new Schema.FieldSchema("tuple_0", inner, DataType.TUPLE), outputSchema.getField(2));
     }
 
     // See Pig-1653 -- left here because we can't force absolute paths in e2e harness
@@ -134,7 +145,7 @@ public class TestScriptUDF{
         t = iter.next();
 
         Assert.assertTrue(t.toString().equals("(9)"));
-        
+
         Assert.assertFalse(iter.hasNext());
     }
 
@@ -143,9 +154,9 @@ public class TestScriptUDF{
      * the first module.
      *
      * to use a jython install, the Lib dir must be in the jython search path
-     * via env variable JYTHON_HOME=jy_home or JYTHON_PATH=jy_home/Lib:... or
+     * via env variable JYTHON_HOME=jy_home or JYTHONPATH=jy_home/Lib:... or
      * jython-standalone.jar should be in the classpath
-     * 
+     *
      * Left in for now as we don't have paths to include other scripts in a
      * script in the e2e harness.
      *
@@ -158,7 +169,7 @@ public class TestScriptUDF{
 
     @Test
     public void testPythonNestedImportClassPath() throws Exception {
-        // Use different names for the script as PythonInterpreter is static in JythonScriptEngine 
+        // Use different names for the script as PythonInterpreter is static in JythonScriptEngine
         testPythonNestedImport("build/classes", "scriptC.py", "scriptD.py");
     }
 
@@ -217,9 +228,10 @@ public class TestScriptUDF{
                 "def getEnv(envkey):" ,
                 " return os.getenv(envkey);"
         };
+        String userenv = Shell.WINDOWS?"USERNAME":"USER";
         String[] input = {
-                "USER",
-                "PATH"
+                userenv,
+                "JAVA_HOME"
         };
 
         Util.createInputFile(cluster, "testPythonBuiltinModuleImport1", input);

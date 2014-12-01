@@ -17,11 +17,18 @@
  */
 package org.apache.pig.test;
 
+import static org.apache.pig.builtin.mock.Storage.tuple;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.pig.FuncSpec;
@@ -39,26 +46,37 @@ import org.apache.pig.builtin.IntSum;
 import org.apache.pig.data.DataType;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.plan.PlanException;
+import org.apache.pig.impl.util.Spillable;
 import org.apache.pig.parser.ParserException;
 import org.apache.pig.test.utils.GenPhyOp;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
+
+import com.google.common.base.Strings;
 
 /**
  * Test POPartialAgg runtime
  */
 public class TestPOPartialAgg {
-    POPartialAgg partAggOp;
-    PhysicalPlan parentPlan;
-    Tuple dummyTuple = null;
+
+    private static ExecutorService executor = Executors.newSingleThreadExecutor();
+    private POPartialAgg partAggOp;
+    private PhysicalPlan parentPlan;
+
+    @AfterClass
+    public static void oneTimeTearDown() {
+        executor.shutdownNow();
+    }
 
     @Before
     public void setUp() throws Exception {
-        createPOPartialPlan();
+        PigMapReduce.sJobConfInternal.set(new Configuration());
+        createPOPartialPlan(1);
     }
 
-    private void createPOPartialPlan() throws PlanException {
+    private void createPOPartialPlan(int valueCount) throws PlanException {
         parentPlan = new PhysicalPlan();
         partAggOp = GenPhyOp.topPOPartialAgg();
         partAggOp.setParentPlan(parentPlan);
@@ -70,24 +88,27 @@ public class TestPOPartialAgg {
         keyPlan.add(keyProj);
         partAggOp.setKeyPlan(keyPlan);
 
-        // setup value plan
-        // project arg for udf
-        PhysicalPlan valPlan1 = new PhysicalPlan();
-        POProject projVal1 = new POProject(GenPhyOp.getOK(), -1, 1);
-        projVal1.setResultType(DataType.BAG);
-        valPlan1.add(projVal1);
-
-        // setup udf
-        List<PhysicalOperator> udfInps = new ArrayList<PhysicalOperator>();
-        udfInps.add(projVal1);
-        FuncSpec sumSpec = new FuncSpec(IntSum.Intermediate.class.getName());
-        POUserFunc sumUdf = new POUserFunc(GenPhyOp.getOK(), -1, udfInps,
-                sumSpec);
-        valPlan1.add(sumUdf);
-        valPlan1.connect(projVal1, sumUdf);
-
+        // setup value plans
         List<PhysicalPlan> valuePlans = new ArrayList<PhysicalPlan>();
-        valuePlans.add(valPlan1);
+
+        for (int i = 0; i < valueCount; i++) {
+            // project arg for udf
+            PhysicalPlan valPlan = new PhysicalPlan();
+            POProject projVal1 = new POProject(GenPhyOp.getOK(), -1, i + 1);
+            projVal1.setResultType(DataType.BAG);
+            valPlan.add(projVal1);
+
+            // setup udf
+            List<PhysicalOperator> udfInps = new ArrayList<PhysicalOperator>();
+            udfInps.add(projVal1);
+            FuncSpec sumSpec = new FuncSpec(IntSum.Intermediate.class.getName());
+            POUserFunc sumUdf = new POUserFunc(GenPhyOp.getOK(), -1, udfInps,
+                    sumSpec);
+            valPlan.add(sumUdf);
+            valPlan.connect(projVal1, sumUdf);
+
+            valuePlans.add(valPlan);
+        }
 
         partAggOp.setValuePlans(valuePlans);
     }
@@ -217,12 +238,145 @@ public class TestPOPartialAgg {
         checkInputAndOutput(inputTups, outputTups, false);
     }
 
+    @Test
+    public void testMultiVals() throws Exception {
+        // more than one value to be aggregated
+        createPOPartialPlan(2);
+
+        // input tuple has key, and bag containing SUM.Init output
+        String[] inputTups = { "(1,(1L),(2L))", "(2,(2L),(1L))", "(1,(2L),(2L))" };
+        String[] outputTups = { "(1,(3L),(4L))", "(2,(2L),(1L))" };
+        checkInputAndOutput(inputTups, outputTups, false);
+    }
+
+    @Test
+    public void testMultiValCheckNotDisabled() throws Exception {
+        // "large" number of values per input to aggregate but good reduction
+        // in size due to aggregation.
+        // This case should result in a reduction from 10500 inputs to 500
+        // outputs (factor of 20), so in-memory aggregation should not be
+        // disabled in checkSize(). If it is disabled, too many output rows
+        // will be generated.
+
+        int numKeys = 500;
+        int numVals = 3;
+
+        createPOPartialPlan(numVals);
+
+        // Build a string of values to use in all input tuples
+        String vals = Strings.repeat(",(1L)", numVals);
+
+        // And input tuples.
+        // We need the next multiple of numKeys over 10,000 because we need to
+        // trigger the size check (at 10,000), and we want an even multiple of
+        // numKeys so result values end up even across keys
+        int numInputs = (10000 + numKeys * 2 - 1) / numKeys * numKeys;
+        String[] inputTups = new String[numInputs];
+        for (int i = 0; i < numInputs; i++) {
+            inputTups[i] = "(" + (i % numKeys) + vals + ")";
+        }
+
+        // Build expected results
+        int expectedVal = numInputs / numKeys;
+        vals = Strings.repeat(",(" + expectedVal + "L)", numVals);
+        String[] outputTups = new String[numKeys];
+        for (int i = 0; i < numKeys; i++) {
+            outputTups[i] = "(" + i + vals + ")";
+        }
+
+        // input tuple has key, and bag containing SUM.Init output
+        checkInputAndOutput(inputTups, outputTups, false);
+    }
+
+    @Test
+    public void testMemorySpill1() throws Exception {
+        // Test spill which only does aggregation
+        Result res;
+        for (long i=1; i <= 15; i ++) {
+            Tuple t = tuple(1, tuple(i));
+            partAggOp.attachInput(t);
+            res = partAggOp.getNextTuple();
+            assertEquals(POStatus.STATUS_EOP, res.returnStatus);
+        }
+        Future<Long> spilled = executor.submit(new Spill(partAggOp));
+        Thread.sleep(100);
+        partAggOp.attachInput(tuple(2, tuple(-1L)));
+        assertFalse(spilled.isDone());
+        res = partAggOp.getNextTuple();
+        // Since it was aggregated there should be no records emitted
+        assertEquals(POStatus.STATUS_EOP, res.returnStatus);
+        Thread.sleep(100);
+        assertTrue(spilled.isDone());
+        assertEquals(new Long(1), spilled.get());
+
+        List<Tuple> expectedValues = new ArrayList<Tuple>();
+        expectedValues.add(tuple(1, tuple(120L))); //aggregated result
+        expectedValues.add(tuple(2, tuple(-1L)));
+        // end of all input, now expecting all tuples
+        parentPlan.endOfAllInput = true;
+        res = partAggOp.getNextTuple();
+        do {
+            assertEquals(POStatus.STATUS_OK, res.returnStatus);
+            assertTrue(expectedValues.remove(res.result));
+            res = partAggOp.getNextTuple();
+        } while (res.returnStatus != POStatus.STATUS_EOP);
+        assertTrue(expectedValues.isEmpty());
+    }
+
+    @Test
+    public void testMemorySpill2() throws Exception {
+        // Test spill which emits records as aggregation does not meet secondary tier threshold
+        Result res = null;
+        List<Tuple> expectedValues = new ArrayList<Tuple>();
+        //POPartialAgg.SECOND_TIER_THRESHOLD evaluates to 2000 by default
+        for (long i=1; i <= 2001; i ++) {
+            Tuple t = tuple(i, tuple(i));
+            expectedValues.add(t);
+            partAggOp.attachInput(t);
+            res = partAggOp.getNextTuple();
+            assertEquals(POStatus.STATUS_EOP, res.returnStatus);
+        }
+        Future<Long> spilled = executor.submit(new Spill(partAggOp));
+        Thread.sleep(100);
+        partAggOp.attachInput(tuple(2, tuple(-1L)));
+        expectedValues.add(tuple(2, tuple(-1L)));
+
+        long i = 0;
+        res = partAggOp.getNextTuple();
+        do {
+            assertFalse(spilled.isDone());
+            assertEquals(POStatus.STATUS_OK, res.returnStatus);
+            assertTrue(expectedValues.remove(res.result));
+            i++;
+            res = partAggOp.getNextTuple();
+        } while (res.returnStatus != POStatus.STATUS_EOP);
+        assertEquals(2002, i);
+        assertTrue(expectedValues.isEmpty());
+        Thread.sleep(100);
+        assertTrue(spilled.isDone());
+        assertEquals(new Long(1), spilled.get());
+    }
+
+    private static class Spill implements Callable<Long> {
+
+        private Spillable spillable;
+
+        public Spill(Spillable spillable) {
+            this.spillable = spillable;
+        }
+
+        @Override
+        public Long call() throws Exception {
+            return spillable.spill();
+        }
+
+    }
 
     /**
      * run the plan on inputTups and check if output matches outputTups if
      * isMapMemEmpty is set to true, set memory available for the hash-map to
      * zero
-     * 
+     *
      * @param inputTups
      * @param outputTups
      * @param isMapMemEmpty
@@ -233,9 +387,8 @@ public class TestPOPartialAgg {
     private void checkInputAndOutput(String[] inputTups, String[] outputTups,
             boolean isMapMemEmpty) throws Exception {
 
-        PigMapReduce.sJobConfInternal.set(new Configuration());
         if (isMapMemEmpty) {
-            PigMapReduce.sJobConfInternal.get().set(PigConfiguration.PROP_CACHEDBAG_MEMUSAGE,
+            PigMapReduce.sJobConfInternal.get().set(PigConfiguration.PIG_CACHEDBAG_MEMUSAGE,
                     "0");
         }
 
@@ -270,7 +423,7 @@ public class TestPOPartialAgg {
 
             res = partAggOp.getNextTuple();
             assertEquals(POStatus.STATUS_EOP, res.returnStatus);
-            Util.compareActualAndExpectedResults(outputs, expectedOuts);
+            Util.checkQueryOutputsAfterSort(outputs, expectedOuts);
         } else {
             while (true) {
                 Result res = partAggOp.getNextTuple();
@@ -278,7 +431,7 @@ public class TestPOPartialAgg {
                     break;
                 }
             }
-            Util.compareActualAndExpectedResults(outputs, expectedOuts);
+            Util.checkQueryOutputsAfterSort(outputs, expectedOuts);
         }
 
     }

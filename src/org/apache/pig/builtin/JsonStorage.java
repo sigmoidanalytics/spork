@@ -19,13 +19,15 @@ package org.apache.pig.builtin;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 
 import org.codehaus.jackson.JsonEncoding;
 import org.codehaus.jackson.JsonFactory;
 import org.codehaus.jackson.JsonGenerator;
-
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
@@ -34,14 +36,12 @@ import org.apache.hadoop.mapreduce.OutputFormat;
 import org.apache.hadoop.mapreduce.RecordWriter;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
-
 import org.apache.pig.ResourceSchema;
 import org.apache.pig.ResourceSchema.ResourceFieldSchema;
 import org.apache.pig.ResourceStatistics;
 import org.apache.pig.StoreMetadata;
 import org.apache.pig.StoreFunc;
-import org.apache.pig.backend.hadoop.executionengine.spark.BroadCastClient;
-import org.apache.pig.backend.hadoop.executionengine.spark.SparkLauncher;
+import org.apache.pig.StoreResources;
 import org.apache.pig.data.DataType;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.data.DataBag;
@@ -57,7 +57,7 @@ import org.apache.pig.impl.util.Utils;
  * with mapping between JSON and Pig types. The schema file share the same format
  * as the one we use in PigStorage.
  */
-public class JsonStorage extends StoreFunc implements StoreMetadata {
+public class JsonStorage extends StoreFunc implements StoreMetadata, StoreResources {
 
     protected RecordWriter writer = null;
     protected ResourceSchema schema = null;
@@ -104,17 +104,7 @@ public class JsonStorage extends StoreFunc implements StoreMetadata {
         UDFContext udfc = UDFContext.getUDFContext();
         Properties p =
             udfc.getUDFProperties(this.getClass(), new String[]{udfcSignature});
-        p.setProperty(SCHEMA_SIGNATURE, s.toString());
-        
-        try{
-        	
-        	if(SparkLauncher.bcaster != null){
-        		SparkLauncher.bcaster.addResource("new_json_schema", p);
-        	}        	
-        	
-        }catch(Exception e){
-        	e.printStackTrace();
-        }
+        p.setProperty(SCHEMA_SIGNATURE, fixSchema(s).toString());
     }
 
 
@@ -134,10 +124,7 @@ public class JsonStorage extends StoreFunc implements StoreMetadata {
             udfc.getUDFProperties(this.getClass(), new String[]{udfcSignature});
         String strSchema = p.getProperty(SCHEMA_SIGNATURE);
         if (strSchema == null) {
-            //throw new IOException("Could not find schema in UDF context");
-        	BroadCastClient bc = new BroadCastClient(System.getenv("BROADCAST_MASTER_IP"), Integer.parseInt(System.getenv("BROADCAST_PORT")));
-            p = (Properties) bc.getBroadCastMessage("new_json_schema");
-            strSchema = p.getProperty(SCHEMA_SIGNATURE);
+            throw new IOException("Could not find schema in UDF context");
         }
 
         // Parse the schema from the string stored in the properties object.
@@ -160,7 +147,13 @@ public class JsonStorage extends StoreFunc implements StoreMetadata {
         
         ResourceFieldSchema[] fields = schema.getFields();
         for (int i = 0; i < fields.length; i++) {
-            writeField(json, fields[i], t.get(i));
+            int tupleLength = t.size();
+            //write col if exists in tuple, null otherwise
+            if (i < tupleLength) {
+                writeField(json, fields[i], t.get(i));
+            } else {
+                writeField(json, fields[i], null);
+            }
         }
         json.writeEndObject();
         json.close();
@@ -186,6 +179,10 @@ public class JsonStorage extends StoreFunc implements StoreMetadata {
 
         // Based on the field's type, write it out
         switch (field.getType()) {
+        case DataType.BOOLEAN:
+            json.writeBooleanField(field.getName(), (Boolean)d);
+            return;
+
         case DataType.INTEGER:
             json.writeNumberField(field.getName(), (Integer)d);
             return;
@@ -202,12 +199,27 @@ public class JsonStorage extends StoreFunc implements StoreMetadata {
             json.writeNumberField(field.getName(), (Double)d);
             return;
 
+        case DataType.DATETIME:
+            json.writeStringField(field.getName(), d.toString());
+            return;
+
         case DataType.BYTEARRAY:
             json.writeStringField(field.getName(), d.toString());
             return;
 
         case DataType.CHARARRAY:
             json.writeStringField(field.getName(), (String)d);
+            return;
+
+        case DataType.BIGINTEGER:
+            //Since Jackson doesnt have a writeNumberField for BigInteger we
+            //have to do it manually here.
+            json.writeFieldName(field.getName());
+            json.writeNumber((BigInteger)d);
+            return;
+
+        case DataType.BIGDECIMAL:
+            json.writeNumberField(field.getName(), (BigDecimal)d);
             return;
 
         case DataType.MAP:
@@ -289,4 +301,22 @@ public class JsonStorage extends StoreFunc implements StoreMetadata {
         metadataWriter.storeSchema(schema, location, job);
     }
 
+    public ResourceSchema fixSchema(ResourceSchema s){
+      for (ResourceFieldSchema filed : s.getFields()) {
+        if(filed.getType() == DataType.NULL)
+          filed.setType(DataType.BYTEARRAY);
+      }
+      return s;
+    }
+
+    @Override
+    public List<String> getShipFiles() {
+        Class[] classList = new Class[] {JsonFactory.class};
+        return FuncUtils.getShipFiles(classList);
+    }
+
+    @Override
+    public List<String> getCacheFiles() {
+        return null;
+    }
 }

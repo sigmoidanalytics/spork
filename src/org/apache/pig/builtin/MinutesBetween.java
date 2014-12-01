@@ -78,7 +78,7 @@ public class MinutesBetween extends EvalFunc<Long> {
     @Override
     public Long exec(Tuple input) throws IOException
     {
-        if (input == null || input.size() < 2) {
+        if (input == null || input.size() < 2 || input.get(0) == null || input.get(1) == null) {
             return null;
         }
 
@@ -103,5 +103,10 @@ public class MinutesBetween extends EvalFunc<Long> {
         s.add(new Schema.FieldSchema(null, DataType.DATETIME));
         funcList.add(new FuncSpec(this.getClass().getName(), s));
         return funcList;
+    }
+
+    @Override
+    public boolean allowCompileTimeCalculation() {
+        return true;
     }
 }

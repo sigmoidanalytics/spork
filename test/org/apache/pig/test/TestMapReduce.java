@@ -29,17 +29,17 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.util.Iterator;
-import java.util.Properties;
 import java.util.Map.Entry;
+import java.util.Properties;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.pig.EvalFunc;
-import org.apache.pig.ExecType;
 import org.apache.pig.FuncSpec;
 import org.apache.pig.PigServer;
 import org.apache.pig.backend.datastorage.ElementDescriptor;
 import org.apache.pig.backend.executionengine.ExecException;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRConfiguration;
 import org.apache.pig.builtin.COUNT;
 import org.apache.pig.builtin.PigStorage;
 import org.apache.pig.data.BagFactory;
@@ -56,21 +56,21 @@ import org.junit.Test;
 public class TestMapReduce {
 
     private Log log = LogFactory.getLog(getClass());
-    
-    static MiniCluster cluster = MiniCluster.buildCluster();
+
+    static MiniGenericCluster cluster = MiniGenericCluster.buildCluster();
 
     private PigServer pig;
-    
+
     @Before
     public void setUp() throws Exception {
-        pig = new PigServer(ExecType.MAPREDUCE, cluster.getProperties());
+        pig = new PigServer(cluster.getExecType(), cluster.getProperties());
     }
-    
+
     @AfterClass
     public static void oneTimeTearDown() throws Exception {
         cluster.shutDown();
     }
-    
+
 
     @Test
     public void testBigGroupAll() throws Throwable {
@@ -95,12 +95,12 @@ public class TestMapReduce {
         PrintStream ps = new PrintStream(new FileOutputStream(tmpFile));
         long nonNullCnt = 0;
         for(int i = 0; i < LOOP_COUNT; i++) {
-	    if ( i % 10 == 0 ){
+        if ( i % 10 == 0 ){
                ps.println("");
-	    } else {
+        } else {
                ps.println(i);
                nonNullCnt ++;
-	    }
+        }
         }
         ps.close();
 
@@ -112,19 +112,19 @@ public class TestMapReduce {
 
     /**
      * This test checks records that align perfectly on
-     * bzip block boundaries and hdfs block boundaries 
+     * bzip block boundaries and hdfs block boundaries
      */
     @Test
     public void testBZip2Aligned() throws Throwable {
         int offsets[] = { 219642, 219643, 219644, 552019, 552020 };
         for(int i = 1; i < offsets.length; i ++) {
-            
+
             Properties props = new Properties();
             for (Entry<Object, Object> entry : cluster.getProperties().entrySet()) {
                 props.put(entry.getKey(), entry.getValue());
             }
-            props.setProperty("mapred.max.split.size", Integer.toString(offsets[i]));
-            PigContext pigContext = new PigContext(ExecType.MAPREDUCE, props);
+            props.setProperty(MRConfiguration.MAX_SPLIT_SIZE, Integer.toString(offsets[i]));
+            PigContext pigContext = new PigContext(cluster.getExecType(), props);
             PigServer pig = new PigServer(pigContext);
             pig.registerQuery("a = load '"
                     + Util.generateURI(
@@ -143,7 +143,7 @@ public class TestMapReduce {
             //assertEquals("1000000", it.next().getField(0));
         }
     }
-    
+
     public Double bigGroupAll( File tmpFile ) throws Throwable {
 
         String query = "foreach (group (load '"
@@ -157,7 +157,7 @@ public class TestMapReduce {
         return  DataType.toDouble(t.get(0));
     }
 
-    
+
     static public class MyApply extends EvalFunc<DataBag> {
         String field0 = "Got";
         public MyApply() {}
@@ -210,14 +210,14 @@ public class TestMapReduce {
         public void setNulls(boolean hasNulls ) { this.hasNulls=hasNulls; }
 
         /**
-         * 
+         *
          */
         public MyStorage() {
             // initialize delimiter to be "-" for output
             // since that is the delimiter in the tests below
             super("-");
         }
-        
+
         @Override
         public Tuple getNext() throws IOException {
             if (count < COUNT) {
@@ -289,12 +289,12 @@ public class TestMapReduce {
         String[][] data = genDataSetFile1( 10, true );
         storeFunction( data);
     }
-   
+
     public void storeFunction(String[][] data) throws Throwable {
 
         File tmpFile=TestHelper.createTempFile(data) ;
 
-	//Load, Execute and Store query
+    //Load, Execute and Store query
         String query = "foreach (load '"
                 + Util.generateURI(tmpFile.toString(), pig.getPigContext())
                 + "') generate $0,$1;";
@@ -310,7 +310,7 @@ public class TestMapReduce {
         BufferedReader br = new BufferedReader(new InputStreamReader(is));
         String line;
 
-	//verify query
+    //verify query
         int i= 0;
         while((line = br.readLine()) != null) {
 
@@ -362,7 +362,7 @@ public class TestMapReduce {
         assertEquals( MyStorage.COUNT, count );
         tmpFile.delete();
     }
-    
+
     @Test
     public void testQualifiedFunctionsWithNulls() throws Throwable {
 
@@ -370,11 +370,11 @@ public class TestMapReduce {
         File tmpFile = File.createTempFile("test", ".txt");
         PrintStream ps = new PrintStream(new FileOutputStream(tmpFile));
         for(int i = 0; i < 1; i++) {
-	    if ( i % 10 == 0 ){
+        if ( i % 10 == 0 ){
                ps.println("");
-	    } else {
+        } else {
                ps.println(i);
-	    }
+        }
         }
         ps.close();
 
@@ -401,7 +401,7 @@ public class TestMapReduce {
         assertEquals( MyStorage.COUNT, count );
         tmpFile.delete();
     }
-    
+
 
     @Test
     public void testDefinedFunctions() throws Throwable {
@@ -489,7 +489,7 @@ public class TestMapReduce {
     @Test
     public void testPigServer() throws Throwable {
         log.debug("creating pig server");
-        PigContext pigContext = new PigContext(ExecType.MAPREDUCE, cluster.getProperties());
+        PigContext pigContext = new PigContext(cluster.getExecType(), cluster.getProperties());
         PigServer pig = new PigServer(pigContext);
         System.out.println("testing capacity");
         long capacity = pig.capacity();
@@ -509,69 +509,53 @@ public class TestMapReduce {
      * For generating a sample dataset as
      *
      * no nulls:
-     *   	$0 $1
+     *       $0 $1
      *           0  9
      *           1  1
      *           ....
      *           9  9
      *
      * has nulls:
-     *   	$0 $1
+     *       $0 $1
      *           0  9
      *           1  1
      *              2
      *           3  3
      *           4  4
      *           5  5
-     *           6   
+     *           6
      *           7  7
-     *               
+     *
      *           9  9
-     *           
+     *
      */
     private String[][] genDataSetFile1( int dataLength, boolean hasNulls ) throws IOException {
-
-
         String[][] data= new String[dataLength][];
-
         if ( hasNulls == true ) {
-
-        	for (int i = 0; i < dataLength; i++) {
-
-            	     data[i] = new String[2] ;
-                     if ( i == 2 ) {
-            		data[i][0] = "";
-            		data[i][1] = new Integer(i).toString();
-
-		     } else if ( i == 6 ) {
-                   
-            		data[i][0] = new Integer(i).toString();
-            		data[i][1] = "";
-
-		     } else if ( i == 8 ) {
-
-            		data[i][0] = "";
-            		data[i][1] = "";
-
-		     } else {
-            		data[i][0] = new Integer(i).toString();
-            		data[i][1] = new Integer(i).toString();
-           	     }
-	     }
-
-	} else {
-
-        	for (int i = 0; i < dataLength; i++) {
-            		data[i] = new String[2] ;
-            		data[i][0] = new Integer(i).toString();
-            		data[i][1] = new Integer(i).toString();
-        	}
-
-	}
-
-         return  data;
-
+            for (int i = 0; i < dataLength; i++) {
+                data[i] = new String[2] ;
+                if ( i == 2 ) {
+                    data[i][0] = "";
+                    data[i][1] = new Integer(i).toString();
+                } else if ( i == 6 ) {
+                    data[i][0] = new Integer(i).toString();
+                    data[i][1] = "";
+                } else if ( i == 8 ) {
+                    data[i][0] = "";
+                    data[i][1] = "";
+                } else {
+                    data[i][0] = new Integer(i).toString();
+                    data[i][1] = new Integer(i).toString();
+                }
+            }
+        } else {
+            for (int i = 0; i < dataLength; i++) {
+                data[i] = new String[2] ;
+                data[i][0] = new Integer(i).toString();
+                data[i][1] = new Integer(i).toString();
+            }
+        }
+        return  data;
     }
-
 
 }

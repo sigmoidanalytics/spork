@@ -39,6 +39,7 @@ import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.pig.StoreFunc;
 import org.apache.pig.backend.executionengine.ExecException;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRConfiguration;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.util.StorageUtil;
 
@@ -98,7 +99,9 @@ public class MultiStorage extends StoreFunc {
    * Constructor
    * 
    * @param parentPathStr
-   *          Parent output dir path
+   *          Parent output dir path (this will be specified in store statement,
+   *            so MultiStorage don't use this parameter in reality. However, we don't
+   *            want to change the construct to break backward compatibility)
    * @param splitFieldIndex
    *          key field index
    * @param compression
@@ -161,7 +164,7 @@ public class MultiStorage extends StoreFunc {
     
   @Override
   public void setStoreLocation(String location, Job job) throws IOException {
-    job.getConfiguration().set("mapred.textoutputformat.separator", "");
+    job.getConfiguration().set(MRConfiguration.TEXTOUTPUTFORMAT_SEPARATOR, "");
     FileOutputFormat.setOutputPath(job, new Path(location));
     if (comp == Compression.bz2 || comp == Compression.bz) {
       FileOutputFormat.setCompressOutput(job, true);

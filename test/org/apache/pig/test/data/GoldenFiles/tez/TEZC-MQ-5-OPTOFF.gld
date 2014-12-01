@@ -1,0 +1,81 @@
+#--------------------------------------------------
+# There are 1 DAGs in the session
+#--------------------------------------------------
+#--------------------------------------------------
+# TEZ DAG plan: pig-0_scope-1
+#--------------------------------------------------
+Tez vertex scope-102	->	Tez vertex scope-103,
+Tez vertex scope-103	->	Tez vertex scope-105,Tez vertex scope-107,Tez vertex scope-109,
+Tez vertex scope-109	->	Tez vertex scope-112,Tez vertex scope-114,
+Tez vertex scope-114
+Tez vertex scope-112
+Tez vertex scope-107
+Tez vertex scope-105
+
+Tez vertex scope-102
+# Plan on vertex
+b: Local Rearrange[tuple]{int}(false) - scope-69	->	 scope-103
+|   |
+|   Project[int][0] - scope-70
+|
+|---a: New For Each(false,false)[bag] - scope-66
+    |   |
+    |   Cast[int] - scope-61
+    |   |
+    |   |---Project[bytearray][0] - scope-60
+    |   |
+    |   Cast[int] - scope-64
+    |   |
+    |   |---Project[bytearray][1] - scope-63
+    |
+    |---a: Load(file:///tmp/input:org.apache.pig.builtin.PigStorage) - scope-59
+Tez vertex scope-103
+# Plan on vertex
+POValueOutputTez - scope-104	->	 [scope-107, scope-109, scope-105]
+|
+|---b: Package(Packager)[tuple]{int} - scope-68
+Tez vertex scope-109
+# Plan on vertex
+POValueOutputTez - scope-111	->	 [scope-114, scope-112]
+|
+|---d: New For Each(true)[bag] - scope-89
+    |   |
+    |   Project[bag][1] - scope-87
+    |
+    |---POValueInputTez - scope-110	<-	 scope-103
+Tez vertex scope-114
+# Plan on vertex
+e: Store(file:///tmp/output/e:org.apache.pig.builtin.PigStorage) - scope-101
+|
+|---e: New For Each(false,false)[bag] - scope-100
+    |   |
+    |   Project[int][0] - scope-96
+    |   |
+    |   Project[int][1] - scope-98
+    |
+    |---POValueInputTez - scope-115	<-	 scope-109
+Tez vertex scope-112
+# Plan on vertex
+d: Store(file:///tmp/output/d:org.apache.pig.builtin.PigStorage) - scope-93
+|
+|---POValueInputTez - scope-113	<-	 scope-109
+Tez vertex scope-107
+# Plan on vertex
+c: Store(file:///tmp/output/c:org.apache.pig.builtin.PigStorage) - scope-84
+|
+|---c: New For Each(false,false)[bag] - scope-83
+    |   |
+    |   Project[bag][0] - scope-78
+    |   |
+    |   |---Project[bag][1] - scope-77
+    |   |
+    |   Project[bag][1] - scope-81
+    |   |
+    |   |---Project[bag][1] - scope-80
+    |
+    |---POValueInputTez - scope-108	<-	 scope-103
+Tez vertex scope-105
+# Plan on vertex
+b: Store(file:///tmp/output/b:org.apache.pig.builtin.PigStorage) - scope-74
+|
+|---POValueInputTez - scope-106	<-	 scope-103

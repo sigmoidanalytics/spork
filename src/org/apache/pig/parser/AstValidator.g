@@ -116,7 +116,8 @@ query : ^( QUERY statement* )
 statement : general_statement
           | split_statement
           | realias_statement
-          | rel_cache_statement
+          | register_statement
+          | assert_statement
 ;
 
 split_statement : split_clause
@@ -125,7 +126,10 @@ split_statement : split_clause
 realias_statement : realias_clause
 ;
 
-rel_cache_statement: rel_cache_clause
+register_statement : ^( REGISTER QUOTEDSTRING (USING IDENTIFIER AS IDENTIFIER)? )
+;
+
+assert_statement : assert_clause
 ;
 
 general_statement : ^( STATEMENT ( alias { aliases.add( $alias.name ); } )? op_clause parallel_clause? )
@@ -174,6 +178,7 @@ op_clause : define_clause
           | split_clause
           | foreach_clause
           | cube_clause
+          | assert_clause
 ;
 
 define_clause : ^( DEFINE alias ( cmd | func_clause ) )
@@ -271,7 +276,7 @@ tuple_type : ^( TUPLE_TYPE field_def_list? )
 bag_type : ^( BAG_TYPE IDENTIFIER? tuple_type? )
 ;
 
-map_type : ^( MAP_TYPE type? )
+map_type : ^( MAP_TYPE IDENTIFIER? type? )
 ;
 
 func_clause : ^( FUNC_REF func_name )
@@ -355,6 +360,12 @@ flatten_clause : ^( FLATTEN expr )
 store_clause : ^( STORE rel filename func_clause? )
 ;
 
+assert_clause : ^( ASSERT rel cond comment? )
+; 
+
+comment : QUOTEDSTRING
+;
+
 filter_clause : ^( FILTER rel cond )
 ;
 
@@ -368,7 +379,7 @@ cond : ^( OR cond cond )
      | ^( BOOL_COND expr )
 ;
 
-in_eval: ^( IN expr expr+ )
+in_eval: ^( IN ( ^( IN_LHS expr ) ^( IN_RHS expr ) )+ )
 ;
 
 func_eval: ^( FUNC_EVAL func_name real_arg* ) | ^( INVOKER_FUNC_EVAL func_name IDENTIFIER real_arg* )
@@ -427,16 +438,13 @@ pound_proj : ^( POUND ( QUOTEDSTRING | NULL ) )
 bin_expr : ^( BIN_EXPR cond expr expr )
 ;
 
-case_expr: ^( CASE_EXPR expr+ )
+case_expr: ^( CASE_EXPR ( ^( CASE_EXPR_LHS expr ) ( ^( CASE_EXPR_RHS expr) )+ )+ )
 ;
 
 case_cond: ^( CASE_COND ^( WHEN cond+ ) ^( THEN expr+ ) )
 ;
 
 limit_clause : ^( LIMIT rel ( INTEGER | LONGINTEGER | expr ) )
-;
-
-rel_cache_clause : ^( CACHE IDENTIFIER)
 ;
 
 sample_clause : ^( SAMPLE rel ( DOUBLENUMBER | expr ) )
@@ -720,6 +728,7 @@ eid : rel_str_op
     | TOBAG
     | TOMAP
     | TOTUPLE
+    | ASSERT
 ;
 
 // relational operator

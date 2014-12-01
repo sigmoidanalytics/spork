@@ -27,10 +27,10 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.fs.Path;
-import org.apache.pig.ExecType;
 import org.apache.pig.pigunit.Cluster;
 import org.apache.pig.pigunit.PigTest;
 import org.apache.pig.pigunit.pig.PigServer;
+import org.apache.pig.test.Util;
 import org.apache.pig.tools.parameters.ParseException;
 import org.junit.BeforeClass;
 import org.junit.Ignore;
@@ -52,10 +52,12 @@ public class TestPigTest {
     private PigTest test;
     private static Cluster cluster;
     private static final String PIG_SCRIPT = "test/data/pigunit/top_queries.pig";
+    private static final String PIG_SCRIPT_MACRO = "test/data/pigunit/top_queries_macro.pig";
     private static final Log LOG = LogFactory.getLog(TestPigTest.class);
 
     @BeforeClass
-    public static void setUpOnce() throws IOException {
+    public static void setUpOnce() throws Exception {
+        System.getProperties().setProperty("pigunit.exectype", Util.getLocalTestMode().toString());
         cluster = PigTest.getCluster();
 
         cluster.update(
@@ -324,6 +326,26 @@ public class TestPigTest {
 
         assertTrue(cluster.delete(new Path("top_3_queries")));
     }
+    
+    @Test
+    // Script should only be registered once, otherwise Pig will complain
+    // Macro defined twice. See PIG-3114
+    public void testMacro() throws ParseException, IOException {
+        String[] args = {
+                        "n=3",
+                        "reducers=1",
+                        "input=top_queries_input_data.txt",
+                        "output=top_3_queries",
+        };
+        test = new PigTest(PIG_SCRIPT_MACRO, args);
+
+        // By default PigUnit removes all the STORE and DUMP
+        test.unoverride("STORE");
+
+        test.runScript();
+
+        assertTrue(cluster.delete(new Path("top_3_queries")));
+    }
 
     @Ignore("Not ready yet")
     @Test
@@ -345,12 +367,11 @@ public class TestPigTest {
 
     /**
      * This is a test for default bootup. PIG-2456
-     *
-     * @throws IOException
+     * @throws Exception 
      */
 
     @Test
-    public void testDefaultBootup() throws ParseException, IOException {
+    public void testDefaultBootup() throws Exception {
         // Test with properties file
         String pigProps = "pig.properties";
         String bootupPath = "/tmp/.temppigbootup";
@@ -393,13 +414,7 @@ public class TestPigTest {
 
         // Create a pigunit.pig.PigServer and Cluster to run this test.
         PigServer pig = null;
-        if (System.getProperties().containsKey("pigunit.exectype.cluster")) {
-            LOG.info("Using cluster mode");
-            pig = new PigServer(ExecType.MAPREDUCE);
-        } else {
-            LOG.info("Using default local mode");
-            pig = new PigServer(ExecType.LOCAL);
-        }
+        pig = new PigServer(Util.getLocalTestMode());
 
         final Cluster cluster = new Cluster(pig.getPigContext());
 

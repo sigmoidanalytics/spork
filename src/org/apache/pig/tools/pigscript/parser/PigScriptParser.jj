@@ -84,6 +84,8 @@ public abstract class PigScriptParser
 
 	abstract protected void processSet(String key, String value) throws IOException, ParseException;
 
+    abstract protected void processSet() throws IOException, ParseException;
+    
     abstract protected void processHistory(boolean withNumbers);
 
 	abstract protected void processCat(String path) throws IOException;
@@ -180,6 +182,7 @@ TOKEN: {<PARAM: "-param">}
 TOKEN: {<PARAM_FILE: "-param_file">}
 TOKEN: {<SCRIPT: "-script">}
 TOKEN: {<DOT: "-dot">}
+TOKEN: {<XML: "-xml">}
 TOKEN: {<OUT: "-out">}
 TOKEN: {<BRIEF: "-brief">}
 TOKEN: {<N: "-n">}
@@ -243,13 +246,13 @@ TOKEN_MGR_DECLS : {
 <DEFAULT> MORE :
 {
     <"split"> : PIG_START
-|   <"cache"> : PIG_START
 |   <"define"> : PIG_START
-|	<"store"> : PIG_START
-|	<"import"> : PIG_START
-| 	<(["a"-"z", "A"-"Z"])+(["a"-"z", "A"-"Z"] | ["0"-"9"] | "_")*(" " | "\t")*"="> : PIG_START
+|   <"store"> : PIG_START
+|   <"assert"> : PIG_START
+|   <"import"> : PIG_START
+|   <(["a"-"z", "A"-"Z"])+(["a"-"z", "A"-"Z"] | ["0"-"9"] | "_")*(" " | "\t")*"="> : PIG_START
 |   <"=>" (" " | "\t")*> : PIG_START
-| 	< <IDENTIFIER> (" " | "\t")* ("," (" " | "\t")* <IDENTIFIER> )* (" " | "\t")* "="> : PIG_START
+|   < <IDENTIFIER> (" " | "\t")* ("," (" " | "\t")* <IDENTIFIER> )* (" " | "\t")* "="> : PIG_START
 |   < <IDENTIFIER> (" " | "\t")* "(" > : PIG_START
 }
 
@@ -591,6 +594,8 @@ void parse() throws IOException:
 		t1 = GetKey()
 		t2 = GetValue()
 		{processSet(t1.image, unquote(t2.image));}
+    	|
+		{processSet();}
 	)
 	|
 	<EOF>
@@ -691,6 +696,9 @@ void Explain() throws IOException:
          	|
          	<DOT>
         	{format = "dot";}
+         	|
+         	<XML>
+         	{format = "xml";}
          	|
 		<OUT>
 		t = GetPath()

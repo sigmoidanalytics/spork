@@ -17,11 +17,16 @@
  */
 package org.apache.pig.impl.plan;
 
+import java.io.IOException;
+import java.io.OutputStream;
 import java.io.PrintStream;
 import java.io.Serializable;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +36,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.pig.PigException;
 import org.apache.pig.impl.util.MultiMap;
+import org.apache.pig.impl.util.Pair;
 
 
 //import org.apache.commons.collections.map.MultiValueMap;
@@ -65,6 +71,7 @@ import org.apache.pig.impl.util.MultiMap;
 // Suppress "unchecked" warnings for all logical plan related classes. Will revisit in logical plan rework
 @SuppressWarnings("unchecked")
 public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, Serializable, Cloneable {
+    private static final long serialVersionUID = 1L;
     protected Map<E, OperatorKey> mOps;
     protected Map<OperatorKey, E> mKeys;
     protected MultiMap<E, E> mFromEdges;
@@ -75,7 +82,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
     private List<E> mRoots;
     private List<E> mLeaves;
     protected static final Log log = LogFactory.getLog(OperatorPlan.class);
-
+    
     public OperatorPlan() {
         mRoots = new ArrayList<E>();
         mLeaves = new ArrayList<E>();
@@ -195,7 +202,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
         mFromEdges.put(from, to);
         mToEdges.put(to, from);
     }
-
+    
     /**
      * Create an soft edge between two nodes.
      * @param from Operator dependent upon.
@@ -220,11 +227,11 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
         mSoftFromEdges.remove(from, to);
         mSoftToEdges.remove(to, from);
     }
-
+    
     /**
-     * Remove an edge from between two nodes.
-     * Use {@link org.apache.pig.impl.plan.OperatorPlan#insertBetween(Operator, Operator, Operator)}
-     * if disconnect is used in the process of inserting a new node between two nodes
+     * Remove an edge from between two nodes. 
+     * Use {@link org.apache.pig.impl.plan.OperatorPlan#insertBetween(Operator, Operator, Operator)} 
+     * if disconnect is used in the process of inserting a new node between two nodes 
      * by calling disconnect followed by a connect.
      * @param from Operator data would flow from.
      * @param to Operator data would flow to.
@@ -233,7 +240,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
      */
     public boolean disconnect(E from, E to) {
         markDirty();
-
+        
         boolean sawNull = false;
         if (mFromEdges.remove(from, to) == null) sawNull = true;
         if (mToEdges.remove(to, from) == null) sawNull = true;
@@ -251,7 +258,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
 
         removeEdges(op, mFromEdges, mToEdges);
         removeEdges(op, mToEdges, mFromEdges);
-
+        
         removeEdges(op, mSoftFromEdges, mSoftToEdges);
         removeEdges(op, mSoftToEdges, mSoftFromEdges);
 
@@ -333,7 +340,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
     public List<E> getSuccessors(E op) {
         return mFromEdges.get(op);
     }
-
+    
     /**
      * Find all of the nodes that have soft edges to the indicated node from
      * themselves.
@@ -354,7 +361,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
     public List<E> getSoftLinkSuccessors(E op) {
         return mSoftFromEdges.get(op);
     }
-
+    
     /**
      * A method to check if there is a path from a given node to another node
      * @param from the start node for checking
@@ -367,7 +374,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
             return false;
         }
         for (E successor : successors) {
-            if(successor.equals(to)
+            if(successor.equals(to) 
                     || pathExists(successor, to)) {
                 return true;
             }
@@ -375,8 +382,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
         return false;
     }
 
-    @Override
-    public Iterator<E> iterator() {
+    public Iterator<E> iterator() { 
         return mOps.keySet().iterator();
     }
 
@@ -406,12 +412,12 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
     private void checkInPlan(E op) throws PlanException {
         if (mOps.get(op) == null) {
             PlanException pe = new PlanException("Attempt to connect operator " +
-                (op == null ? "null" : op.name()) + " which is not in the plan.");
+                op.name() + " which is not in the plan.");
             log.error(pe.getMessage());
             throw pe;
         }
     }
-
+    
     /**
      * Merges the operators in the incoming operPlan with
      * this plan's operators. By merging I mean just making
@@ -427,7 +433,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
 
     /**
      * Merges the operators in the incoming plan with this plan's operators.
-     * The plans can have shared components.
+     * The plans can have shared components. 
      *
      * @param inpPlan
      * @return this pointer
@@ -480,7 +486,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
                 log.error(pe.getMessage());
                 throw pe;
             }
-
+            
             for (E e : inpFromEdges.get(fromEdg)) {
                 if (mFromEdges.get(fromEdg) == null || !mFromEdges.get(fromEdg).contains(e)) {
                     mFromEdges.put(fromEdg, e);
@@ -491,14 +497,14 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
         MultiMap<E, E> inpToEdges = inpPlan.mToEdges;
         Set<E> curTEKeySet = mToEdges.keySet();
         for (E toEdg : inpToEdges.keySet()) {
-            if (curTEKeySet.contains(toEdg) && !allowSharedPlan) {
+            if (curTEKeySet.contains(toEdg) && !allowSharedPlan) {  
                 PlanException pe = new PlanException(
                     "There are operators that are shared across the plans. Merge of "
                         + "mutually exclusive plans is the only supported merge.");
                 log.error(pe.getMessage());
-                throw pe;
+                throw pe;                
             }
-
+            
             for (E e : inpToEdges.get(toEdg)) {
                 if (mToEdges.get(toEdg) == null || !mToEdges.get(toEdg).contains(e)) {
                     mToEdges.put(toEdg, e);
@@ -516,7 +522,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
      * Adds the leaf operator to the plan and connects
      * all existing leaves to the new leaf
      * @param leaf
-     * @throws PlanException
+     * @throws PlanException 
      */
     public void addAsLeaf(E leaf) throws PlanException {
         List<E> ret = new ArrayList<E>();
@@ -528,7 +534,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
             connect(oper, leaf);
         }
     }
-
+    
     public boolean isSingleLeafPlan() {
         List<E> tmpList = getLeaves() ;
         return tmpList.size() == 1 ;
@@ -554,7 +560,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
             E before) throws PlanException {
         doInsertBetween(after, newNode, before, true);
     }
-
+    
     /*
      * Private method to perform the insertBetween operation with the ability to turn off
      * rewiring operation.
@@ -592,10 +598,10 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
     // replaces (src -> dst) entry in multiMap with (src -> replacement)
     private boolean replaceNode(E src, E replacement, E dst, MultiMap<E, E> multiMap) {
         if(multiMap == null) return false;
-
+        
         if(src == null) return false;
-
-        List<E> nodes = multiMap.get(src);
+      
+        List<E> nodes = (ArrayList<E>)multiMap.get(src);
         if (nodes == null) {
             //we need to add replacement to the multimap as long as replacement != null
             if(replacement == null) {
@@ -609,9 +615,9 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
                 return false;
             }
         }
-
+        
         if(dst == null) return false;
-
+        
         boolean replaced = false;
         ArrayList<E> replacementNodes = new ArrayList<E>();
         for(int i = 0; i < nodes.size(); ++i) {
@@ -625,7 +631,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
                 replacementNodes.add(to);
             }
         }
-
+        
         if(replaced) {
             multiMap.removeKey(src);
             if(replacementNodes.size() > 0) {
@@ -655,10 +661,10 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
             }
         }
 
-
+        
         mToEdges = generateNewMap(oldNode, newNode, mToEdges);
         mFromEdges = generateNewMap(oldNode, newNode, mFromEdges);
-
+        
         //ensure that the oldNode's successors are rewired
         if(oldNodeSuccs != null) {
             for(int i = 0; i < oldNodeSuccs.size(); ++i) {
@@ -721,10 +727,10 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
             pred = preds.get(0);
             disconnect(pred, node);
         }
-
+        
         int oldPos = -1;
         int newPos = -1;
-
+        
         List<E> succs = getSuccessors(node);
         E succ = null;
         if (succs != null) {
@@ -754,13 +760,13 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
                     newPos = i;
                 }
             }
-
+            
             if (oldPos < 0 || newPos < 0) {
-                throw new PlanException("Invalid position index: " + oldPos
+                throw new PlanException("Invalid position index: " + oldPos                        
                         + " : " + newPos);
             }
-
-            if (oldPos != newPos) {
+            
+            if (oldPos != newPos) {            
                 List<E> nlst = new ArrayList<E>();
                 for (int i=0; i<plst.size(); i++) {
                     E nod = plst.get(i);
@@ -770,16 +776,16 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
                     if (i == newPos) continue;
                     nlst.add(nod);
                 }
-
+                
                 if (nlst.size() != plst.size()) {
                     throw new PlanException("Invalid list size: " + nlst.size()
                             + " : " + plst.size());
                 }
-
+                         
                 mToEdges.removeKey(succ);
                 mToEdges.put(succ, nlst);
             }
-
+            
             succ.rewire(node, oldPos, pred, true);
         }
     }
@@ -789,7 +795,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
         //    A (predecessor (only one) )
         //  / |
         // X  B(nodeB)  Y(some predecessor of a Cn)
-        //  / | \     /
+        //  / | \     / 
         // C1 C2  C3 ... (Successors)
         // should become
         // After:
@@ -838,7 +844,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
 
         // replace B in A.succesors and add B.successors(ie C) to it
         replaceAndAddSucessors(nodeA, nodeB);
-
+        
         // for all C(succs) , replace B(node) in predecessors, with A(pred)
         if(nodeC != null) {
             for(int i = 0; i < nodeC.size(); ++i) {
@@ -856,10 +862,10 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
                 }
                 mToEdges.removeKey(c);
                 mToEdges.put(c,newPreds);
-
+                
             }
         }
-
+        
         if(removeNode) {
             remove(nodeB);
         } else {
@@ -867,7 +873,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
             mFromEdges.removeKey(nodeB);
             mToEdges.removeKey(nodeB);
         }
-
+        
         //ensure that any existing successor of nodeB is rewired to have nodeA in place of nodeB
         if(nodeC != null) {
             for(int i = 0; i < nodeC.size(); ++i) {
@@ -876,7 +882,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
             }
         }
     }
-
+    
     private void reconnectPredecessors(E node, boolean predecessorRequired, boolean removeNode) throws PlanException {
         // Before:
         // C1 C2  C3 ... (Predecessors)
@@ -884,7 +890,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
         // X  B(nodeB)  Y(some successor of a Cn)
         //  \ |
         //    A (successor (only one) )
-
+ 
 
         // should become
         // After:
@@ -926,10 +932,10 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
 
         // replace B in A.predecessors and add B.predecessors(ie C) to it
         replaceAndAddPredecessors(nodeA, nodeB);
-
+        
         // for all C(predecessors) , replace B(node) in successors, with A(successor)
         if(nodeC != null) {
-
+                        
             for(E c: nodeC) {
                 Collection<E> sPreds = mFromEdges.get(c);
                 ArrayList<E> newPreds = new ArrayList<E>(sPreds.size());
@@ -944,12 +950,12 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
                 }
                 mFromEdges.removeKey(c);
                 mFromEdges.put(c,newPreds);
-
-                //rewire nodeA
+                
+                //rewire nodeA 
                 nodeA.rewire(nodeB, 0, c, true);
             }
         }
-
+        
         if(removeNode) {
             remove(nodeB);
         } else {
@@ -958,7 +964,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
             mToEdges.removeKey(nodeB);
         }
     }
-
+    
     // removes entry for successor in list of successors of node
     // and adds successors of successor in its place
     // @param node - parent node whose entry for successor needs to be replaced
@@ -980,9 +986,9 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
        if (!newSuccessors.isEmpty()) {
            mFromEdges.put(node,newSuccessors);
        }
-    }
+    }    
 
-    // removes entry  for predecessor in list of predecessors of node,
+    // removes entry  for predecessor in list of predecessors of node, 
     // and adds predecessors of predecessor in its place
     // @param node - parent node whose entry for predecessor needs to be replaced
     // @param predecessor - see above
@@ -1004,14 +1010,14 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
            mToEdges.put(node,newPredecessors);
        }
     }
-
+    
     /**
      * Remove a node in a way that connects the node's predecessor (if any)
      * with the node's successors (if any).  This function handles the
      * case where the node has *one* predecessor and one or more successors.
      * It replaces the predecessor in same position as node was in
-     * each of the successors predecessor list(getPredecessors()), to
-     * preserve input ordering
+     * each of the successors predecessor list(getPredecessors()), to 
+     * preserve input ordering 
      * for eg, it is used to remove redundant project(*) from plan
      * which will have only one predecessor,but can have multiple success
      * @param node Node to be removed
@@ -1020,9 +1026,9 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
     public void removeAndReconnectMultiSucc(E node) throws PlanException {
         reconnectSuccessors(node, true, true);
     }
+    
 
-
-
+    
     public void dump(PrintStream ps) {
         ps.println("Ops");
         for (E op : mOps.keySet()) {
@@ -1041,7 +1047,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
             }
         }
     }
-
+    
     /**
      * Swap two operators in a plan.  Both of the operators must have single
      * inputs and single outputs.
@@ -1052,67 +1058,67 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
     public void swap(E first, E second) throws PlanException {
         E firstNode = first;
         E secondNode = second;
-
+        
         if(firstNode == null) {
             int errCode = 1092;
             String msg = "First operator in swap is null. Cannot swap null operators.";
             throw new PlanException(msg, errCode, PigException.INPUT);
         }
-
+        
         if(secondNode == null) {
             int errCode = 1092;
             String msg = "Second operator in swap is null. Cannot swap null operators.";
             throw new PlanException(msg, errCode, PigException.INPUT);
         }
-
+        
         checkInPlan(firstNode);
         checkInPlan(secondNode);
-
-        List<E> firstNodePredecessors = mToEdges.get(firstNode);
-
+        
+        List<E> firstNodePredecessors = (ArrayList<E>)mToEdges.get(firstNode);
+        
         if(firstNodePredecessors != null && firstNodePredecessors.size() > 1) {
             int errCode = 1093;
             String msg = "Swap supports swap of operators with at most one input."
                             + " Found first operator with " + firstNodePredecessors.size() + " inputs.";
             throw new PlanException(msg, errCode, PigException.INPUT);
         }
-
-        List<E> firstNodeSuccessors = mFromEdges.get(firstNode);
-
+        
+        List<E> firstNodeSuccessors = (ArrayList<E>)mFromEdges.get(firstNode);
+        
         if(firstNodeSuccessors != null && firstNodeSuccessors.size() > 1) {
             int errCode = 1093;
             String msg = "Swap supports swap of operators with at most one output."
                 + " Found first operator with " + firstNodeSuccessors.size() + " outputs.";
             throw new PlanException(msg, errCode, PigException.INPUT);
         }
-
-        List<E> secondNodePredecessors = mToEdges.get(secondNode);
-
+        
+        List<E> secondNodePredecessors = (ArrayList<E>)mToEdges.get(secondNode);
+        
         if(secondNodePredecessors != null && secondNodePredecessors.size() > 1) {
             int errCode = 1093;
             String msg = "Swap supports swap of operators with at most one input."
                 + " Found second operator with " + secondNodePredecessors.size() + " inputs.";
             throw new PlanException(msg, errCode, PigException.INPUT);
         }
-
-        List<E> secondNodeSuccessors = mFromEdges.get(secondNode);
-
+        
+        List<E> secondNodeSuccessors = (ArrayList<E>)mFromEdges.get(secondNode);
+        
         if(secondNodeSuccessors != null && secondNodeSuccessors.size() > 1) {
             int errCode = 1093;
             String msg = "Swap supports swap of operators with at most one output."
                 + " Found second operator with " + secondNodeSuccessors.size() + " outputs.";
             throw new PlanException(msg, errCode, PigException.INPUT);
         }
-
+        
         E firstNodePredecessor = null;
         E firstNodeSuccessor = null;
         E secondNodePredecessor = null;
         E secondNodeSuccessor = null;
-
+        
         if(firstNodePredecessors != null) {
             firstNodePredecessor = firstNodePredecessors.get(0);
         }
-
+        
         if(firstNodeSuccessors != null) {
             firstNodeSuccessor = firstNodeSuccessors.get(0);
         }
@@ -1120,13 +1126,13 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
         if(secondNodePredecessors != null) {
             secondNodePredecessor = secondNodePredecessors.get(0);
         }
-
+        
         if(secondNodeSuccessors != null) {
             secondNodeSuccessor = secondNodeSuccessors.get(0);
         }
-
+        
         boolean immediateNodes = false;
-
+        
         if((firstNodeSuccessor == secondNode) && (secondNodePredecessor == firstNode)) {
             immediateNodes = true;
         } else if ((secondNodeSuccessor == firstNode) && (firstNodePredecessor == secondNode)) {
@@ -1135,36 +1141,36 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
             E tmpNode = firstNode;
             firstNode = secondNode;
             secondNode = tmpNode;
-
+            
             //swap the predecessor and successor nodes
             tmpNode = firstNodePredecessor;
             firstNodePredecessor = secondNodePredecessor;
             secondNodePredecessor = tmpNode;
-
+            
             tmpNode = firstNodeSuccessor;
             firstNodeSuccessor = secondNodeSuccessor;
             secondNodeSuccessor = tmpNode;
         }
 
         if(immediateNodes) {
-            //Replace the predecessors and successors of first and second in their respective edge lists
+            //Replace the predecessors and successors of first and second in their respective edge lists       
             replaceNode(firstNode, secondNodeSuccessor, firstNodeSuccessor, mFromEdges);
             replaceNode(firstNode, secondNode, firstNodePredecessor, mToEdges);
             replaceNode(secondNode, firstNode, secondNodeSuccessor, mFromEdges);
             replaceNode(secondNode, firstNodePredecessor, secondNodePredecessor, mToEdges);
-
+            
             //rewire the two nodes
             secondNode.rewire(firstNode, 0, firstNodePredecessor, true);
             secondNode.regenerateProjectionMap();
-            firstNode.rewire(firstNodePredecessor, 0, secondNode, false);
+            firstNode.rewire(firstNodePredecessor, 0, secondNode, false);            
 
         } else {
-            //Replace the predecessors and successors of first and second in their respective edge lists
+            //Replace the predecessors and successors of first and second in their respective edge lists       
             replaceNode(firstNode, secondNodeSuccessor, firstNodeSuccessor, mFromEdges);
             replaceNode(firstNode, secondNodePredecessor, firstNodePredecessor, mToEdges);
             replaceNode(secondNode, firstNodeSuccessor, secondNodeSuccessor, mFromEdges);
             replaceNode(secondNode, firstNodePredecessor, secondNodePredecessor, mToEdges);
-
+            
             //rewire the two nodes
             //here the use of true as the final parameter is questionable
             //there is no knowledge about how to use the projection maps
@@ -1172,26 +1178,26 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
             secondNode.rewire(secondNodePredecessor, 0, firstNodePredecessor, true);
         }
 
-        //Replace first with second in the edges list for first's predecessor and successor
+        //Replace first with second in the edges list for first's predecessor and successor        
         replaceNode(firstNodePredecessor, secondNode, firstNode, mFromEdges);
         replaceNode(firstNodeSuccessor, secondNode, firstNode, mToEdges);
-
+        
         //Replace second with first in the edges list for second's predecessor and successor
         replaceNode(secondNodePredecessor, firstNode, secondNode, mFromEdges);
         replaceNode(secondNodeSuccessor, firstNode, secondNode, mToEdges);
-
+        
         if(firstNodeSuccessor != null) {
             //here the use of true as the final parameter is questionable
             //there is no knowledge about how to use the projection maps
             firstNodeSuccessor.rewire(firstNode, 0, secondNode, true);
         }
-
+        
         if(secondNodeSuccessor != null) {
             //here the use of true as the final parameter is questionable
             //there is no knowledge about how to use the projection maps
             secondNodeSuccessor.rewire(secondNode, 0, firstNode, true);
         }
-
+        
         markDirty();
     }
 
@@ -1208,24 +1214,24 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
     public void pushBefore(E first, E second, int inputNum) throws PlanException {
         E firstNode = first;
         E secondNode = second;
-
+        
         if(firstNode == null) {
             int errCode = 1085;
             String msg = "First operator in pushBefore is null. Cannot pushBefore null operators.";
             throw new PlanException(msg, errCode, PigException.INPUT);
         }
-
+        
         if(secondNode == null) {
             int errCode = 1085;
             String msg = "Second operator in pushBefore is null. Cannot pushBefore null operators.";
             throw new PlanException(msg, errCode, PigException.INPUT);
         }
-
+        
         checkInPlan(firstNode);
         checkInPlan(secondNode);
-
+        
         List<E> firstNodePredecessors = (mToEdges.get(firstNode) == null? null : new ArrayList<E>(mToEdges.get(firstNode)));
-
+        
         if(firstNodePredecessors == null || firstNodePredecessors.size() <= 1) {
             int size = (firstNodePredecessors == null ? 0 : firstNodePredecessors.size());
             int errCode = 1086;
@@ -1233,25 +1239,25 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
                             + " Found first operator with " + size + " inputs.";
             throw new PlanException(msg, errCode, PigException.INPUT);
         }
-
+        
         if(inputNum >= firstNodePredecessors.size()) {
             int errCode = 1087;
             String msg = "The inputNum " + inputNum + " should be lesser than the number of inputs of the first operator."
                             + " Found first operator with " + firstNodePredecessors.size() + " inputs.";
             throw new PlanException(msg, errCode, PigException.INPUT);
         }
-
+        
         List<E> firstNodeSuccessors = (mFromEdges.get(firstNode) == null? null : new ArrayList<E>(mFromEdges.get(firstNode)));
-
+        
         if(firstNodeSuccessors == null) {
             int errCode = 1088;
             String msg = "First operator in pushBefore should have at least one output."
                 + " Found first operator with no outputs.";
             throw new PlanException(msg, errCode, PigException.INPUT);
         }
-
+        
         List<E> secondNodePredecessors = (mToEdges.get(secondNode) == null? null : new ArrayList<E>(mToEdges.get(secondNode)));
-
+        
         if(secondNodePredecessors == null || secondNodePredecessors.size() > 1) {
             int size = (secondNodePredecessors == null ? 0 : secondNodePredecessors.size());
             int errCode = 1088;
@@ -1259,9 +1265,9 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
                 + " Found second operator with " + size + " inputs.";
             throw new PlanException(msg, errCode, PigException.INPUT);
         }
-
+        
         List<E> secondNodeSuccessors = (mFromEdges.get(secondNode) == null? null : new ArrayList<E>(mFromEdges.get(secondNode)));
-
+        
         //check for multiple edges from first to second
         int edgesFromFirstToSecond = 0;
         for(E node: firstNodeSuccessors) {
@@ -1269,7 +1275,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
                 ++edgesFromFirstToSecond;
             }
         }
-
+        
         if(edgesFromFirstToSecond == 0) {
             int errCode = 1089;
             String msg = "Second operator in pushBefore should be the successor of the First operator.";
@@ -1278,11 +1284,11 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
             int errCode = 1090;
             String msg = "Second operator can have at most one incoming edge from First operator."
                 + " Found " + edgesFromFirstToSecond + " edges.";
-            throw new PlanException(msg, errCode, PigException.INPUT);
+            throw new PlanException(msg, errCode, PigException.INPUT);            
         }
-
+        
         //check if E (i.e., firstNode) can support multiple outputs before we short-circuit
-
+        
         if(!firstNode.supportsMultipleOutputs()) {
             int numSecondNodeSuccessors = (secondNodeSuccessors == null? 0 : secondNodeSuccessors.size());
             if((firstNodeSuccessors.size() > 0) || (numSecondNodeSuccessors > 0)) {
@@ -1293,7 +1299,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
                 throw new PlanException(msg, errCode, PigException.INPUT);
             }
         }
-
+        
         //Assume that we have a graph which is like
         //   A   B   C   D
         //   \   |   |  /
@@ -1313,7 +1319,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
         //   \   |   |  /
         //         E
         //   /  /  |  \  \
-        //  F  I   J   K  H
+        //  F  I   J   K  H  
         //Step 2
         //       B
         //       |
@@ -1321,11 +1327,11 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
         //   \   |   |  /
         //         E
         //   /  /  |  \  \
-        //  F  I   J   K  H
-
+        //  F  I   J   K  H           
+        
         reconnectSuccessors(secondNode, false, false);
         doInsertBetween(firstNodePredecessors.get(inputNum), secondNode, firstNode, false);
-
+        
         //A note on the use of rewire
         //Rewire is used within reconnectPredecessors. However, rewire is explicitly turned off in insertBetween
         //The rewiring is done explicitly here to avoid exceptions that are generated due to precondition
@@ -1344,29 +1350,29 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
      * second operator the first operator should be pushed to.
      * @param first operator, assumed to have multiple outputs
      * @param second operator, will be pushed after the first operator
-     * @param outputNum indicates which output of the first operator the second
+     * @param outputNum indicates which output of the first operator the second 
      * operator will be pushed onto.  Numbered from 0.
      * @throws PlanException if outputNum does not exist for first operator
      */
     public void pushAfter(E first, E second, int outputNum) throws PlanException {
         E firstNode = first;
         E secondNode = second;
-
+        
         if(firstNode == null) {
             int errCode = 1085;
             String msg = "First operator in pushAfter is null. Cannot pushBefore null operators.";
             throw new PlanException(msg, errCode, PigException.INPUT);
         }
-
+        
         if(secondNode == null) {
             int errCode = 1085;
             String msg = "Second operator in pushAfter is null. Cannot pushBefore null operators.";
             throw new PlanException(msg, errCode, PigException.INPUT);
         }
-
+        
         checkInPlan(firstNode);
         checkInPlan(secondNode);
-
+        
         List<E> firstNodePredecessors = (mToEdges.get(firstNode) == null? null : new ArrayList<E>(mToEdges.get(firstNode)));
 
         if(firstNodePredecessors == null) {
@@ -1374,10 +1380,10 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
             String msg = "First operator in pushAfter should have at least one input."
                 + " Found first operator with no inputs.";
             throw new PlanException(msg, errCode, PigException.INPUT);
-        }
+        }        
 
         List<E> firstNodeSuccessors = (mFromEdges.get(firstNode) == null? null: new ArrayList<E>(mFromEdges.get(firstNode)));
-
+        
         if(firstNodeSuccessors == null || firstNodeSuccessors.size() <= 1) {
             int size = (firstNodeSuccessors == null ? 0 : firstNodeSuccessors.size());
             int errCode = 1086;
@@ -1385,16 +1391,16 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
                             + " Found first operator with " + size + " outputs.";
             throw new PlanException(msg, errCode, PigException.INPUT);
         }
-
+        
         if(outputNum >= firstNodeSuccessors.size()) {
             int errCode = 1087;
             String msg = "The outputNum " + outputNum + " should be lesser than the number of outputs of the first operator."
                             + " Found first operator with " + firstNodeSuccessors.size() + " outputs.";
             throw new PlanException(msg, errCode, PigException.INPUT);
         }
-
+        
         List<E> secondNodePredecessors = (mToEdges.get(secondNode) == null? null : new ArrayList<E>(mToEdges.get(secondNode)));
-
+        
         List<E> secondNodeSuccessors = (mFromEdges.get(secondNode) == null? null : new ArrayList<E>(mFromEdges.get(secondNode)));
 
         if(secondNodeSuccessors == null || secondNodeSuccessors.size() > 1) {
@@ -1404,7 +1410,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
                 + " Found second operator with " + size + " outputs.";
             throw new PlanException(msg, errCode, PigException.INPUT);
         }
-
+        
 
         //check for multiple edges from second to first
         int edgesFromSecondToFirst = 0;
@@ -1413,7 +1419,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
                 ++edgesFromSecondToFirst;
             }
         }
-
+        
         if(edgesFromSecondToFirst == 0) {
             int errCode = 1089;
             String msg = "Second operator in pushAfter should be the predecessor of the First operator.";
@@ -1422,11 +1428,11 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
             int errCode = 1090;
             String msg = "Second operator can have at most one outgoing edge from First operator."
                 + " Found " + edgesFromSecondToFirst + " edges.";
-            throw new PlanException(msg, errCode, PigException.INPUT);
+            throw new PlanException(msg, errCode, PigException.INPUT);            
         }
-
+        
         //check if E (i.e., firstNode) can support multiple outputs before we short-circuit
-
+        
         if(!firstNode.supportsMultipleInputs()) {
             int numSecondNodePredecessors = (secondNodePredecessors == null? 0 : secondNodePredecessors.size());
             //if((firstNodePredecessors.size() > 0) || (numSecondNodePredecessors > 0)) {
@@ -1438,7 +1444,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
                 throw new PlanException(msg, errCode, PigException.INPUT);
             }
         }
-
+        
         //Assume that we have a graph which is like
         //   A   B   C   D
         //   \   |   |  /
@@ -1458,17 +1464,17 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
         //   \   |   |  /
         //         G
         //      /  |  \
-        //     I   J   K
+        //     I   J   K  
         //Step 2
-        //   A   B   C   D
+        //   A   B   C   D 
         //   \   |   |  /
         //         G
         //      /  |  \
         //     I   E   K
         //         |
         //         J
-
-
+        
+        
         reconnectPredecessors(secondNode, false, false);
         doInsertBetween(firstNode, secondNode, firstNodeSuccessors.get(outputNum), false);
         //A note on the use of rewire
@@ -1482,22 +1488,22 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
                 secondNode.rewire(secondNodePred, i, firstNode, true);
             }
         }
-
+        
         secondNode.regenerateProjectionMap();
         firstNodeSuccessors.get(outputNum).rewire(firstNode, 0, secondNode, false);
-
+        
         markDirty();
         return;
 
     }
-
+    
     /*
      * A helper class that computes the index of each reference in a list for a quick lookup
      */
     public static class IndexHelper <E> {
-
+        
         private Map<E, Integer> mIndex = null;
-
+        
         public IndexHelper(List<E> list) {
             if(list != null) {
                 if(list.size() != 0) {
@@ -1508,7 +1514,7 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
                 }
             }
         }
-
+        
         public int getIndex(E e) {
             if(mIndex == null || mIndex.size() == 0) return -1;
             return mIndex.get(e);

@@ -19,46 +19,53 @@
 package org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators;
 
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.HashSet;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.pig.PigConfiguration;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigMapReduce;
-import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.POStatus;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.Result;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhyPlanVisitor;
 import org.apache.pig.data.BagFactory;
 import org.apache.pig.data.DataBag;
 import org.apache.pig.data.DataType;
-import org.apache.pig.data.DistinctDataBag;
 import org.apache.pig.data.InternalDistinctBag;
-import org.apache.pig.data.InternalSortedBag;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.plan.NodeIdGenerator;
 import org.apache.pig.impl.plan.OperatorKey;
 import org.apache.pig.impl.plan.VisitorException;
-import org.apache.pig.impl.util.IdentityHashSet;
-import org.apache.pig.pen.util.ExampleTuple;
-import org.apache.pig.pen.util.LineageTracer;
-import org.apache.pig.impl.util.IdentityHashSet;
 
 /**
  * Find the distinct set of tuples in a bag.
  * This is a blocking operator. All the input is put in the hashset implemented
  * in DistinctDataBag which also provides the other DataBag interfaces.
- * 
- * 
+ *
+ *
  */
 public class PODistinct extends PhysicalOperator implements Cloneable {
     private static final Log log = LogFactory.getLog(PODistinct.class);
     private static final long serialVersionUID = 1L;
     private boolean inputsAccumulated = false;
     private DataBag distinctBag = null;
-    transient Iterator<Tuple> it;
+
+    private transient boolean initialized;
+    private transient boolean useDefaultBag;
+    private transient Iterator<Tuple> it;
+
+    // PIG-3385: Since GlobalRearrange is not used by PODistinct, passing the
+    // custom partioner through here
+    protected String customPartitioner;
+
+    public String getCustomPartitioner() {
+        return customPartitioner;
+    }
+    public void setCustomPartitioner(String customPartitioner) {
+        this.customPartitioner = customPartitioner;
+    }
 
     public PODistinct(OperatorKey k, int rp, List<PhysicalOperator> inp) {
         super(k, rp, inp);
@@ -84,37 +91,36 @@ public class PODistinct extends PhysicalOperator implements Cloneable {
     @Override
     public Result getNextTuple() throws ExecException {
          if (!inputsAccumulated) {
-            Result in = processInput();    
-            
-            // by default, we create InternalSortedBag, unless user configures
-			// explicitly to use old bag
-           	String bagType = null;
-            if (PigMapReduce.sJobConfInternal.get() != null) {
-       			bagType = PigMapReduce.sJobConfInternal.get().get("pig.cachedbag.distinct.type");       			
-       	    }            
-            if (bagType != null && bagType.equalsIgnoreCase("default")) {        	    	
-            	distinctBag = BagFactory.getInstance().newDistinctBag();    			
-       	    } else {
-       	    	distinctBag = new InternalDistinctBag(3);
-    	    }
-            
+            // by default, we create InternalDistinctBag, unless user configures
+            // explicitly to use old bag
+             if (!initialized) {
+                 initialized = true;
+                 if (PigMapReduce.sJobConfInternal.get() != null) {
+                     String bagType = PigMapReduce.sJobConfInternal.get().get(PigConfiguration.PIG_CACHEDBAG_DISTINCT_TYPE);
+                     if (bagType != null && bagType.equalsIgnoreCase("default")) {
+                         useDefaultBag = true;
+                     }
+                 }
+             }
+             distinctBag = useDefaultBag ? BagFactory.getInstance().newDistinctBag()
+                     : new InternalDistinctBag(3);
+
+            Result in = processInput();
             while (in.returnStatus != POStatus.STATUS_EOP) {
                 if (in.returnStatus == POStatus.STATUS_ERR) {
                     log.error("Error in reading from inputs");
                     return in;
-                    //continue;
                 } else if (in.returnStatus == POStatus.STATUS_NULL) {
-                    // Ignore the null, read the next tuple.  It's not clear
-                    // to me that we should ever get this, or if we should, 
-                    // how it differs from EOP.  But ignoring it here seems
-                    // to work.
+                    // Ignore and read the next tuple.
                     in = processInput();
                     continue;
+                } else {
+                    distinctBag.add((Tuple) in.result);
+                    illustratorMarkup(in.result, in.result, 0);
+                    in = processInput();
                 }
-                distinctBag.add((Tuple) in.result);
-                illustratorMarkup(in.result, in.result, 0);
-                in = processInput();
             }
+
             inputsAccumulated = true;
         }
         if (it == null) {

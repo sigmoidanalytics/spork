@@ -28,6 +28,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -36,6 +37,7 @@ import java.io.OutputStreamWriter;
 import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.io.StringReader;
+import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -45,8 +47,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
-import junit.framework.Assert;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -54,18 +54,24 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
+import org.apache.log4j.Appender;
 import org.apache.log4j.FileAppender;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.apache.log4j.PatternLayout;
 import org.apache.log4j.SimpleLayout;
+import org.apache.log4j.WriterAppender;
 import org.apache.pig.ExecType;
+import org.apache.pig.ExecTypeProvider;
 import org.apache.pig.LoadCaster;
 import org.apache.pig.PigException;
 import org.apache.pig.PigServer;
 import org.apache.pig.ResourceSchema.ResourceFieldSchema;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.datastorage.ConfigurationUtil;
+import org.apache.pig.backend.hadoop.executionengine.HExecutionEngine;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRCompiler;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRConfiguration;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MapReduceLauncher;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.MROperPlan;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
@@ -83,9 +89,7 @@ import org.apache.pig.impl.io.FileLocalizer;
 import org.apache.pig.impl.logicalLayer.FrontendException;
 import org.apache.pig.impl.logicalLayer.schema.Schema;
 import org.apache.pig.impl.logicalLayer.schema.Schema.FieldSchema;
-import org.apache.pig.impl.plan.CompilationMessageCollector;
 import org.apache.pig.impl.util.LogUtils;
-import org.apache.pig.newplan.logical.optimizer.DanglingNestedNodeRemover;
 import org.apache.pig.newplan.logical.optimizer.LogicalPlanPrinter;
 import org.apache.pig.newplan.logical.optimizer.SchemaResetter;
 import org.apache.pig.newplan.logical.optimizer.UidResetter;
@@ -93,17 +97,14 @@ import org.apache.pig.newplan.logical.relational.LogToPhyTranslationVisitor;
 import org.apache.pig.newplan.logical.relational.LogicalPlan;
 import org.apache.pig.newplan.logical.relational.LogicalSchema;
 import org.apache.pig.newplan.logical.relational.LogicalSchema.LogicalFieldSchema;
-import org.apache.pig.newplan.logical.visitor.CastLineageSetter;
-import org.apache.pig.newplan.logical.visitor.ColumnAliasConversionVisitor;
-import org.apache.pig.newplan.logical.visitor.ScalarVisitor;
-import org.apache.pig.newplan.logical.visitor.SchemaAliasVisitor;
+import org.apache.pig.newplan.logical.visitor.DanglingNestedNodeRemover;
 import org.apache.pig.newplan.logical.visitor.SortInfoSetter;
 import org.apache.pig.newplan.logical.visitor.StoreAliasSetter;
-import org.apache.pig.newplan.logical.visitor.TypeCheckingRelVisitor;
-import org.apache.pig.newplan.logical.visitor.UnionOnSchemaSetter;
 import org.apache.pig.parser.ParserException;
 import org.apache.pig.parser.QueryParserDriver;
 import org.apache.pig.tools.grunt.GruntParser;
+import org.apache.pig.tools.pigstats.ScriptState;
+import org.junit.Assert;
 
 import com.google.common.base.Function;
 import com.google.common.collect.Lists;
@@ -188,6 +189,7 @@ public class Util {
     static public Tuple buildBinTuple(final Object... args) throws IOException {
         return TupleFactory.getInstance().newTuple(Lists.transform(
                 Lists.newArrayList(args), new Function<Object, DataByteArray>() {
+                    @Override
                     public DataByteArray apply(Object o) {
                         if (o == null) {
                             return null;
@@ -322,7 +324,8 @@ public class Util {
 	    PrintWriter pw = new PrintWriter(new OutputStreamWriter(new
 	            FileOutputStream(f), "UTF-8"));
         for (int i=0; i<inputData.length; i++){
-            pw.println(inputData[i]);
+            pw.print(inputData[i]);
+            pw.print("\n");
         }
         pw.close();
 	}
@@ -337,7 +340,7 @@ public class Util {
      *                  on one line
      * @throws IOException
      */
-    static public void createInputFile(MiniCluster miniCluster, String fileName,
+    static public void createInputFile(MiniGenericCluster miniCluster, String fileName,
                                        String[] inputData)
     throws IOException {
         FileSystem fs = miniCluster.getFileSystem();
@@ -346,19 +349,26 @@ public class Util {
 
     static public void createInputFile(FileSystem fs, String fileName,
             String[] inputData) throws IOException {
+        if(Util.WINDOWS){
+            fileName = fileName.replace('\\','/');
+        }
         if(fs.exists(new Path(fileName))) {
             throw new IOException("File " + fileName + " already exists on the FileSystem");
         }
         FSDataOutputStream stream = fs.create(new Path(fileName));
         PrintWriter pw = new PrintWriter(new OutputStreamWriter(stream, "UTF-8"));
         for (int i=0; i<inputData.length; i++){
-            pw.println(inputData[i]);
+            pw.print(inputData[i]);
+            pw.print("\n");
         }
         pw.close();
 
     }
 
     static public String[] readOutput(FileSystem fs, String fileName) throws IOException {
+        if(Util.WINDOWS){
+            fileName = fileName.replace('\\','/');
+        }
         Path path = new Path(fileName);
         if(!fs.exists(path)) {
             throw new IOException("Path " + fileName + " does not exist on the FileSystem");
@@ -367,6 +377,7 @@ public class Util {
         FileStatus[] files;
         if (fileStatus.isDir()) {
             files = fs.listStatus(path, new PathFilter() {
+                @Override
                 public boolean accept(Path p) {
                     return !p.getName().startsWith("_");
                 }
@@ -399,9 +410,12 @@ public class Util {
      *         MiniCluster.
      * @throws IOException
      */
-    static public OutputStream createInputFile(MiniCluster cluster,
+    static public OutputStream createInputFile(MiniGenericCluster cluster,
             String fileName) throws IOException {
         FileSystem fs = cluster.getFileSystem();
+        if(Util.WINDOWS){
+            fileName = fileName.replace('\\','/');
+        }
         if (fs.exists(new Path(fileName))) {
             throw new IOException("File " + fileName
                     + " already exists on the minicluster");
@@ -432,9 +446,12 @@ public class Util {
      * @param fileName pathname of the file to be deleted
      * @throws IOException
      */
-    static public void deleteFile(MiniCluster miniCluster, String fileName)
+    static public void deleteFile(MiniGenericCluster miniCluster, String fileName)
     throws IOException {
         FileSystem fs = miniCluster.getFileSystem();
+        if(Util.WINDOWS){
+            fileName = fileName.replace('\\','/');
+        }
         fs.delete(new Path(fileName), true);
     }
 
@@ -443,6 +460,9 @@ public class Util {
         Configuration conf = ConfigurationUtil.toConfiguration(
                 pigContext.getProperties());
         FileSystem fs = FileSystem.get(conf);
+        if(Util.WINDOWS){
+            fileName = fileName.replace('\\','/');
+        }
         fs.delete(new Path(fileName), true);
     }
 
@@ -451,6 +471,9 @@ public class Util {
         Configuration conf = ConfigurationUtil.toConfiguration(
                 pigContext.getProperties());
         FileSystem fs = FileSystem.get(conf);
+        if(Util.WINDOWS){
+            fileName = fileName.replace('\\','/');
+        }
         return fs.exists(new Path(fileName));
     }
 
@@ -463,10 +486,8 @@ public class Util {
     */
     static public void checkQueryOutputs(Iterator<Tuple> actualResults,
                                     Tuple[] expectedResults) {
-        for (Tuple expected : expectedResults) {
-            Tuple actual = actualResults.next();
-            Assert.assertEquals(expected.toString(), actual.toString());
-        }
+        checkQueryOutputs(actualResults, Arrays.asList(expectedResults));
+
     }
 
     /**
@@ -478,9 +499,37 @@ public class Util {
      */
      static public void checkQueryOutputs(Iterator<Tuple> actualResults,
                                      List<Tuple> expectedResults) {
-
-         checkQueryOutputs(actualResults,expectedResults.toArray(new Tuple[expectedResults.size()]));
+         int count = 0;
+         for (Tuple expected : expectedResults) {
+             Tuple actual = actualResults.next();
+             count++;
+             Assert.assertEquals(expected.toString(), actual.toString());
+         }
+         Assert.assertEquals(expectedResults.size(), count);
      }
+
+     /**
+      * Helper function to check if the result of a Pig Query is in line with
+      * expected results.
+      *
+      * @param actualResults Result of the executed Pig query
+      * @param expectedResults Expected results List to validate against
+      */
+      static public void checkQueryOutputs(Iterator<Tuple> actualResults,
+            Iterator<Tuple> expectedResults, Integer expectedRows) {
+          int count = 0;
+          while (expectedResults.hasNext()) {
+              Tuple expected = expectedResults.next();
+              Assert.assertTrue("Actual result has less records than expected results", actualResults.hasNext());
+              Tuple actual = actualResults.next();
+              Assert.assertEquals(expected.toString(), actual.toString());
+              count++;
+          }
+          Assert.assertFalse("Actual result has more records than expected results", actualResults.hasNext());
+          if (expectedRows != null) {
+              Assert.assertEquals((int)expectedRows, count);
+          }
+      }
 
     /**
      * Helper function to check if the result of a Pig Query is in line with
@@ -495,14 +544,10 @@ public class Util {
          while(actualResultsIt.hasNext()){
              actualResList.add(actualResultsIt.next());
          }
-
-         compareActualAndExpectedResults(actualResList, expectedResList);
-
+         checkQueryOutputsAfterSort(actualResList, expectedResList);
      }
 
-
-
-     static public void compareActualAndExpectedResults(
+     static public void checkQueryOutputsAfterSort(
             List<Tuple> actualResList, List<Tuple> expectedResList) {
          Collections.sort(actualResList);
          Collections.sort(expectedResList);
@@ -566,7 +611,7 @@ public class Util {
      }
 
      static private String getMkDirCommandForHadoop2_0(String fileName) {
-         if (Util.isHadoop23() || Util.isHadoop2_0()) {
+         if (org.apache.pig.impl.util.Utils.isHadoop23() || org.apache.pig.impl.util.Utils.isHadoop2()) {
              Path parentDir = new Path(fileName).getParent();
              String mkdirCommand = parentDir.getName().isEmpty() ? "" : "fs -mkdir -p " + parentDir + "\n";
              return mkdirCommand;
@@ -582,13 +627,20 @@ public class Util {
 	 * @param fileNameOnCluster the name with which the file should be created on the minicluster
 	 * @throws IOException
 	 */
-	static public void copyFromLocalToCluster(MiniCluster cluster, String localFileName, String fileNameOnCluster) throws IOException {
-        PigServer ps = new PigServer(ExecType.MAPREDUCE, cluster.getProperties());
+     static public void copyFromLocalToCluster(MiniGenericCluster cluster,
+        String localFileName, String fileNameOnCluster) throws IOException {
+        if(Util.WINDOWS){
+            if (!localFileName.contains(":")) {
+                localFileName = localFileName.replace('\\','/');
+            } else {
+                localFileName = localFileName.replace('/','\\');
+            }
+            fileNameOnCluster = fileNameOnCluster.replace('\\','/');
+        }
+        PigServer ps = new PigServer(cluster.getExecType(), cluster.getProperties());
         String script = getMkDirCommandForHadoop2_0(fileNameOnCluster) + "fs -put " + localFileName + " " + fileNameOnCluster;
-
-	    GruntParser parser = new GruntParser(new StringReader(script));
+        GruntParser parser = new GruntParser(new StringReader(script), ps);
         parser.setInteractive(false);
-        parser.setParams(ps);
         try {
             parser.parseStopOnError();
         } catch (org.apache.pig.tools.pigscript.parser.ParseException e) {
@@ -598,14 +650,17 @@ public class Util {
 
     static public void copyFromLocalToLocal(String fromLocalFileName,
             String toLocalFileName) throws IOException {
+        if(Util.WINDOWS){
+            fromLocalFileName = fromLocalFileName.replace('\\','/');
+            toLocalFileName = toLocalFileName.replace('\\','/');
+        }
         PigServer ps = new PigServer(ExecType.LOCAL, new Properties());
         String script = getMkDirCommandForHadoop2_0(toLocalFileName) + "fs -cp " + fromLocalFileName + " " + toLocalFileName;
 
         new File(toLocalFileName).deleteOnExit();
 
-        GruntParser parser = new GruntParser(new StringReader(script));
+        GruntParser parser = new GruntParser(new StringReader(script), ps);
         parser.setInteractive(false);
-        parser.setParams(ps);
         try {
             parser.parseStopOnError();
         } catch (org.apache.pig.tools.pigscript.parser.ParseException e) {
@@ -614,7 +669,12 @@ public class Util {
 
     }
 
-	static public void copyFromClusterToLocal(MiniCluster cluster, String fileNameOnCluster, String localFileName) throws IOException {
+    static public void copyFromClusterToLocal(MiniGenericCluster cluster,
+            String fileNameOnCluster, String localFileName) throws IOException {
+        if(Util.WINDOWS){
+            fileNameOnCluster = fileNameOnCluster.replace('\\','/');
+            localFileName = localFileName.replace('\\','/');
+        }
 	    File parent = new File(localFileName).getParentFile();
 	    if (!parent.exists()) {
 	        parent.mkdirs();
@@ -675,9 +735,13 @@ public class Util {
 
     public static String generateURI(String filename, PigContext context)
             throws IOException {
-        if (context.getExecType() == ExecType.MAPREDUCE) {
+        if(Util.WINDOWS){
+            filename = filename.replace('\\','/');
+        }
+        if (context.getExecType() == ExecType.MAPREDUCE || context.getExecType().name().equals("TEZ") ||
+                context.getExecType().name().equals("SPARK")) {
             return FileLocalizer.hadoopify(filename, context);
-        } else if (context.getExecType() == ExecType.LOCAL) {
+        } else if (context.getExecType().isLocal()) {
             return filename;
         } else {
             throw new IllegalStateException("ExecType: " + context.getExecType());
@@ -742,7 +806,7 @@ public class Util {
             }else if(col instanceof DataBag){
                 Iterator<Tuple> it = ((DataBag)col).iterator();
                 while(it.hasNext()){
-                    convertStringToDataByteArray((Tuple)it.next());
+                    convertStringToDataByteArray(it.next());
                 }
             }
 
@@ -813,6 +877,8 @@ public class Util {
     public static MROperPlan buildMRPlan(PhysicalPlan pp, PigContext pc) throws Exception{
         MRCompiler comp = new MRCompiler(pp, pc);
         comp.compile();
+        comp.aggregateScalarsFiles();
+        comp.connectSoftLink();
         return comp.getMRPlan();
     }
 
@@ -850,6 +916,38 @@ public class Util {
         return executeJavaCommandAndReturnInfo(cmd).exitCode;
     }
 
+    public static class ReadStream implements Runnable {
+        InputStream is;
+        Thread thread;
+        String message = "";
+        public ReadStream(InputStream is) {
+            this.is = is;
+        }
+        public void start () {
+            thread = new Thread (this);
+            thread.start ();
+        }
+        public void run () {
+            try {
+                InputStreamReader isr = new InputStreamReader (is);
+                BufferedReader br = new BufferedReader (isr);
+                while (true) {
+                    String s = br.readLine ();
+                    if (s == null) break;
+                    if (!message.isEmpty()) {
+                        message += "\n";
+                    }
+                    message += s;
+                }
+                is.close ();
+            } catch (Exception ex) {
+                ex.printStackTrace ();
+            }
+        }
+        public String getMessage() {
+            return message;
+        }
+    }
 
     public static ProcessReturnInfo executeJavaCommandAndReturnInfo(String cmd)
     throws Exception {
@@ -860,24 +958,17 @@ public class Util {
         }
         Process cmdProc = Runtime.getRuntime().exec(cmd);
         ProcessReturnInfo pri = new ProcessReturnInfo();
-        pri.stdoutContents = getContents(cmdProc.getInputStream());
-        pri.stderrContents = getContents(cmdProc.getErrorStream());
+        ReadStream stdoutStream = new ReadStream(cmdProc.getInputStream ());
+        ReadStream stderrStream = new ReadStream(cmdProc.getErrorStream ());
+        stdoutStream.start();
+        stderrStream.start();
         cmdProc.waitFor();
         pri.exitCode = cmdProc.exitValue();
+        pri.stdoutContents = stdoutStream.getMessage();
+        pri.stderrContents = stderrStream.getMessage();
         return pri;
     }
 
-    private static String getContents(InputStream istr) throws IOException {
-        BufferedReader br = new BufferedReader(
-                new InputStreamReader(istr));
-        String s = "";
-        String line;
-        while ( (line = br.readLine()) != null) {
-            s += line + "\n";
-        }
-        return s;
-
-    }
     public static class ProcessReturnInfo {
         public int exitCode;
         public String stderrContents;
@@ -992,6 +1083,7 @@ public class Util {
             while ((line = reader.readLine()) != null) {
                 logMessage = logMessage + line + "\n";
             }
+            reader.close();
             for (int i = 0; i < messages.length; i++) {
                 boolean present = logMessage.contains(messages[i]);
                 if (expected) {
@@ -1024,12 +1116,10 @@ public class Util {
 
     public static PhysicalPlan buildPp(PigServer pigServer, String query)
     throws Exception {
-    	buildLp( pigServer, query );
-        java.lang.reflect.Method compilePp = pigServer.getClass().getDeclaredMethod("compilePp" );
-        compilePp.setAccessible(true);
-
-        return (PhysicalPlan)compilePp.invoke( pigServer );
-
+        LogicalPlan lp = buildLp( pigServer, query );
+        lp.optimize(pigServer.getPigContext());
+        return ((HExecutionEngine)pigServer.getPigContext().getExecutionEngine()).compile(lp,
+                pigServer.getPigContext().getProperties());
     }
 
     public static LogicalPlan parse(String query, PigContext pc) throws FrontendException {
@@ -1037,16 +1127,7 @@ public class Util {
         QueryParserDriver parserDriver = new QueryParserDriver( pc, "test", fileNameMap );
         org.apache.pig.newplan.logical.relational.LogicalPlan lp = parserDriver.parse( query );
 
-        new ColumnAliasConversionVisitor(lp).visit();
-        new SchemaAliasVisitor(lp).visit();
-        new ScalarVisitor(lp, pc, "test").visit();
-
-        CompilationMessageCollector collector = new CompilationMessageCollector() ;
-
-        new TypeCheckingRelVisitor( lp, collector).visit();
-
-        new UnionOnSchemaSetter( lp ).visit();
-        new CastLineageSetter(lp, collector).visit();
+        lp.validate(pc, "test", false);
         return lp;
     }
 
@@ -1055,16 +1136,7 @@ public class Util {
         QueryParserDriver parserDriver = new QueryParserDriver( pc, "test", fileNameMap );
         org.apache.pig.newplan.logical.relational.LogicalPlan lp = parserDriver.parse( query );
 
-        new ColumnAliasConversionVisitor( lp ).visit();
-        new SchemaAliasVisitor( lp ).visit();
-        new ScalarVisitor(lp, pc, "test").visit();
-
-        CompilationMessageCollector collector = new CompilationMessageCollector() ;
-
-        new TypeCheckingRelVisitor( lp, collector).visit();
-
-        new UnionOnSchemaSetter( lp ).visit();
-        new CastLineageSetter(lp, collector).visit();
+        lp.validate(pc, "test", false);
         return lp;
     }
 
@@ -1175,30 +1247,34 @@ public class Util {
             result += line;
             result += "\n";
         }
+        reader.close();
         return result;
     }
-    
-    public static boolean isHadoop23() {
-        String version = org.apache.hadoop.util.VersionInfo.getVersion();
-        if (version.matches("\\b0\\.23\\..+\\b"))
-            return true;
-        return false;
+
+    /**
+     * this removes the signature from the serialized plan changing the way the
+     * unique signature is generated should not break this test
+     * @param plan the plan to canonicalize
+     * @return the cleaned up plan
+     */
+    public static String removeSignature(String plan) {
+        return plan.replaceAll("','','[^']*','scope','true'\\)\\)", "','','','scope','true'))");
     }
-    
+
     public static boolean isHadoop203plus() {
         String version = org.apache.hadoop.util.VersionInfo.getVersion();
         if (version.matches("\\b0\\.20\\.2\\b"))
             return false;
         return true;
     }
-    
+
     public static boolean isHadoop205() {
         String version = org.apache.hadoop.util.VersionInfo.getVersion();
         if (version.matches("\\b0\\.20\\.205\\..+"))
             return true;
         return false;
     }
-    
+
     public static boolean isHadoop1_x() {
         String version = org.apache.hadoop.util.VersionInfo.getVersion();
         if (version.matches("\\b1\\.*\\..+"))
@@ -1214,17 +1290,100 @@ public class Util {
         assertConfLong(conf, "pig.info.reducers.default.parallel", defaultParallel);
         assertConfLong(conf, "pig.info.reducers.requested.parallel", requestedParallel);
         assertConfLong(conf, "pig.info.reducers.estimated.parallel", estimatedParallel);
-        assertConfLong(conf, "mapred.reduce.tasks", runtimeParallel);
+        assertConfLong(conf, MRConfiguration.REDUCE_TASKS, runtimeParallel);
     }
 
-    private static void assertConfLong(Configuration conf, String param, long expected) {
+    public static void assertConfLong(Configuration conf, String param, long expected) {
         assertEquals("Unexpected value found in configs for " + param, expected, conf.getLong(param, -1));
     }
 
-    public static boolean isHadoop2_0() {
-        String version = org.apache.hadoop.util.VersionInfo.getVersion();
-        if (version.matches("\\b2\\.\\d\\..+"))
-            return true;
-        return false;
+    /**
+     * Returns a PathFilter that filters out filenames that start with _.
+     * @return PathFilter
+     */
+    public static PathFilter getSuccessMarkerPathFilter() {
+        return new PathFilter() {
+            @Override
+            public boolean accept(Path p) {
+                return !p.getName().startsWith("_");
+            }
+        };
+    }
+
+    /**
+     *
+     * @param expected
+     *            Exception class that is expected to be thrown
+     * @param found
+     *            Exception that occurred in the test
+     * @param message
+     *            expected String to verify against
+     */
+    public static void assertExceptionAndMessage(Class<?> expected,
+            Exception found, String message) {
+        assertEquals(expected, found.getClass());
+        assertEquals(found.getMessage(), message);
+    }
+
+    /**
+     * Called to reset ThreadLocal or static states that PigServer depends on
+     * when a test suite has testcases switching between LOCAL and MAPREDUCE/TEZ
+     * execution modes
+     */
+    public static void resetStateForExecModeSwitch() {
+        FileLocalizer.setInitialized(false);
+        // TODO: once we have Tez local mode, we can get rid of this. For now,
+        // if we run this test suite in Tez mode and there are some tests
+        // in LOCAL mode, we need to set ScriptState to
+        // null to force ScriptState gets initialized every time.
+        ScriptState.start(null);
+    }
+
+    public static boolean isMapredExecType(ExecType execType) {
+        return execType == ExecType.MAPREDUCE;
+    }
+
+    public static String findPigJarName() {
+        final String suffix = System.getProperty("hadoopversion").equals("20") ? "1" : "2";
+        File baseDir = new File(".");
+        String[] jarNames = baseDir.list(new FilenameFilter() {
+            @Override
+            public boolean accept(File dir, String name) {
+                if (!name.matches("pig.*h" + suffix + "\\.jar")) {
+                    return false;
+                }
+                if (name.contains("all")) {
+                    return false;
+                }
+                return true;
+            }
+        });
+        if (jarNames==null || jarNames.length!=1) {
+            throw new RuntimeException("Cannot find pig.jar");
+        }
+        return jarNames[0];
+    }
+
+    public static ExecType getLocalTestMode() throws Exception {
+        String execType = System.getProperty("test.exec.type");
+        if (execType!=null && execType.equals("tez")) {
+            return ExecTypeProvider.fromString("tez_local");
+        } else {
+            return ExecTypeProvider.fromString("local");
+        }
+    }
+
+    public static void createLogAppender(Class clazz, String appenderName, Writer writer) {
+        Logger logger = Logger.getLogger(clazz);
+        WriterAppender writerAppender = new WriterAppender(new PatternLayout("%d [%t] %-5p %c %x - %m%n"), writer);
+        writerAppender.setName(appenderName);
+        logger.addAppender(writerAppender);
+    }
+
+    public static void removeLogAppender(Class clazz, String appenderName) {
+        Logger logger = Logger.getLogger(clazz);
+        Appender appender = logger.getAppender(appenderName);
+        appender.close();
+        logger.removeAppender(appenderName);
     }
 }

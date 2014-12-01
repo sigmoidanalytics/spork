@@ -22,10 +22,10 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
 import java.util.Iterator;
-import java.util.Properties;
 
 import org.apache.pig.ExecType;
 import org.apache.pig.PigConfiguration;
+import org.apache.pig.PigServer;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.MROperPlan;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
@@ -39,11 +39,13 @@ import org.junit.Test;
  * Test POPartialAgg runtime
  */
 public class TestPOPartialAggPlan  {
-    PigContext pc;
+    private static PigContext pc;
+    private static PigServer ps;
 
     @Before
     public void setUp() throws ExecException {
-        pc = new PigContext(ExecType.LOCAL, new Properties());
+        ps = new PigServer(ExecType.LOCAL);
+        pc = ps.getPigContext();
         pc.connect();
     }
 
@@ -62,7 +64,7 @@ public class TestPOPartialAggPlan  {
     public void testMapAggPropFalse() throws Exception{
         //test with pig.exec.mapPartAgg set to false
         String query = getGByQuery();
-        pc.getProperties().setProperty(PigConfiguration.PROP_EXEC_MAP_PARTAGG, "false");
+        pc.getProperties().setProperty(PigConfiguration.PIG_EXEC_MAP_PARTAGG, "false");
         MROperPlan mrp = Util.buildMRPlan(query, pc);
         assertEquals(mrp.size(), 1);
 
@@ -73,7 +75,7 @@ public class TestPOPartialAggPlan  {
     public void testMapAggPropTrue() throws Exception{
         //test with pig.exec.mapPartAgg to true
         String query = getGByQuery();
-        pc.getProperties().setProperty(PigConfiguration.PROP_EXEC_MAP_PARTAGG, "true");
+        pc.getProperties().setProperty(PigConfiguration.PIG_EXEC_MAP_PARTAGG, "true");
         MROperPlan mrp = Util.buildMRPlan(query, pc);
         assertEquals(mrp.size(), 1);
 
@@ -100,7 +102,7 @@ public class TestPOPartialAggPlan  {
         String query = "l = load 'x' as (a,b,c);" +
                 "g = group l by a;" +
                 "f = foreach g generate group;";
-        pc.getProperties().setProperty(PigConfiguration.PROP_EXEC_MAP_PARTAGG, "true");
+        pc.getProperties().setProperty(PigConfiguration.PIG_EXEC_MAP_PARTAGG, "true");
         MROperPlan mrp = Util.buildMRPlan(query, pc);
         assertEquals(mrp.size(), 1);
 
@@ -113,7 +115,7 @@ public class TestPOPartialAggPlan  {
         String query = "l = load 'x' as (a,b,c);" +
                 "g = group l by a;" +
                 "f = foreach g generate group, COUNT(l.b), l.b;";
-        pc.getProperties().setProperty(PigConfiguration.PROP_EXEC_MAP_PARTAGG, "true");
+        pc.getProperties().setProperty(PigConfiguration.PIG_EXEC_MAP_PARTAGG, "true");
         MROperPlan mrp = Util.buildMRPlan(query, pc);
         assertEquals(mrp.size(), 1);
 

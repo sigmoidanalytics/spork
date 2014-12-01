@@ -18,10 +18,10 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringReader;
-import java.io.StringWriter;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -31,13 +31,15 @@ import junit.framework.Assert;
 import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
 import org.apache.pig.ExecType;
+import org.apache.pig.ExecTypeProvider;
+import org.apache.pig.PigException;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.data.DataType;
 import org.apache.pig.data.Tuple;
+import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.io.FileLocalizer;
 import org.apache.pig.impl.logicalLayer.schema.Schema;
 import org.apache.pig.pigunit.pig.PigServer;
-import org.apache.pig.tools.parameters.ParameterSubstitutionPreprocessor;
 import org.apache.pig.tools.parameters.ParseException;
 
 /**
@@ -62,7 +64,7 @@ public class PigTest {
   private static ThreadLocal<Cluster> cluster = new ThreadLocal<Cluster>();
 
   private static final Logger LOG = Logger.getLogger(PigTest.class);
-  private static final String EXEC_CLUSTER = "pigunit.exectype.cluster";
+  private static final String EXEC_CLUSTER = "pigunit.exectype";
 
   /**
    * Initializes the Pig test.
@@ -120,16 +122,30 @@ public class PigTest {
    * @throws ExecException If the PigServer can't be started.
    */
   public static Cluster getCluster() throws ExecException {
-    if (cluster.get() == null) {
-      if (System.getProperties().containsKey(EXEC_CLUSTER)) {
-        LOG.info("Using cluster mode");
-        pig.set(new PigServer(ExecType.MAPREDUCE));
-      } else {
-        LOG.info("Using default local mode");
-        pig.set(new PigServer(ExecType.LOCAL));
+    try {
+      if (cluster.get() == null) {
+        ExecType execType = ExecType.LOCAL;
+        if (System.getProperties().containsKey(EXEC_CLUSTER)) {
+          if (System.getProperties().getProperty(EXEC_CLUSTER).equalsIgnoreCase("mr")) {
+            LOG.info("Using mr cluster mode");
+            execType = ExecType.MAPREDUCE;
+          } else if (System.getProperties().getProperty(EXEC_CLUSTER).equalsIgnoreCase("tez")) {
+            LOG.info("Using tez cluster mode");
+            execType = ExecTypeProvider.fromString("tez");
+          } else if (System.getProperties().getProperty(EXEC_CLUSTER).equalsIgnoreCase("tez_local")) {
+            LOG.info("Using tez local mode");
+            execType = ExecTypeProvider.fromString("tez_local");
+          } else {
+            LOG.info("Using default local mode");
+          }
+        } else {
+          LOG.info("Using default local mode");
+        }
+        pig.set(new PigServer(execType));
+        cluster.set(new Cluster(pig.get().getPigContext()));
       }
-
-      cluster.set(new Cluster(pig.get().getPigContext()));
+    } catch (PigException e) {
+      throw new ExecException(e);
     }
 
     return cluster.get();
@@ -153,13 +169,12 @@ public class PigTest {
   protected void registerScript() throws IOException, ParseException {
     getCluster();
 
-    BufferedReader pigIStream = new BufferedReader(new StringReader(this.originalTextPigScript));
-    StringWriter pigOStream = new StringWriter();
+    BufferedReader reader = new BufferedReader(new StringReader(this.originalTextPigScript));
+    PigContext context = getPigServer().getPigContext();
 
-    ParameterSubstitutionPreprocessor ps = new ParameterSubstitutionPreprocessor(50);
-    ps.genSubstitutedFile(pigIStream, pigOStream, args, argFiles);
-
-    String substitutedPig = pigOStream.toString();
+    String substitutedPig = context.doParamSubstitution(reader,
+                                                        args == null ? null : Arrays.asList(args),
+                                                        argFiles == null ? null : Arrays.asList(argFiles));
     LOG.info(substitutedPig);
 
     File f = File.createTempFile("tmp", "pigunit");
@@ -193,6 +208,14 @@ public class PigTest {
     registerScript();
     return getPigServer().openIterator(alias);
   }
+  
+  /**
+   * Gets an iterator on the content of one alias of a cached script. The script itself
+   * must be already be registered with registerScript().
+   */
+  private Iterator<Tuple> getAliasFromCache(String alias) throws IOException, ParseException {
+    return getPigServer().openIterator(alias);
+  }
 
   /**
    * Gets an iterator on the content of the latest STORE alias of the script.
@@ -204,7 +227,7 @@ public class PigTest {
     registerScript();
     String alias = aliasOverrides.get("LAST_STORE_ALIAS");
 
-    return getAlias(alias);
+    return getAliasFromCache(alias);
   }
 
   /**
@@ -235,26 +258,26 @@ public class PigTest {
     registerScript();
     String alias = aliasOverrides.get("LAST_STORE_ALIAS");
 
-    assertEquals(StringUtils.join(expected, "\n"), StringUtils.join(getAlias(alias), "\n"));
+    assertEquals(StringUtils.join(expected, "\n"), StringUtils.join(getAliasFromCache(alias), "\n"));
   }
 
   public void assertOutput(String alias, String[] expected) throws IOException, ParseException {
     registerScript();
 
-    assertEquals(StringUtils.join(expected, "\n"), StringUtils.join(getAlias(alias), "\n"));
+    assertEquals(StringUtils.join(expected, "\n"), StringUtils.join(getAliasFromCache(alias), "\n"));
   }
 
   public void assertOutput(File expected) throws IOException, ParseException {
     registerScript();
     String alias = aliasOverrides.get("LAST_STORE_ALIAS");
 
-    assertEquals(readFile(expected).replaceAll("\r\n", "\n"), StringUtils.join(getAlias(alias), "\n"));
+    assertEquals(readFile(expected).replaceAll("\r\n", "\n"), StringUtils.join(getAliasFromCache(alias), "\n"));
   }
 
   public void assertOutput(String alias, File expected) throws IOException, ParseException {
     registerScript();
 
-    assertEquals(readFile(expected).replaceAll("\r\n", "\n"), StringUtils.join(getAlias(alias), "\n"));
+    assertEquals(readFile(expected).replaceAll("\r\n", "\n"), StringUtils.join(getAliasFromCache(alias), "\n"));
   }
 
   public void assertOutput(String aliasInput, String[] input, String alias, String[] expected)

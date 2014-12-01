@@ -36,4 +36,31 @@ public class PigImplConstants {
      * the set of disabled optimizer rules.
      */
     public static final String PIG_OPTIMIZER_RULES_KEY = "pig.optimizer.rules";
+
+    /**
+     * Used by pig to indicate that current job has been converted to run in local mode
+     */
+    public static final String CONVERTED_TO_LOCAL = "pig.job.converted.local";
+
+    /**
+     * Used by pig to indicate that current job has been converted to run in fetch mode
+     */
+    public static final String CONVERTED_TO_FETCH = "pig.job.converted.fetch";
+
+    /**
+     * Indicate the split index of the task. Used by merge cogroup
+     */
+    public static final String PIG_SPLIT_INDEX = "pig.split.index";
+
+    /**
+     * Parallelism for the reducer
+     */
+    public static final String REDUCER_DEFAULT_PARALLELISM = "pig.info.reducers.default.parallel";
+    public static final String REDUCER_REQUESTED_PARALLELISM = "pig.info.reducers.requested.parallel";
+    public static final String REDUCER_ESTIMATED_PARALLELISM = "pig.info.reducers.estimated.parallel";
+
+    /**
+     * Parallelism to be used for CROSS operation by GFCross UDF
+     */
+    public static final String PIG_CROSS_PARALLELISM = "pig.cross.parallelism";
 }

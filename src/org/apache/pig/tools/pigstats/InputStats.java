@@ -36,22 +36,22 @@ public final class InputStats {
     private long records;
 
     private boolean success;
-    
+
     public static enum INPUT_TYPE { regular, sampler, indexer, side };
- 
+
     private INPUT_TYPE type = INPUT_TYPE.regular;
-    
+
     private Configuration conf;
 
-    InputStats(String location, long bytes, long records, boolean success) {
+    public InputStats(String location, long bytes, long records, boolean success) {
         this.location = location;
         this.bytes = bytes;
-        this.records = records;        
+        this.records = records;
         this.success = success;
         try {
             this.name = new Path(location).getName();
         } catch (Exception e) {
-            // location is a mal formatted URL 
+            // location is a mal formatted URL
             this.name = location;
         }
     }
@@ -79,14 +79,14 @@ public final class InputStats {
     public Configuration getConf() {
         return conf;
     }
-    
+
     public INPUT_TYPE getInputType() {
         return type;
     }
-    
-    String getDisplayString(boolean local) {
+
+    public String getDisplayString() {
         StringBuilder sb = new StringBuilder();
-        if (success) {            
+        if (success) {
             sb.append("Successfully ");
             if (type == INPUT_TYPE.sampler) {
                 sb.append("sampled ");
@@ -95,8 +95,8 @@ public final class InputStats {
             } else {
                 sb.append("read ");
             }
-            
-            if (!local && records >= 0) {
+
+            if (records >= 0) {
                 sb.append(records).append(" records ");
             } else {
                 sb.append("records ");
@@ -115,20 +115,20 @@ public final class InputStats {
         }
         return sb.toString();
     }
-    
-    void setConf(Configuration conf) {
+
+    public void setConf(Configuration conf) {
         this.conf = conf;
     }
-    
-    void markSampleInput() {
+
+    public void markSampleInput() {
         type = INPUT_TYPE.sampler;
     }
-    
-    void markIndexerInput() {
+
+    public void markIndexerInput() {
         type = INPUT_TYPE.indexer;
     }
-    
-    void markSideFileInput() {
+
+    public void markSideFileInput() {
         type = INPUT_TYPE.side;
     }
 }

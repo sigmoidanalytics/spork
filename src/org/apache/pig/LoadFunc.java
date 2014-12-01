@@ -29,10 +29,10 @@ import org.apache.hadoop.mapreduce.Counter;
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.RecordReader;
-
 import org.apache.pig.classification.InterfaceAudience;
 import org.apache.pig.classification.InterfaceStability;
 import org.apache.pig.LoadPushDown.RequiredFieldList;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigHadoopLogger;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigSplit;
 import org.apache.pig.builtin.Utf8StorageConverter;
 import org.apache.pig.data.Tuple;
@@ -302,8 +302,26 @@ public abstract class LoadFunc {
      * @param warningEnum type of warning
      */
     public final void warn(String msg, Enum warningEnum) {
-        Counter counter = PigStatusReporter.getInstance().getCounter(warningEnum);
-        if (counter!=null)
-            counter.increment(1);
+        PigHadoopLogger.getInstance().warn(this, msg, warningEnum);
+    }
+
+    /**
+     * Allow a LoadFunc to specify a list of files it would like placed in the distributed 
+     * cache.
+     * The default implementation returns null.
+     * @return A list of files
+     */
+    public List<String> getCacheFiles() {
+        return null;
+    }
+
+    /**
+     * Allow a LoadFunc to specify a list of files located locally and would like to ship to backend 
+     * (through distributed cache). Check for {@link FuncUtils} for utility function to facilitate it
+     * The default implementation returns null.
+     * @return A list of files
+     */
+    public List<String> getShipFiles() {
+        return null;
     }
 }

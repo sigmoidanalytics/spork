@@ -12,40 +12,40 @@ import java.io.OutputStream;
 
 public class BroadCastClient {
 
-	private String host;
-	private int port;
-	
-	public BroadCastClient(String host, int port){
+    private String host;
+    private int port;
 
-		this.host = host;
-		this.port = port;
+    public BroadCastClient(String host, int port) {
 
-	}
+        this.host = host;
+        this.port = port;
 
-	public Object getBroadCastMessage(String request){
+    }
 
-		Object response=null;
-		
-		try{
-			
-			System.out.println("Connecting to " + host
-					+ " on port " + port);
-			Socket client = new Socket(host, port);
-			
-			OutputStream outToServer = client.getOutputStream();
-			DataOutputStream out = new DataOutputStream(outToServer);
+    public Object getBroadCastMessage(String request) {
 
-			out.writeUTF(request);
-			ObjectInputStream inFromServer = new ObjectInputStream(client.getInputStream());
-			
-			response = inFromServer.readObject();
-			System.out.println("Server says " + response);
-			client.close();			
-			
-		}catch(Exception e){
-			e.printStackTrace();
-		}
+        Object response = null;
 
-		return response;
-	}
+        try {
+
+            System.out.println("Connecting to " + host + " on port " + port);
+            Socket client = new Socket(host, port);
+
+            OutputStream outToServer = client.getOutputStream();
+            DataOutputStream out = new DataOutputStream(outToServer);
+
+            out.writeUTF(request);
+            ObjectInputStream inFromServer = new ObjectInputStream(
+                    client.getInputStream());
+
+            response = inFromServer.readObject();
+            System.out.println("Server says " + response);
+            client.close();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return response;
+    }
 }

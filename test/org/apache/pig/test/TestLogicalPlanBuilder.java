@@ -18,12 +18,16 @@
 package org.apache.pig.test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+
+import junit.framework.Assert;
+import junit.framework.AssertionFailedError;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.InputFormat;
@@ -59,13 +63,11 @@ import org.apache.pig.newplan.logical.relational.LOLoad;
 import org.apache.pig.newplan.logical.relational.LOSort;
 import org.apache.pig.newplan.logical.relational.LOStore;
 import org.apache.pig.newplan.logical.relational.LogicalPlan;
+import org.apache.pig.newplan.logical.relational.LogicalPlanData;
 import org.apache.pig.newplan.logical.relational.LogicalSchema;
 import org.apache.pig.test.utils.Identity;
 import org.junit.Before;
 import org.junit.Test;
-
-import junit.framework.Assert;
-import junit.framework.AssertionFailedError;
 
 public class TestLogicalPlanBuilder {
     PigContext pigContext = new PigContext(ExecType.LOCAL, new Properties());
@@ -86,17 +88,6 @@ public class TestLogicalPlanBuilder {
     @Test
     public void testQuery2() throws Exception {
         String query = "foreach (load 'a' using " + PigStorage.class.getName() + "(':')) generate $1, 'aoeuaoeu' ;";
-        buildPlan(query);
-    }
-
-    @Test
-    public void testCacheQuery() throws Exception {
-        String query = "x = load 'a' using " + PigStorage.class.getName() + " as (foo, bar, baz);\n" +
-                " cache x; \n" +
-                " z = x;" +
-                "y = filter z by $0 == 1;\n" +
-                "store y into '/dev/null/y';\n" +
-                "store x into '/dev/null/x';";
         buildPlan(query);
     }
 
@@ -265,10 +256,10 @@ public class TestLogicalPlanBuilder {
         Operator lo = listOp.get(0);
 
         if (lo instanceof LOCogroup) {
-            Assert.assertEquals( 1, ((LOCogroup) lo).getRequestedParallelism() );//Local mode, paraallel = 1
+            Assert.assertEquals( 16, ((LOCogroup) lo).getRequestedParallelism() );
         } else {
             Assert.fail("Error: Unexpected Parse Tree output");
-        }
+    }
     }
 
     @Test
@@ -433,7 +424,6 @@ public class TestLogicalPlanBuilder {
 
     public static class TestStorageFunc extends LoadFunc{
 
-        @Override
         public Tuple getNext() throws IOException {
             return null;
         }
@@ -914,12 +904,12 @@ public class TestLogicalPlanBuilder {
     	buildPlan( q );
     }
 
-    @Test
+    @Test 
     public void testQuery80() throws Exception {
     	String q = "a = load 'input1' as (name, age, gpa);" +
         "b = filter a by age < '20';" +
         "c = group b by age;" +
-        "d = foreach c {"
+        "d = foreach c {" 
             + "cf = filter b by gpa < '3.0';"
             + "cp = cf.gpa;"
             + "cd = distinct cp;"
@@ -953,8 +943,8 @@ public class TestLogicalPlanBuilder {
         String q = "a = load 'myfile';" +
         "b = group a by $0;" +
         "c = foreach b {"
-            + "c1 = order $1 by *;"
-            + "c2 = $1.$0;"
+        + "c1 = order $1 by *;"
+        + "c2 = $1.$0;"
             + "generate flatten(c1), c2;"
             + "};";
         buildPlan(q);
@@ -963,10 +953,10 @@ public class TestLogicalPlanBuilder {
     @Test
     public void testQueryFail82() throws Exception {
     	String q = "a = load 'myfile';" +
-        "b = group a by $0;" +
+        "b = group a by $0;" + 
         "c = foreach b {"
-            + "c1 = order $1 by *;"
-            + "c2 = $1;"
+            + "c1 = order $1 by *;" 
+            + "c2 = $1;" 
             + "generate flatten(c1), c2;"
             + "};";
         try {
@@ -981,7 +971,7 @@ public class TestLogicalPlanBuilder {
     	String q = "a = load 'input1' as (name, age, gpa);" +
         "b = filter a by age < '20';" +
         "c = group b by (name,age);" +
-        "d = foreach c {"
+        "d = foreach c {" 
             + "cf = filter b by gpa < '3.0';"
             + "cp = cf.gpa;"
             + "cd = distinct cp;"
@@ -1091,7 +1081,7 @@ public class TestLogicalPlanBuilder {
 
     @Test
     public void testQuery89() throws Exception {
-        String query = "a = load 'myfile';" +
+        String query = "a = load 'myfile';" + 
                        "b = foreach a generate $0, $100;" +
                        "c = load 'myfile' as (i: int);" +
                        "d = foreach c generate $0 as zero, i;";
@@ -1116,7 +1106,7 @@ public class TestLogicalPlanBuilder {
         String query = "a = load 'myfile' as (name:Chararray, age:Int, gpa:Float);" +
                        "b = group a by (name, age);";
         //the first and second elements in group, i.e., name and age are renamed as myname and myage
-        lp = buildPlan(query +
+        lp = buildPlan(query + 
         		"c = foreach b generate flatten(group) as (myname, myage), COUNT(a) as mycount;" +
         		"store c into 'output';");
         Operator store = lp.getSinks().get(0);
@@ -1124,7 +1114,7 @@ public class TestLogicalPlanBuilder {
         Assert.assertTrue(foreach.getSchema().isEqual(Utils.parseSchema("myname: chararray, age: int, mycount: long")));
 
         //the schema of group is unchanged
-        lp = buildPlan( query +
+        lp = buildPlan( query + 
         		"c = foreach b generate flatten(group), COUNT(a) as mycount;" +
         		"store c into 'output';" );
         store = lp.getSinks().get(0);
@@ -1177,7 +1167,7 @@ public class TestLogicalPlanBuilder {
         Assert.assertTrue(foreach.getSchema().equals(Util.getSchemaFromString("x: bytearray, mycount: long")));
 
         //setting the schema of flattened bag that has no schema with the user defined schema
-        q = query +
+        q = query + 
             "c = load 'another_file';" +
             "d = cogroup a by $0, c by $0;" +
             "e = foreach d generate flatten(DIFF(a, c)) as x: int, COUNT(a) as mycount;";
@@ -1543,7 +1533,7 @@ public class TestLogicalPlanBuilder {
 
     @Test
     public void testQuery108()  throws Exception {
-        String query = "a = load 'one' as (name, age, gpa);" +
+        String query = "a = load 'one' as (name, age, gpa);" + 
         "b = group a by *;" +
         "store b into 'output';";
         LogicalPlan lp = buildPlan(query);
@@ -1597,7 +1587,7 @@ public class TestLogicalPlanBuilder {
 
     @Test
     public void testQuery112()  throws Exception {
-        String query = "a = load 'one' as (name, age, gpa);" +
+        String query = "a = load 'one' as (name, age, gpa);" + 
         "b = group a by *;" +
         "c = foreach b {a1 = order a by *; generate a1;};" +
         "store c into 'y';";
@@ -1621,7 +1611,7 @@ public class TestLogicalPlanBuilder {
 
     @Test
     public void testQuery114()  throws Exception {
-        String query = "a = load 'one' as (name, age, gpa);" +
+        String query = "a = load 'one' as (name, age, gpa);" + 
         "b = foreach a generate " + Identity.class.getName() + "(name, age);" +
         "store b into 'y';";
 
@@ -1660,7 +1650,7 @@ public class TestLogicalPlanBuilder {
 
     @Test
     public void testQuery117()  throws Exception {
-        String query = "a = load 'one';" +
+        String query = "a = load 'one';" + 
         "b = foreach a generate " + Identity.class.getName() + "(*);" +
         "store b into 'y';";
         LogicalPlan lp = buildPlan(query);
@@ -1718,7 +1708,7 @@ public class TestLogicalPlanBuilder {
     @Test
     public void testNullConsConcatSize() throws Exception {
     	String query = "a = load 'a' as (x:int, y:double, str:chararray);" +
-        "b = foreach a generate SIZE(null), CONCAT(str, null), " +
+        "b = foreach a generate SIZE(null), CONCAT(str, null), " + 
                 "CONCAT(null, str);" +
                 "store b into 'output';";
         buildPlan(query);
@@ -1780,7 +1770,7 @@ public class TestLogicalPlanBuilder {
     @Test
     public void testCast() throws Exception {
     	String query = "a = load 'one.txt' as (x,y); " +
-        "b = foreach a generate (int)$0, (double)$1;" +
+        "b = foreach a generate (int)$0, (double)$1;" + 
         "c = group b by $0;"+
         "store c into 'output';";
     	buildPlan(query);
@@ -1866,7 +1856,7 @@ public class TestLogicalPlanBuilder {
 
     @Test
     public void testTokenizeSchema()  throws Exception {
-        String query = "a = load 'one' as (f1: chararray);" +
+        String query = "a = load 'one' as (f1: chararray);" + 
         "b = foreach a generate TOKENIZE(f1);" +
         "store b into 'output';";
         LogicalPlan lp = buildPlan(query);
@@ -2166,6 +2156,23 @@ public class TestLogicalPlanBuilder {
         
         // unset default load func
         pigServer.getPigContext().getProperties().remove(PigConfiguration.PIG_DEFAULT_STORE_FUNC);      
+    }
+    
+    @Test
+    public void testLogicalPlanData() throws Exception {
+        String query = "a = load 'input.txt'; b = load 'anotherinput.txt'; c = join a by $0, b by $1;" +
+                "store c into 'output' using org.apache.pig.test.PigStorageWithSchema();";
+        // Set batch on so the query is not executed
+        pigServer.setBatchOn();
+        pigServer.registerQuery(query);
+        LogicalPlanData lData = pigServer.getLogicalPlanData();
+        assertEquals("LoadFunc must be PigStorage", "org.apache.pig.builtin.PigStorage", lData.getLoadFuncs().get(0));
+        assertEquals("StoreFunc must be PigStorageWithSchema", "org.apache.pig.test.PigStorageWithSchema", lData.getStoreFuncs().get(0));
+        assertEquals("Number of sources must be 2", lData.getNumSources(), 2);
+        assertEquals("Number of sinks must be 1", lData.getNumSinks(), 1);
+        assertTrue("Source must end with input.txt", lData.getSources().get(0).endsWith("input.txt"));
+        assertTrue("Sink must end with output", lData.getSinks().get(0).endsWith("output"));
+        assertEquals("Number of logical relational operators must be 4", lData.getNumLogicalRelationOperators(), 4);
     }
     
     /**

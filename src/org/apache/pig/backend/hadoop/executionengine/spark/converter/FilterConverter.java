@@ -15,21 +15,21 @@ import org.apache.spark.rdd.RDD;
 
 /**
  * Converter that converts an RDD to a filtered RRD using POFilter
- * @author billg
  */
-@SuppressWarnings({ "serial"})
+@SuppressWarnings({ "serial" })
 public class FilterConverter implements POConverter<Tuple, Tuple, POFilter> {
 
     @Override
-    public RDD<Tuple> convert(List<RDD<Tuple>> predecessors, POFilter physicalOperator) {
+    public RDD<Tuple> convert(List<RDD<Tuple>> predecessors,
+            POFilter physicalOperator) {
         SparkUtil.assertPredecessorSize(predecessors, physicalOperator, 1);
         RDD<Tuple> rdd = predecessors.get(0);
         FilterFunction filterFunction = new FilterFunction(physicalOperator);
         return rdd.filter(filterFunction);
     }
 
-    private static class FilterFunction extends AbstractFunction1<Tuple, Object>
-            implements Serializable {
+    private static class FilterFunction extends
+            AbstractFunction1<Tuple, Object> implements Serializable {
 
         private POFilter poFilter;
 
@@ -48,15 +48,19 @@ public class FilterConverter implements POConverter<Tuple, Tuple, POFilter> {
                 throw new RuntimeException("Couldn't filter tuple", e);
             }
 
-            if (result == null) { return false; }
+            if (result == null) {
+                return false;
+            }
 
             switch (result.returnStatus) {
-                case POStatus.STATUS_OK:
-                    return true;
-                case POStatus.STATUS_EOP: // TODO: probably also ok for EOS, END_OF_BATCH
-                    return false;
-                default:
-                    throw new RuntimeException("Unexpected response code from filter: " + result);
+            case POStatus.STATUS_OK:
+                return true;
+            case POStatus.STATUS_EOP: // TODO: probably also ok for EOS,
+                                      // END_OF_BATCH
+                return false;
+            default:
+                throw new RuntimeException(
+                        "Unexpected response code from filter: " + result);
             }
         }
     }

@@ -20,44 +20,75 @@ package org.apache.pig.tools.pigstats;
 
 import org.apache.hadoop.mapreduce.Counter;
 import org.apache.hadoop.mapreduce.StatusReporter;
-import org.apache.hadoop.mapreduce.TaskInputOutputContext;
 import org.apache.hadoop.util.Progressable;
+import org.apache.pig.JVMReuseManager;
+import org.apache.pig.StaticDataCleanup;
+import org.apache.pig.backend.hadoop.executionengine.TaskContext;
 import org.apache.pig.classification.InterfaceAudience;
 import org.apache.pig.classification.InterfaceStability;
 
-@SuppressWarnings("unchecked")
 @InterfaceAudience.Public
 @InterfaceStability.Evolving
 public class PigStatusReporter extends StatusReporter implements Progressable {
 
-    private TaskInputOutputContext context;
     private static PigStatusReporter reporter = null;
+
+    private TaskContext<?> context = null;
+
+    static {
+        JVMReuseManager.getInstance().registerForStaticDataCleanup(PigStatusReporter.class);
+    }
+
+    @StaticDataCleanup
+    public static void staticDataCleanup() {
+        reporter = null;
+    }
+
+    private PigStatusReporter() {
+    }
+
     /**
      * Get singleton instance of the context
      */
     public static PigStatusReporter getInstance() {
         if (reporter == null) {
-            reporter = new PigStatusReporter(null);
+            reporter = new PigStatusReporter();
         }
         return reporter;
     }
-    
-    public static void setContext(TaskInputOutputContext context) {
-        reporter = new PigStatusReporter(context);
-    }
-    
-    private PigStatusReporter(TaskInputOutputContext context) {
+
+    public void setContext(TaskContext<?> context) {
         this.context = context;
     }
-    
+
+    /**
+     * @deprecated use {@link org.apache.pig.tools.pigstats.PigStatusReporter#incrCounter} instead.
+     * This method returns MR counter which is not compatible with Tez mode. Use
+     * incrCounter() that is compatible with both MR and Tez mode.
+     */
     @Override
-    public Counter getCounter(Enum<?> name) {        
+    @Deprecated
+    public Counter getCounter(Enum<?> name) {
         return (context == null) ? null : context.getCounter(name);
     }
 
+    /**
+     * @deprecated use {@link org.apache.pig.tools.pigstats.PigStatusReporter#incrCounter} instead.
+     * This method returns MR counter which is not compatible with Tez mode. Use
+     * incrCounter() that is compatible with both MR and Tez mode.
+     */
     @Override
+    @Deprecated
     public Counter getCounter(String group, String name) {
-        return (context == null) ? null : context.getCounter(group, name);
+        return context == null ? null : context.getCounter(group, name);
+    }
+
+    public boolean incrCounter(Enum<?> name, long incr) {
+        return context == null ? false : context.incrCounter(name, incr);
+    }
+
+    public boolean incrCounter(String group, String name, long incr) {
+        return context == null ? false : context.incrCounter(group, name, incr);
     }
 
     @Override
@@ -75,6 +106,6 @@ public class PigStatusReporter extends StatusReporter implements Progressable {
     }
 
     public float getProgress() {
-        return 0;
+        return context == null ? 0f : context.getProgress();
     }
 }

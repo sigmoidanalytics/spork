@@ -18,6 +18,7 @@
 package org.apache.pig.builtin;
 
 import java.io.IOException;
+
 import org.apache.pig.EvalFunc;
 import org.apache.pig.PigException;
 import org.apache.pig.backend.executionengine.ExecException;
@@ -57,5 +58,14 @@ public class StringConcat extends EvalFunc<String> {
     public Schema outputSchema(Schema input) {
         return new Schema(new Schema.FieldSchema(null, DataType.CHARARRAY)); 
     }
-   
+    
+    @Override
+    public SchemaType getSchemaType() {
+        return SchemaType.VARARG;
+    }
+
+    @Override
+    public boolean allowCompileTimeCalculation() {
+        return true;
+    }
 }

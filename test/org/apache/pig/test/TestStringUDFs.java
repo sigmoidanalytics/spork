@@ -30,10 +30,15 @@ import org.apache.pig.builtin.INDEXOF;
 import org.apache.pig.builtin.LAST_INDEX_OF;
 import org.apache.pig.builtin.REPLACE;
 import org.apache.pig.builtin.STARTSWITH;
+import org.apache.pig.builtin.ENDSWITH;
 import org.apache.pig.builtin.STRSPLIT;
+import org.apache.pig.builtin.STRSPLITTOBAG;
 import org.apache.pig.builtin.SUBSTRING;
 import org.apache.pig.builtin.TRIM;
+import org.apache.pig.builtin.LTRIM;
+import org.apache.pig.builtin.RTRIM;
 import org.apache.pig.builtin.EqualsIgnoreCase;
+import org.apache.pig.data.DataBag;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.data.TupleFactory;
 import org.junit.Test;
@@ -134,13 +139,57 @@ public class TestStringUDFs {
         Tuple testTuple = Util.buildTuple("nospaces");
         assertEquals("nospaces".trim(), trim.exec(testTuple));
         
-        testTuple = Util.buildTuple("spaces    ");
-        assertEquals("spaces     ".trim(), trim.exec(testTuple));
+        testTuple = Util.buildTuple("spaces right    ");
+        assertEquals("spaces right", trim.exec(testTuple));
+        
+        testTuple = Util.buildTuple("    spaces left");
+        assertEquals("spaces left", trim.exec(testTuple));
+        
+        testTuple = Util.buildTuple("    spaces both    ");
+        assertEquals("spaces both", trim.exec(testTuple));
+        
+        testTuple = TupleFactory.getInstance().newTuple();
+        assertNull(trim.exec(testTuple));
+    }
+
+    @Test
+    public void testLtrim() throws IOException {
+        LTRIM trim = new LTRIM();
+        Tuple testTuple = Util.buildTuple("nospaces");
+        assertEquals("nospaces", trim.exec(testTuple));
+        
+        testTuple = Util.buildTuple("spaces right    ");
+        assertEquals("spaces right    ", trim.exec(testTuple));
+        
+        testTuple = Util.buildTuple("    spaces left");
+        assertEquals("spaces left", trim.exec(testTuple));
+        
+        testTuple = Util.buildTuple("    spaces both    ");
+        assertEquals("spaces both    ", trim.exec(testTuple));
         
         testTuple = TupleFactory.getInstance().newTuple();
         assertNull(trim.exec(testTuple));
     }
     
+    @Test
+    public void testRtrim() throws IOException {
+        RTRIM trim = new RTRIM();
+        Tuple testTuple = Util.buildTuple("nospaces");
+        assertEquals("nospaces", trim.exec(testTuple));
+        
+        testTuple = Util.buildTuple("spaces right    ");
+        assertEquals("spaces right", trim.exec(testTuple));
+        
+        testTuple = Util.buildTuple("    spaces left");
+        assertEquals("    spaces left", trim.exec(testTuple));
+        
+        testTuple = Util.buildTuple("    spaces both    ");
+        assertEquals("    spaces both", trim.exec(testTuple));
+        
+        testTuple = TupleFactory.getInstance().newTuple();
+        assertNull(trim.exec(testTuple));
+    }
+
     @Test 
     public void testSplit() throws IOException {
         STRSPLIT splitter = new STRSPLIT();
@@ -180,6 +229,77 @@ public class TestStringUDFs {
     }
 
     @Test
+    public void testSplitToBag() throws IOException {
+        STRSPLITTOBAG bagSplit = new STRSPLITTOBAG();
+
+        //test no delims in input
+        Tuple testTuple = Util.buildTuple("1 2 3", "4");
+        DataBag outputBag = bagSplit.exec(testTuple);
+        assertEquals("No of records split should be 1", 1, outputBag.size());
+        assertEquals("Split string should match the input string", "(1 2 3)", outputBag.iterator().next().toString());
+
+        //test default delimiter
+        testTuple = Util.buildTuple("1 2 3");
+        outputBag = bagSplit.exec(testTuple);
+        String[] assertionArray = {"1", "2", "3"};
+        assertEquals("No of record split should be " + assertionArray.length, assertionArray.length, outputBag.size());
+
+        int i = 0;
+        for (Tuple t : outputBag) {
+            assertEquals("Assertion tests on split strings", "(" + assertionArray[i] + ")", t.toString());
+            i++;
+        }
+
+        //test split on specified delimiter
+        testTuple = Util.buildTuple("1:2:3", ":");
+        outputBag = bagSplit.exec(testTuple);
+        assertEquals("No of record split should be " + assertionArray.length, assertionArray.length, outputBag.size());
+        i = 0;
+        for (Tuple t : outputBag) {
+            assertEquals("Assertion tests on split strings", "(" + assertionArray[i] + ")", t.toString());
+            i++;
+        }
+
+        // test limiting results with limit
+        testTuple = Util.buildTuple("1:2:3", ":", 2);
+        outputBag = bagSplit.exec(testTuple);
+        assertionArray = new String[]{"1", "2:3"};
+        assertEquals("No of record split should be " + assertionArray.length, assertionArray.length, outputBag.size());
+        i = 0;
+        for (Tuple t : outputBag) {
+            assertEquals("Matched records in split results with limit", "(" + assertionArray[i] + ")", t.toString());
+            i++;
+        }
+
+        // test trimming of whitespace
+        testTuple = Util.buildTuple("1 2    ");
+        outputBag = bagSplit.exec(testTuple);
+        assertionArray = new String[]{"1", "2"};
+        assertEquals("No of record split should be " + assertionArray.length, assertionArray.length, outputBag.size());
+        i = 0;
+        for (Tuple t : outputBag) {
+            assertEquals("Matched records in split results with trimming of whitespaces", "(" + assertionArray[i] + ")", t.toString());
+            i++;
+        }
+
+        // test forcing null matches with length param
+        testTuple = Util.buildTuple("1:2:::", ":", 10);
+        outputBag = bagSplit.exec(testTuple);
+        assertionArray = new String[]{"1", "2", "", "", ""};
+        assertEquals("No of record split should be " + assertionArray.length, assertionArray.length, outputBag.size());
+        i = 0;
+        for (Tuple t : outputBag) {
+            assertEquals("Matched records in split results with forcing null matched with limit", "(" + assertionArray[i] + ")", t.toString());
+            i++;
+        }
+
+        //test wrong schemas
+        testTuple = Util.buildTuple(1, 2, 3);
+        outputBag = bagSplit.exec(testTuple);
+        assertEquals("Wrong Schema checks", null, outputBag);
+    }
+
+    @Test
     public void testStartsWith() throws IOException {
         STARTSWITH startsWith = new STARTSWITH();
         Tuple testTuple1 = Util.buildTuple("foo", "bar");
@@ -189,8 +309,21 @@ public class TestStringUDFs {
     }
     
     @Test
+    public void testEndsWith() throws IOException {
+        ENDSWITH endsWith = new ENDSWITH();
+        Tuple testTuple1 = Util.buildTuple("foo", "bar");
+        assertFalse("String suffix should not match", endsWith.exec(testTuple1));
+        Tuple testTuple2 = Util.buildTuple("foobaz", "foo");
+        assertFalse("String suffix should not match", endsWith.exec(testTuple2));
+        Tuple testTuple3 = Util.buildTuple("foobaz", "baz");
+        assertTrue("String suffix should match", endsWith.exec(testTuple3));
+        Tuple testTuple4 = Util.buildTuple(null, "bar");
+        assertNull("Should return null", endsWith.exec(testTuple4));
+    }
+
+    @Test
     public void testEqualsIgnoreCase() throws IOException {
-    	EqualsIgnoreCase equalsIgnoreCase = new EqualsIgnoreCase ();
+        EqualsIgnoreCase equalsIgnoreCase = new EqualsIgnoreCase ();
         Tuple testTuple = Util.buildTuple("ABC","abc");
         assertEquals("Strings are NOT equalsIgnoreCase", "ABC".equalsIgnoreCase("abc"), equalsIgnoreCase.exec(testTuple));
         testTuple = Util.buildTuple("ABC", "aBC");

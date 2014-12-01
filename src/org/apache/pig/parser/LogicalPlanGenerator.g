@@ -77,7 +77,6 @@ import org.apache.pig.newplan.logical.expression.RegexExpression;
 import org.apache.pig.newplan.logical.expression.ScalarExpression;
 import org.apache.pig.newplan.logical.expression.SubtractExpression;
 import org.apache.pig.newplan.logical.expression.UserFuncExpression;
-import org.apache.pig.newplan.logical.relational.LOCache;
 import org.apache.pig.newplan.logical.relational.LOCogroup;
 import org.apache.pig.newplan.logical.relational.LOCube;
 import org.apache.pig.newplan.logical.relational.LOFilter;
@@ -100,6 +99,7 @@ import org.apache.pig.data.DataBag;
 import org.apache.pig.data.DataType;
 import org.apache.pig.data.Tuple;
 import java.util.Arrays;
+import java.util.Collections;
 import java.math.BigInteger;
 import java.math.BigDecimal;
 }
@@ -173,7 +173,8 @@ scope {
  : general_statement
  | split_statement
  | realias_statement
- | rel_cache_statement
+ | assert_statement
+ | register_statement
 ;
 
 split_statement : split_clause
@@ -182,10 +183,18 @@ split_statement : split_clause
 realias_statement : realias_clause
 ;
 
-rel_cache_statement : rel_cache_clause
+assert_statement : assert_clause
 ;
 
-general_statement 
+register_statement
+: ^( REGISTER QUOTEDSTRING (USING IDENTIFIER AS IDENTIFIER)? )
+  {
+    // registers are handled by QueryParserDriver and are not actually part of the logical plan
+    // so we just ignore them here
+  }
+;
+
+general_statement
 : ^( STATEMENT ( alias { $statement::alias = $alias.name; } )? oa = op_clause parallel_clause? )
   {
       Operator op = builder.lookupOperator( $oa.alias );
@@ -202,15 +211,6 @@ realias_clause
 	            new SourceLocation( (PigParserNode)$IDENTIFIER ), $IDENTIFIER.text);
 	    }
 	    builder.putOperator( $alias.name, (LogicalRelationalOperator)op );
-    }
-;
-
-rel_cache_clause
-: ^( CACHE IDENTIFIER )
-    {
-        LOCache cacheOp = builder.createCacheOp();
-        String alias = builder.buildCacheOp(new SourceLocation( (PigParserNode) $rel_cache_clause.start ),
-            cacheOp, $IDENTIFIER.text);
     }
 ;
 
@@ -242,6 +242,7 @@ op_clause returns[String alias] :
           | mr_clause { $alias = $mr_clause.alias; }
           | foreach_clause { $alias = $foreach_clause.alias; }
           | cube_clause { $alias = $cube_clause.alias; }
+          | assert_clause { $alias = $assert_clause.alias; }
 ;
 
 define_clause
@@ -429,24 +430,19 @@ tuple_type returns[LogicalSchema logicalSchema]
 bag_type returns[LogicalSchema logicalSchema]
  : ^( BAG_TYPE IDENTIFIER? tuple_type? )
    {
-       if ($tuple_type.logicalSchema!=null && $tuple_type.logicalSchema.size()==1 && $tuple_type.logicalSchema.getField(0).type==DataType.TUPLE) {
-           $logicalSchema = $tuple_type.logicalSchema;
-       }
-       else {
-           LogicalSchema s = new LogicalSchema();
-           s.addField(new LogicalFieldSchema($IDENTIFIER.text, $tuple_type.logicalSchema, DataType.TUPLE));
-           $logicalSchema = s;
-       }
+       LogicalSchema s = new LogicalSchema();
+       s.addField(new LogicalFieldSchema($IDENTIFIER.text, $tuple_type.logicalSchema, DataType.TUPLE));
+       $logicalSchema = s;
    }
 ;
 
 map_type returns[LogicalSchema logicalSchema]
- : ^( MAP_TYPE type? )
+ : ^( MAP_TYPE IDENTIFIER? type? )
    {
        LogicalSchema s = null;
        if( $type.datatype != null ) {
            s = new LogicalSchema();
-           s.addField( new LogicalFieldSchema( null, $type.logicalSchema, $type.datatype ) );
+           s.addField( new LogicalFieldSchema( $IDENTIFIER.text, $type.logicalSchema, $type.datatype ) );
        }
        $logicalSchema = s;
    }
@@ -706,6 +702,24 @@ store_clause returns[String alias]
    }
 ;
 
+assert_clause returns[String alias]
+scope GScope;
+@init {
+    $GScope::currentOp = builder.createFilterOp();
+    LogicalExpressionPlan exprPlan = new LogicalExpressionPlan();
+}
+ : ^( ASSERT rel cond[exprPlan] comment? )
+   {
+       SourceLocation loc = new SourceLocation( (PigParserNode)$ASSERT );
+       $alias= builder.buildAssertOp(loc, (LOFilter)$GScope::currentOp, $statement::alias,
+          $statement::inputAlias, $cond.expr, $comment.comment, exprPlan);
+   }
+;
+
+comment returns[String comment]
+ : QUOTEDSTRING { $comment = builder.unquote( $QUOTEDSTRING.text ); }
+;
+
 filter_clause returns[String alias]
 scope GScope;
 @init {
@@ -797,20 +811,22 @@ cond[LogicalExpressionPlan exprPlan] returns[LogicalExpression expr]
 
 in_eval[LogicalExpressionPlan plan] returns[LogicalExpression expr]
 @init {
-    List<LogicalExpression> exprs = new ArrayList<LogicalExpression>();
+    List<LogicalExpression> lhsExprs = new ArrayList<LogicalExpression>();
+    List<LogicalExpression> rhsExprs = new ArrayList<LogicalExpression>();
 }
- : ^( IN ( expr[$plan] { exprs.add($expr.expr); } )+ )
+ : ^( IN ( ^( IN_LHS lhs = expr[$plan] ) { lhsExprs.add($lhs.expr); }
+           ^( IN_RHS rhs = expr[$plan] ) { rhsExprs.add($rhs.expr); } )+ )
     {
         // Convert IN tree to nested or expressions. Please also see
         // QueryParser.g for how IN tree is constructed from IN expression.
-        EqualExpression firstBoolExpr = new EqualExpression(plan, exprs.get(0), exprs.get(1));
-        if (exprs.size() == 2) {
+        EqualExpression firstBoolExpr = new EqualExpression(plan, lhsExprs.get(0), rhsExprs.get(0));
+        if (lhsExprs.size() == 1) {
             $expr = firstBoolExpr;
         } else {
             OrExpression currOrExpr = null;
             OrExpression prevOrExpr = null;
-            for (int i = 2; i < exprs.size(); i = i + 2) {
-                EqualExpression boolExpr = new EqualExpression(plan, exprs.get(i), exprs.get(i+1));
+            for (int i = 1; i < lhsExprs.size(); i++) {
+                EqualExpression boolExpr = new EqualExpression(plan, lhsExprs.get(i), rhsExprs.get(i));
                 currOrExpr = new OrExpression( $plan, prevOrExpr == null ? firstBoolExpr : prevOrExpr, boolExpr );
                 prevOrExpr = currOrExpr;
             }
@@ -1082,22 +1098,24 @@ bin_expr[LogicalExpressionPlan plan] returns[LogicalExpression expr]
 
 case_expr[LogicalExpressionPlan plan] returns[LogicalExpression expr]
 @init {
-    List<LogicalExpression> exprs = new ArrayList<LogicalExpression>();
+    List<LogicalExpression> lhsExprs = new ArrayList<LogicalExpression>();
+    List<LogicalExpression> rhsExprs = new ArrayList<LogicalExpression>();
 }
- : ^( CASE_EXPR ( expr[$plan] { exprs.add($expr.expr); } )+ )
+ : ^( CASE_EXPR ( ( ^( CASE_EXPR_LHS lhs = expr[$plan] { lhsExprs.add($lhs.expr); } ) )
+                  ( ^( CASE_EXPR_RHS rhs = expr[$plan] { rhsExprs.add($rhs.expr); } ) )+ )+ )
     {
         // Convert CASE tree to nested bincond expressions. Please also see
         // QueryParser.g for how CASE tree is constructed from case statement.
-        boolean hasElse = exprs.size() \% 3 == 1;
-        LogicalExpression elseExpr = hasElse ? exprs.get(exprs.size()-1)
+        boolean hasElse = rhsExprs.size() \% 2 == 1;
+        LogicalExpression elseExpr = hasElse ? rhsExprs.get(rhsExprs.size()-1)
                                              : new ConstantExpression($plan, null);
 
-        int numWhenBranches = exprs.size() / 3;
+        int numWhenBranches = rhsExprs.size() / 2;
         BinCondExpression prevBinCondExpr = null;
         BinCondExpression currBinCondExpr = null;
         for (int i = 0; i < numWhenBranches; i++) {
             currBinCondExpr = new BinCondExpression( $plan,
-                new EqualExpression( $plan, exprs.get(3*i), exprs.get(3*i+1) ), exprs.get(3*i+2),
+                new EqualExpression( $plan, lhsExprs.get(i), rhsExprs.get(2*i) ), rhsExprs.get(2*i+1),
                 prevBinCondExpr == null ? elseExpr : prevBinCondExpr);
             prevBinCondExpr = currBinCondExpr;
         }
@@ -1117,8 +1135,10 @@ case_cond[LogicalExpressionPlan plan] returns[LogicalExpression expr]
         // Convert CASE tree to nested bincond expressions. Please also see
         // QueryParser.g for how CASE tree is constructed from case statement.
         boolean hasElse = exprs.size() != conds.size();
-        LogicalExpression elseExpr = hasElse ? exprs.get(exprs.size() - 1)
+        LogicalExpression elseExpr = hasElse ? exprs.remove(exprs.size()-1)
                                              : new ConstantExpression($plan, null);
+        Collections.reverse(exprs);
+        Collections.reverse(conds);
         int numWhenBranches = conds.size();
         BinCondExpression prevBinCondExpr = null;
         BinCondExpression currBinCondExpr = null;
@@ -1604,8 +1624,7 @@ scope GScope;
    {
        builder.buildGenerateOp( new SourceLocation( (PigParserNode)$GENERATE ),
        	   inNestedCommand ? $nested_foreach::foreachOp : $foreach_clause::foreachOp,
-           (LOGenerate)$GScope::currentOp, $foreach_plan::operators,
-           plans, flattenFlags, schemas );
+           (LOGenerate)$GScope::currentOp, plans, flattenFlags, schemas );
    }
 ;
 
@@ -1739,15 +1758,20 @@ alias_col_ref[LogicalExpressionPlan plan] returns[LogicalExpression expr]
            throw new PlanGenerationFailureException( input, loc, e );
        }
 
-       Operator op = builder.lookupOperator( alias );
-       if( op != null && ( schema == null || schema.getFieldPosition( alias ) == -1 ) ) {
-           $expr = new ScalarExpression( plan, op,
-               inForeachPlan ? $foreach_clause::foreachOp : $GScope::currentOp );
-           $expr.setLocation( loc );
+       // PIG-3581
+       // check within foreach scope before looking at outer scope for scalar
+       if( inForeachPlan && ($foreach_plan::operators).containsKey(alias)) {
+           $expr = builder.buildProjectExpr( loc, $plan, $GScope::currentOp,
+               $foreach_plan::operators, $foreach_plan::exprPlans, alias, 0 );
        } else {
-           if( inForeachPlan ) {
+           Operator op = builder.lookupOperator( alias );
+           if( op != null && ( schema == null || schema.getFieldPosition( alias ) == -1 ) ) {
+               $expr = new ScalarExpression( plan, op,
+                   inForeachPlan ? $foreach_clause::foreachOp : $GScope::currentOp );
+               $expr.setLocation( loc );
+           } else if( inForeachPlan ) {
                $expr = builder.buildProjectExpr( loc, $plan, $GScope::currentOp,
-                   $foreach_plan::exprPlans, alias, 0 );
+                   $foreach_plan::operators, $foreach_plan::exprPlans, alias, 0 );
            } else {
                $expr = builder.buildProjectExpr( loc, $plan, $GScope::currentOp,
                    $statement::inputIndex, alias, 0 );
@@ -1977,6 +2001,7 @@ eid returns[String id] : rel_str_op { $id = $rel_str_op.id; }
     | TOBAG { $id = "TOBAG"; }
     | TOMAP { $id = "TOMAP"; }
     | TOTUPLE { $id = "TOTUPLE"; }
+    | ASSERT { $id = "ASSERT"; } 
 ;
 
 // relational operator

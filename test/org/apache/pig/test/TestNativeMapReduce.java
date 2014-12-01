@@ -27,10 +27,11 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 
-import org.apache.pig.ExecType;
+import org.apache.hadoop.mapred.FileAlreadyExistsException;
 import org.apache.pig.PigServer;
 import org.apache.pig.backend.executionengine.ExecJob;
 import org.apache.pig.backend.executionengine.ExecJob.JOB_STATUS;
+import org.apache.pig.backend.hadoop.executionengine.JobCreationException;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.tools.pigstats.PigStats;
 import org.junit.AfterClass;
@@ -58,7 +59,7 @@ public class TestNativeMapReduce  {
      * file if specified will be skipped by the wordcount udf
      */
     final static String STOPWORD_FILE = "TestNMapReduceStopwFile";
-    static MiniCluster cluster = MiniCluster.buildCluster();
+    static MiniGenericCluster cluster = MiniGenericCluster.buildCluster();
     private PigServer pigServer = null;
 
     /**
@@ -97,7 +98,7 @@ public class TestNativeMapReduce  {
 
     @Before
     public void setUp() throws Exception{
-        pigServer = new PigServer(ExecType.MAPREDUCE, cluster.getProperties());
+        pigServer = new PigServer(cluster.getExecType(), cluster.getProperties());
 
         //createWordCountJar();
     }
@@ -162,10 +163,6 @@ public class TestNativeMapReduce  {
 
             assertFalse(iter.hasNext());
 
-            // We have to manually delete intermediate mapreduce files
-            Util.deleteFile(cluster,"table_testNativeMRJobSimple_input");
-            Util.deleteFile(cluster,"table_testNativeMRJobSimple_output");
-
             // check in interactive mode
             iter = pigServer.openIterator("B");
 
@@ -210,6 +207,9 @@ public class TestNativeMapReduce  {
 
             assertTrue("job failed", PigStats.get().getReturnCode() != 0);
 
+        } catch (JobCreationException e) {
+            // Running in Tez mode throw exception
+            assertTrue(e.getCause() instanceof FileAlreadyExistsException);
         }
         finally{
             // We have to manually delete intermediate mapreduce files
@@ -258,9 +258,6 @@ public class TestNativeMapReduce  {
             assertTrue(exp_msg_prefix + t, results.contains(t.toString()));
 
             assertFalse(iter.hasNext());
-
-            Util.deleteFile(cluster,"table_testNativeMRJobMultiStoreOnPred_input");
-            Util.deleteFile(cluster,"table_testNativeMRJobMultiStoreOnPred_output");
 
             // check in interactive mode
             iter = pigServer.openIterator("B");

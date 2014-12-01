@@ -20,6 +20,7 @@ package org.apache.pig.test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -29,7 +30,6 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-import org.apache.pig.ExecType;
 import org.apache.pig.PigServer;
 import org.apache.pig.ResourceSchema;
 import org.apache.pig.data.DataType;
@@ -121,6 +121,41 @@ public class TestSchema {
 
         // And check again
         assertFalse(Schema.equals(schema1, schema2, false, false));
+    }
+
+    @Test
+    public void testParsingMapSchemasFromString() throws ParserException {
+        assertNotNull(Utils.getSchemaFromString("b:[(a:int)]"));
+        assertNotNull(Utils.getSchemaFromString("b:[someAlias: (b:int)]"));
+        assertNotNull(Utils.getSchemaFromString("a:map[{bag: (a:int)}]"));
+        assertNotNull(Utils.getSchemaFromString("a:map[someAlias: {bag: (a:int)}]"));
+        assertNotNull(Utils.getSchemaFromString("a:map[chararray]"));
+        assertNotNull(Utils.getSchemaFromString("a:map[someAlias: chararray]"));
+        assertNotNull(Utils.getSchemaFromString("a:map[someAlias: (bar: {bag: (a:int)})]"));
+    }
+
+    @Test
+    public void testMapWithoutAlias() throws FrontendException {
+        List<FieldSchema> innerFields = new ArrayList<FieldSchema>();
+        innerFields.add(new FieldSchema(null, DataType.LONG));
+        List<FieldSchema> fields = new ArrayList<FieldSchema>();
+        fields.add(new FieldSchema("mapAlias", new Schema(innerFields), DataType.MAP));
+
+        Schema inputSchema = new Schema(fields);
+        Schema fromString = Utils.getSchemaFromBagSchemaString(inputSchema.toString());
+        assertTrue(Schema.equals(inputSchema, fromString, false, false));
+    }
+
+    @Test
+    public void testMapWithAlias() throws FrontendException {
+        List<FieldSchema> innerFields = new ArrayList<FieldSchema>();
+        innerFields.add(new FieldSchema("valueAlias", DataType.LONG));
+        List<FieldSchema> fields = new ArrayList<FieldSchema>();
+        fields.add(new FieldSchema("mapAlias", new Schema(innerFields), DataType.MAP));
+
+        Schema inputSchema = new Schema(fields);
+        Schema fromString = Utils.getSchemaFromBagSchemaString(inputSchema.toString());
+        assertTrue(Schema.equals(inputSchema, fromString, false, false));
     }
 
     @Test
@@ -613,6 +648,7 @@ public class TestSchema {
         assertFalse(Schema.equals(bagSchema1, bagSchema2, false, false));
     }
 
+    @Test
     public void testCharArray2Numeric(){
     	byte[] numbericTypes=new byte[]{DataType.DOUBLE,DataType.FLOAT,DataType.LONG,DataType.INTEGER};
     	Schema.FieldSchema inputFieldSchema=new Schema.FieldSchema("",DataType.CHARARRAY);
@@ -622,9 +658,10 @@ public class TestSchema {
     	}
     }
 
+    @Test
     public void testSchemaSerialization() throws IOException {
-        MiniCluster cluster = MiniCluster.buildCluster();
-        PigServer pigServer = new PigServer(ExecType.MAPREDUCE, cluster.getProperties());
+        MiniGenericCluster cluster = MiniGenericCluster.buildCluster();
+        PigServer pigServer = new PigServer(cluster.getExecType(), cluster.getProperties());
         String inputFileName = "testSchemaSerialization-input.txt";
         String[] inputData = new String[] { "foo\t1", "hello\t2" };
         Util.createInputFile(cluster, inputFileName, inputData);
@@ -868,13 +905,37 @@ public class TestSchema {
             "datetime,datetime,datetime,datetime,datetime,datetime,datetime,datetime,datetime,datetime",
             "{},{},{},{},{},{},{},{},{},{}",
             "map[],map[],map[],map[],map[],map[],map[],map[],map[],map[]",
-            "int,int,long,long,float,float,double,double,boolean,boolean,datetime,datetime(int,long,float,double,boolean,datetime),{(int,long,float,double,boolean,datetime)},map[(int,long,float,double,boolean,datetime)]"
+            "int,int,long,long,float,float,double,double,boolean,boolean,datetime,datetime,(int,long,float,double,boolean,datetime),{(int,long,float,double,boolean,datetime)},map[(int,long,float,double,boolean,datetime)]"
         };
         for (String schemaString : schemaStrings) {
             Schema s1 = Utils.getSchemaFromString(schemaString);
             String s=s1.toString();
             Schema s2 = Utils.getSchemaFromBagSchemaString(s); // removes outer curly-braces added by Schema#toString
             assertTrue(Schema.equals(s1,s2,false,true));
+        }
+    }
+
+    @Test(expected = ParserException.class)
+    public void testGetStringFromSchemaNegative() throws Exception {
+        String schemaString = "a:int b:long"; // A comma is missing between fields
+        Utils.getSchemaFromString(schemaString);
+        fail("The schema string is invalid, so parsing should fail!");
+    }
+    
+    @Test
+    public void testGetInitialSchemaStringFromSchema() throws ParserException {
+        String[] schemaStrings = {
+                "my_list:{array:(array_element:(num1:int,num2:int))}",
+                "my_list:{array:(array_element:(num1:int,num2:int),c:chararray)}",
+                "bag:{mytuple3:(mytuple2:(mytuple:(f1:int)))}",
+                "bag:{mytuple:(f1:int)}",
+                "{((num1:int,num2:int))}"
+        };
+        for (String schemaString : schemaStrings) {
+            String s1 = Utils.getSchemaFromString(schemaString).toString();
+            //check if we get back the initial schema string
+            String s2 = s1.substring(1, s1.length() - 1).replaceAll("\\s|bag_0:|tuple_0:", "");
+            assertTrue(schemaString.equals(s2));
         }
     }
 }

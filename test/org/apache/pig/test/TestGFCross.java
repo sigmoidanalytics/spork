@@ -18,23 +18,18 @@
 package org.apache.pig.test;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 import org.apache.hadoop.conf.Configuration;
-
 import org.apache.pig.data.DataBag;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.data.TupleFactory;
-import org.apache.pig.impl.PigContext;
+import org.apache.pig.impl.PigImplConstants;
 import org.apache.pig.impl.builtin.GFCross;
 import org.apache.pig.impl.util.UDFContext;
-import org.junit.AfterClass;
-import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Test;
 
 public class TestGFCross {
-    
+
     // Test GFCross returns the correct number of default
     // join groups
     @Test
@@ -45,7 +40,7 @@ public class TestGFCross {
         t.set(0, 2);
         t.set(1, 0);
 
-        GFCross cross = new GFCross();
+        GFCross cross = new GFCross("1");
         DataBag bag = cross.exec(t);
         assertEquals(10, bag.size());
     }
@@ -54,14 +49,14 @@ public class TestGFCross {
     @Test
     public void testSerial() throws Exception {
         Configuration cfg = new Configuration();
-        cfg.set("mapred.reduce.tasks", "1");
+        cfg.set(PigImplConstants.PIG_CROSS_PARALLELISM + ".1", "1");
         UDFContext.getUDFContext().addJobConf(cfg);
         Tuple t = TupleFactory.getInstance().newTuple(2);
 
         t.set(0, 2);
         t.set(1, 0);
 
-        GFCross cross = new GFCross();
+        GFCross cross = new GFCross("1");
         DataBag bag = cross.exec(t);
         assertEquals(1, bag.size());
     }
@@ -70,14 +65,14 @@ public class TestGFCross {
     @Test
     public void testParallelSet() throws Exception {
         Configuration cfg = new Configuration();
-        cfg.set("mapred.reduce.tasks", "10");
+        cfg.set(PigImplConstants.PIG_CROSS_PARALLELISM + ".1", "10");
         UDFContext.getUDFContext().addJobConf(cfg);
         Tuple t = TupleFactory.getInstance().newTuple(2);
 
         t.set(0, 2);
         t.set(1, 0);
 
-        GFCross cross = new GFCross();
+        GFCross cross = new GFCross("1");
         DataBag bag = cross.exec(t);
         assertEquals(4, bag.size());
     }

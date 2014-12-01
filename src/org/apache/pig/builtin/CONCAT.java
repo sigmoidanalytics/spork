@@ -33,8 +33,8 @@ import org.apache.pig.impl.logicalLayer.schema.Schema;
 
 
 /**
- * Generates the concatenation of the first two arguments.  It can be
- * used with two bytearrays or two chararrays (but not a mixture of the two).
+ * Generates the concatenation of two or more arguments.  It can be
+ * used with two or more bytearrays or two or more chararrays (but not a mixture of the two).
  */
 public class CONCAT extends EvalFunc<DataByteArray> {
 
@@ -81,5 +81,15 @@ public class CONCAT extends EvalFunc<DataByteArray> {
         s.add(new Schema.FieldSchema(null, DataType.CHARARRAY));
         funcList.add(new FuncSpec(StringConcat.class.getName(), s));
         return funcList;
+    }
+    
+    @Override
+    public SchemaType getSchemaType() {
+        return SchemaType.VARARG;
+    }
+
+    @Override
+    public boolean allowCompileTimeCalculation() {
+        return true;
     }
 }

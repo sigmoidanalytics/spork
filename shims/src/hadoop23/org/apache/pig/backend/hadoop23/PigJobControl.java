@@ -72,12 +72,12 @@ public class PigJobControl extends JobControl {
 
       initSuccesful = true;
     } catch (Exception e) {
-      log.warn("falling back to default JobControl (not using hadoop 0.23 ?)", e);
+      log.debug("falling back to default JobControl (not using hadoop 0.23 ?)", e);
       initSuccesful = false;
     }
   }
 
-  private int timeToSleep;
+  protected int timeToSleep;
 
   /**
    * Construct a job control for a group of jobs.
@@ -174,6 +174,9 @@ public class PigJobControl extends JobControl {
 
         synchronized(this) {
           Iterator<ControlledJob> it = getJobs(jobsInProgress).iterator();
+          if (!it.hasNext()) {
+              stop();
+          }
           while(it.hasNext()) {
             ControlledJob j = it.next();
             log.debug("Checking state of job "+j);

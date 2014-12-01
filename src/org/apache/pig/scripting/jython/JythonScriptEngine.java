@@ -228,7 +228,7 @@ public class JythonScriptEngine extends ScriptEngine {
                         if (modulepath.equals(JVM_JAR)) {
                             continue;
                         } else if (modulepath.endsWith(".jar") || modulepath.endsWith(".zip")) {
-                            pigContext.scriptJars.add(modulepath);
+                            pigContext.addScriptJar(modulepath);
                         } else {
                             pigContext.addScriptFile(modulename, modulepath);
                         }
@@ -300,7 +300,7 @@ public class JythonScriptEngine extends ScriptEngine {
                                 // determine the relative path that the file should have in the jar
                                 int pos = apath.lastIndexOf(File.separatorChar + name.replace('.', File.separatorChar));
                                 if (pos > 0) {
-                                    files.put(apath.substring(pos), apath);
+                                    files.put(apath.substring(pos + 1), apath);
                                 } else {
                                     files.put(apath, apath);
                                 }
@@ -342,7 +342,7 @@ public class JythonScriptEngine extends ScriptEngine {
     throws IOException {
         Interpreter.setMain(false);
         Interpreter.init(path, pigContext);
-        pigContext.scriptJars.add(getJarPath(PythonInterpreter.class));
+        pigContext.addScriptJar(getJarPath(PythonInterpreter.class));
         PythonInterpreter pi = Interpreter.interpreter;
         @SuppressWarnings("unchecked")
         List<PyTuple> locals = ((PyStringMap) pi.getLocals()).items();
@@ -409,13 +409,15 @@ public class JythonScriptEngine extends ScriptEngine {
             throw new IOException("Can't read file: " + scriptFile);
         }
 
-        // TODO: fis1 is not closed
         FileInputStream fis1 = new FileInputStream(scriptFile);
-        if (hasFunction(fis1)) {
-            registerFunctions(scriptFile, null, pigContext);
+        try {
+            if (hasFunction(fis1)) {
+                registerFunctions(scriptFile, null, pigContext);
+            }
+        } finally {
+            fis1.close();
         }
 
-        
         Interpreter.setMain(true);
         FileInputStream fis = new FileInputStream(scriptFile);
         try {

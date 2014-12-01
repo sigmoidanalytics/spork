@@ -58,10 +58,17 @@ set PIGARGS=
     )
 		goto :ProcessCmdLine 
   )
+	REM Account for quotes around %1 if needed when checking for -useHCatalog
+	REM because the string may come in quoted from WebHCat.
 	if %1==-useHCatalog (
         shift
         set HCAT_FLAG="true"
         goto :ProcessCmdLine 
+	)
+	if %1==^"-useHCatalog^" (
+        shift
+        set HCAT_FLAG="true"
+        goto :ProcessCmdLine
 	)
 	set PIGARGS=%PIGARGS% %1
     shift
@@ -86,18 +93,36 @@ set PIGARGS=
     for %%i in (%PIG_HOME%\*.jar) do (
       set CLASSPATH=!CLASSPATH!;%%i
     )
+    for %%i in (%PIG_HOME%\lib\*.jar) do (
+      set CLASSPATH=!CLASSPATH!;%%i
+    )
+    for %%i in (%PIG_HOME%\lib\h2\*.jar) do (
+      set CLASSPATH=!CLASSPATH!;%%i
+    )
     if not defined PIG_CONF_DIR (
       set PIG_CONF_DIR=%PIG_HOME%\conf
     )
   )
 
   set HCAT_DEPENDCIES=
+  set HCAT_CLASSPATH=
   if not defined HCAT_FLAG (
     goto HCAT_END
   )
+
+  REM Try to set HCAT_HOME if not set.  Use of HCATALOG_HOME is deprecated.
+  REM Future development should use HCAT_HOME for consistency with non-Windows
+  REM environments.
+  if not defined HCAT_HOME (
+    if defined HCATALOG_HOME (
+       set HCAT_HOME=%HCATALOG_HOME%
+    ) else (
+       echo "Warning: HCAT_HOME not set"
+    )
+  )
   
   if defined HCAT_HOME (
-      call :AddJar %HCAT_HOME%\share\hcatalog hcatalog-*.jar
+      call :AddJar %HCAT_HOME%\share\hcatalog *hcatalog-*.jar
   ) else (
       echo "HCAT_HOME should be defined"
       exit /b 1
@@ -107,16 +132,26 @@ set PIGARGS=
       call :AddJar %HIVE_HOME%\lib libthrift-*.jar
       call :AddJar %HIVE_HOME%\lib hive-exec-*.jar
       call :AddJar %HIVE_HOME%\lib libfb303-*.jar
-      call :AddJar %HIVE_HOME%\lib jdo2-api-*.jar
+      call :AddJar %HIVE_HOME%\lib jdo*-api-*.jar
       call :AddJar %HIVE_HOME%\lib slf4j-api-*.jar
       call :AddJar %HIVE_HOME%\lib hive-hbase-handler-*.jar
       call :AddJar %HIVE_HOME%\lib httpclient-*.jar
+
+      REM Include datanucleus to support embedded metastore use case via setting
+      REM hive.metastore.uris to ''
+      call :AddJar %HIVE_HOME%\lib datanucleus-*.jar
+
+      REM Include sqljdbc4.jar to support SQL server or Windows Azure SQLDB as embedded metastore.
+      call :AddJar %HIVE_HOME%\lib sqljdbc4.jar
+
+      REM Include derby to support local metastore as embedded metastore.
+      call :AddJar %HIVE_HOME%\lib derby*.jar
   ) else (
       echo "HIVE_HOME should be defined"
       exit /b 1
   )
-  set PIG_CLASSPATH=%PIG_CLASSPATH%;%HCAT_DEPENDCIES%;%HIVE_HOME%\conf
-  set PIG_OPTS=%PIG_OPTS% -Dpig.additional.jars=%HCAT_DEPENDCIES%;%PIG_ADDITIONAL_JARS%
+  set PIG_CLASSPATH=%PIG_CLASSPATH%;%HCAT_CLASSPATH%;%HIVE_HOME%\conf
+  set PIG_OPTS=%PIG_OPTS% -Dpig.additional.jars.uris=%HCAT_DEPENDCIES%,%PIG_ADDITIONAL_JARS_COMMA%
 :HCAT_END
 
   if defined PIG_CLASSPATH (
@@ -163,7 +198,8 @@ set PIGARGS=
   :AddJar
     pushd %1
     for /f %%a IN ('dir /b %2') do (
-   	  set HCAT_DEPENDCIES=!HCAT_DEPENDCIES!;%1\%%a
+       set HCAT_CLASSPATH=!HCAT_CLASSPATH!;%1\%%a
+       set HCAT_DEPENDCIES=!HCAT_DEPENDCIES!,file:///%1\%%a
     )
     popd
 :endlocal

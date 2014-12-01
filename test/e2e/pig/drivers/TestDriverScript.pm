@@ -91,13 +91,6 @@ sub runTest
 
         my %result;
 
-        # extract the current zebra.jar file path from the classpath
-        # and enter it in the hash for use in the substitution of :ZEBRAJAR:
-        my $zebrajar = $testCmd->{'cp'};
-        $zebrajar =~ s/zebra.jar.*/zebra.jar/;
-        $zebrajar =~ s/.*://;
-        $testCmd->{'zebrajar'} = $zebrajar;
-
         if(  $testCmd->{'pig'} ){
            return runPig( $self, $testCmd, $log );
         } elsif(  $testCmd->{'pigsql'} ){
@@ -125,7 +118,7 @@ sub runPig
     $pigcmd =~ s/:INPATH:/$testCmd->{'inpathbase'}/g;
     $pigcmd =~ s/:OUTPATH:/$outfile/g;
     $pigcmd =~ s/:FUNCPATH:/$testCmd->{'funcjarPath'}/g;
-    $pigcmd =~ s/:ZEBRAJAR:/$testCmd->{'zebrajar'}/g;
+    $pigcmd =~ s/:PIGGYBANKPATH:/$testCmd->{'piggybankjarPath'}/g;
     $pigcmd =~ s/:RUNID:/$testCmd->{'UID'}/g;
     $pigcmd =~ s/:PIGHARNESS:/$ENV{PIG_HARNESS_ROOT}/g;
     $pigcmd =~ s/:USRHOMEPATH:/$testCmd->{'userhomePath'}/g;
@@ -189,6 +182,7 @@ sub runPigSql
 	$pigcmd =~ s/:INPATH:/$testCmd->{'inpathbase'}/g;
 	$pigcmd =~ s/:OUTPATH:/$outfile/g;
 	$pigcmd =~ s/:FUNCPATH:/$testCmd->{'funcjarPath'}/g;
+	$pigcmd =~ s/:PIGGYBANKPATH:/$testCmd->{'piggybankjarPath'}/g;
 	$pigcmd =~ s/:RUNID:/$testCmd->{'UID'}/g;
 	$pigcmd =~ s/:PIGHARNESS:/$ENV{PIG_HARNESS_ROOT}/g;
 	$pigcmd =~ s/:USRHOMEPATH:/$testCmd->{'userhomePath'}/g;
@@ -276,6 +270,7 @@ sub runScript
 	$cmd =~ s/:INPATH:/$testCmd->{'inpathbase'}/g;
 	$cmd =~ s/:OUTPATH:/$outfile/g;
 	$cmd =~ s/:FUNCPATH:/$testCmd->{'funcjarPath'}/g;
+	$cmd =~ s/:PIGGYBANKPATH:/$testCmd->{'piggybankjarPath'}/g;
 	$cmd =~ s/:RUNID:/$testCmd->{'UID'}/g;
 	$cmd =~ s/:PIGHARNESS:/$ENV{PIG_HARNESS_ROOT}/g;
 	$cmd =~ s/:USRHOMEPATH:/$testCmd->{'userhomePath'}/g;
@@ -316,6 +311,7 @@ sub replaceParameters(){
 	$cmd =~ s/:INPATH:/$testCmd->{'inpathbase'}/g;
 	$cmd =~ s/:OUTPATH:/$outfile/g;
 	$cmd =~ s/:FUNCPATH:/$testCmd->{'funcjarPath'}/g;
+	$cmd =~ s/:PIGGYBANKPATH:/$testCmd->{'piggybankjarPath'}/g;
 	$cmd =~ s/:RUNID:/$testCmd->{'UID'}/g;
 	$cmd =~ s/:PIGHARNESS:/$ENV{PIG_HARNESS_ROOT}/g;
 	$cmd =~ s/:USRHOMEPATH:/$testCmd->{'userhomePath'}/g;

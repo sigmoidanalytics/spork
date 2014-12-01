@@ -435,7 +435,7 @@ public class BinInterSedes implements InterSedes {
     }
 
     private Object readBigDecimal(DataInput in) throws IOException {
-        return new BigDecimal((String)readDatum(in));
+        return  new BigDecimal((String)readDatum(in));
     }
 
     private Object readBigInteger(DataInput in) throws IOException {
@@ -688,10 +688,6 @@ public class BinInterSedes implements InterSedes {
 
         @Override
         public void setConf(Configuration conf) {
-            if (!(conf instanceof JobConf)) {
-                mLog.warn("Expected jobconf in setConf, got " + conf.getClass().getName());
-                return;
-            }
             try {
                 mAsc = (boolean[]) ObjectSerializer.deserialize(conf.get("pig.sortOrder"));
                 mSecondaryAsc = (boolean[]) ObjectSerializer.deserialize(conf.get("pig.secondarySortOrder"));

@@ -124,6 +124,9 @@ public class DryRunGruntParser extends PigScriptParser {
         if (isVerbose) sb.append("-brief ");
         if (format != null && format.equals("dot")) {
             sb.append("-dot ");
+        } 
+        if (format != null && format.equals("xml")) {
+            sb.append("-xml ");
         }
         if (params != null) {
             for (String param : params) {
@@ -164,6 +167,11 @@ public class DryRunGruntParser extends PigScriptParser {
     protected void processSet(String key, String value) throws IOException,
             ParseException {
         sb.append("set ").append(key).append(" ").append(value).append("\n");
+    }
+    
+    @Override
+    protected void processSet() throws IOException {
+        sb.append("set\n");
     }
 
     @Override

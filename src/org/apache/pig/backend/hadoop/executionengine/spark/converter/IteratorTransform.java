@@ -2,7 +2,7 @@ package org.apache.pig.backend.hadoop.executionengine.spark.converter;
 
 import java.util.Iterator;
 
-abstract class IteratorTransform<IN,OUT> implements Iterator<OUT> {
+abstract class IteratorTransform<IN, OUT> implements Iterator<OUT> {
     private Iterator<IN> delegate;
 
     public IteratorTransform(Iterator<IN> delegate) {

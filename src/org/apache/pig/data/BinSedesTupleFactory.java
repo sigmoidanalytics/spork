@@ -17,7 +17,6 @@
  */
 package org.apache.pig.data;
 
-import java.io.Serializable;
 import java.util.List;
 
 import org.apache.pig.backend.executionengine.ExecException;
@@ -27,7 +26,7 @@ import org.apache.pig.classification.InterfaceAudience;
  * Default implementation of TupleFactory.
  */
 @InterfaceAudience.Private
-public class BinSedesTupleFactory extends TupleFactory implements Serializable {
+public class BinSedesTupleFactory extends TupleFactory {
     @Override
     public Tuple newTuple() {
         return new BinSedesTuple();

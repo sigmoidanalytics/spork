@@ -17,7 +17,7 @@
  */
 package org.apache.pig.data;
 
-import static org.apache.pig.PigConfiguration.SHOULD_USE_SCHEMA_TUPLE;
+import static org.apache.pig.PigConfiguration.PIG_SCHEMA_TUPLE_ENABLED;
 import static org.apache.pig.PigConstants.GENERATED_CLASSES_KEY;
 import static org.apache.pig.PigConstants.LOCAL_CODE_DIR;
 import static org.apache.pig.PigConstants.SCHEMA_TUPLE_ON_BY_DEFAULT;
@@ -36,7 +36,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.filecache.DistributedCache;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.pig.ExecType;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRConfiguration;
 import org.apache.pig.data.SchemaTupleClassGenerator.GenContext;
 import org.apache.pig.data.utils.StructuresHelper.Pair;
 import org.apache.pig.data.utils.StructuresHelper.SchemaKey;
@@ -111,7 +111,7 @@ public class SchemaTupleFrontend {
          */
         private void internalCopyAllGeneratedToDistributedCache() {
             LOG.info("Starting process to move generated code to distributed cacche");
-            if (pigContext.getExecType() == ExecType.LOCAL) {
+            if (pigContext.getExecType().isLocal()) {
                 String codePath = codeDir.getAbsolutePath();
                 LOG.info("Distributed cache not supported or needed in local mode. Setting key ["
                         + LOCAL_CODE_DIR + "] with code temp directory: " + codePath);
@@ -149,6 +149,7 @@ public class SchemaTupleFrontend {
                 }
                 try {
                     fs.copyFromLocalFile(src, dst);
+                    fs.setReplication(dst, (short)conf.getInt(MRConfiguration.SUMIT_REPLICATION, 3));
                 } catch (IOException e) {
                     throw new RuntimeException("Unable to copy from local filesystem to HDFS, src = "
                             + src + ", dst = " + dst, e);
@@ -176,8 +177,8 @@ public class SchemaTupleFrontend {
          */
         private boolean generateAll(Map<Pair<SchemaKey, Boolean>, Pair<Integer, Set<GenContext>>> schemasToGenerate) {
             boolean filesToShip = false;
-            if (!conf.getBoolean(SHOULD_USE_SCHEMA_TUPLE, SCHEMA_TUPLE_ON_BY_DEFAULT)) {
-                LOG.info("Key ["+SHOULD_USE_SCHEMA_TUPLE+"] is false, will not generate code.");
+            if (!conf.getBoolean(PIG_SCHEMA_TUPLE_ENABLED, SCHEMA_TUPLE_ON_BY_DEFAULT)) {
+                LOG.info("Key ["+PIG_SCHEMA_TUPLE_ENABLED+"] is false, will not generate code.");
                 return false;
             }
             LOG.info("Generating all registered Schemas.");

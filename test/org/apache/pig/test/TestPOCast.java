@@ -1534,11 +1534,6 @@ public class TestPOCast {
         }
 
         @Override
-        public Map<String, Object> bytesToMap(byte[] b) throws IOException {
-          return null;
-        }
-
-        @Override
         public Map<String, Object> bytesToMap(byte[] b, ResourceFieldSchema s) throws IOException {
             return null;
         }
@@ -2174,7 +2169,7 @@ public class TestPOCast {
             wrappedTuple.append(GenRandomData.genRandString(r));
             wrappedTuple.append(GenRandomData.genRandString(r));
             t.append(wrappedTuple);
-            Schema s = Utils.getSchemaFromString("t:tuple(a:chararray)}");
+            Schema s = Utils.getSchemaFromString("t:tuple(a:chararray)");
             op.setFieldSchema(new ResourceSchema.ResourceFieldSchema(s.getField(0)));
             plan.attachInput(t);
             Tuple tup = null;

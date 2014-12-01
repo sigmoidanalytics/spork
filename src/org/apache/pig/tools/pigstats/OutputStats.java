@@ -35,7 +35,6 @@ import org.apache.pig.classification.InterfaceStability;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.io.ReadToEndLoader;
-import org.apache.pig.newplan.Operator;
 
 /**
  * This class encapsulates the runtime statistics of an user specified output.
@@ -57,7 +56,7 @@ public final class OutputStats {
 
     private static final Log LOG = LogFactory.getLog(OutputStats.class);
     
-    OutputStats(String location, long bytes, long records, boolean success) {
+    public OutputStats(String location, long bytes, long records, boolean success) {
         this.location = location;
         this.bytes = bytes;
         this.records = records;        
@@ -106,12 +105,12 @@ public final class OutputStats {
     public Configuration getConf() {
         return conf;
     }
-    
-    String getDisplayString(boolean local) {
+
+    public String getDisplayString() {
         StringBuilder sb = new StringBuilder();
         if (success) {
             sb.append("Successfully stored ");
-            if (!local && records >= 0) {
+            if (records >= 0) {
                 sb.append(records).append(" records ");
             } else {
                 sb.append("records ");
@@ -127,11 +126,11 @@ public final class OutputStats {
         return sb.toString();
     }
 
-    void setPOStore(POStore store) {
+    public void setPOStore(POStore store) {
         this.store = store;
     }
     
-    void setConf(Configuration conf) {
+    public void setConf(Configuration conf) {
         this.conf = conf;
     }
     

@@ -1,0 +1,69 @@
+#--------------------------------------------------
+# There are 1 DAGs in the session
+#--------------------------------------------------
+#--------------------------------------------------
+# TEZ DAG plan: pig-0_scope-3
+#--------------------------------------------------
+Tez vertex scope-163	->	Tez vertex scope-165,
+Tez vertex scope-164	->	Tez vertex scope-165,
+Tez vertex scope-165	->	Tez vertex scope-162,
+Tez vertex scope-162
+
+Tez vertex scope-163
+# Plan on vertex
+POValueOutputTez - scope-167	->	 [scope-165]
+|
+|---a: New For Each(false,false)[bag] - scope-143
+    |   |
+    |   Cast[int] - scope-138
+    |   |
+    |   |---Project[bytearray][0] - scope-137
+    |   |
+    |   Cast[chararray] - scope-141
+    |   |
+    |   |---Project[bytearray][1] - scope-140
+    |
+    |---a: Load(file:///tmp/input:org.apache.pig.builtin.PigStorage) - scope-136
+Tez vertex scope-164
+# Plan on vertex
+POValueOutputTez - scope-168	->	 [scope-165]
+|
+|---c: New For Each(false,false)[bag] - scope-151
+    |   |
+    |   Cast[int] - scope-146
+    |   |
+    |   |---Project[bytearray][1] - scope-145
+    |   |
+    |   Cast[chararray] - scope-149
+    |   |
+    |   |---Project[bytearray][0] - scope-148
+    |
+    |---b: Load(file:///tmp/input:org.apache.pig.builtin.PigStorage) - scope-144
+Tez vertex scope-165
+# Plan on vertex
+Local Rearrange[tuple]{int}(false) - scope-158	->	 scope-162
+|   |
+|   Project[int][0] - scope-154
+|
+|---POShuffledValueInputTez - scope-166	<-	 [scope-163, scope-164]
+Tez vertex scope-162
+# Plan on vertex
+e: Store(file:///tmp/output:org.apache.pig.builtin.PigStorage) - scope-161
+|
+|---e: FRJoin[tuple] - scope-155	<-	 scope-165
+    |   |
+    |   Project[int][0] - scope-153
+    |   |
+    |   Project[int][0] - scope-154
+    |
+    |---d: New For Each(false,false)[bag] - scope-135
+        |   |
+        |   Cast[int] - scope-130
+        |   |
+        |   |---Project[bytearray][0] - scope-129
+        |   |
+        |   Cast[chararray] - scope-133
+        |   |
+        |   |---Project[bytearray][1] - scope-132
+        |
+        |---d: Load(file:///tmp/input1:org.apache.pig.builtin.PigStorage) - scope-128

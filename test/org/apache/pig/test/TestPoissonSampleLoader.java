@@ -27,9 +27,9 @@ import java.util.Iterator;
 import org.apache.pig.ExecType;
 import org.apache.pig.PigServer;
 import org.apache.pig.backend.executionengine.ExecException;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRConfiguration;
 import org.apache.pig.data.Tuple;
 import org.junit.After;
-import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -37,7 +37,6 @@ public class TestPoissonSampleLoader {
     private static final String INPUT_FILE1 = "SkewedJoinInput1.txt";
 
     private PigServer pigServer;
-    private static MiniCluster cluster = MiniCluster.buildCluster();
 
     public TestPoissonSampleLoader() throws ExecException, IOException {
         pigServer = new PigServer(ExecType.LOCAL);
@@ -45,7 +44,7 @@ public class TestPoissonSampleLoader {
                 .setProperty("pig.skewedjoin.reduce.maxtuple", "5");
         pigServer.getPigContext().getProperties()
                 .setProperty("pig.skewedjoin.reduce.memusage", "0.0001");
-        pigServer.getPigContext().getProperties().setProperty("mapred.child.java.opts", "-Xmx512m");
+        pigServer.getPigContext().getProperties().setProperty(MRConfiguration.CHILD_JAVA_OPTS, "-Xmx512m");
 
         pigServer.getPigContext().getProperties().setProperty("pig.mapsplits.count", "5");
     }
@@ -53,11 +52,6 @@ public class TestPoissonSampleLoader {
     @Before
     public void setUp() throws Exception {
         createFiles();
-    }
-
-    @AfterClass
-    public static void oneTimeTearDown() throws Exception {
-        cluster.shutDown();
     }
 
     private void createFiles() throws IOException {
@@ -75,30 +69,11 @@ public class TestPoissonSampleLoader {
 
         w.close();
 
-        Util.copyFromLocalToCluster(cluster, INPUT_FILE1, INPUT_FILE1);
     }
 
     @After
     public void tearDown() throws Exception {
         new File(INPUT_FILE1).delete();
-
-        Util.deleteFile(cluster, INPUT_FILE1);
-    }
-
-    private int testNumSamples(String memUsage, String sampleRate) throws IOException {
-        pigServer.getPigContext().getProperties()
-                .setProperty("pig.skewedjoin.reduce.memusage", memUsage);
-        pigServer.getPigContext().getProperties()
-                .setProperty("pig.sksampler.samplerate", sampleRate);
-        pigServer.registerQuery("A = Load '" + INPUT_FILE1
-                + "' Using PoissonSampleLoader('PigStorage()', '100');");
-        Iterator<Tuple> iter = pigServer.openIterator("A");
-        int count = 0;
-        while (iter.hasNext()) {
-            count++;
-            iter.next();
-        }
-        return count;
     }
 
     /*

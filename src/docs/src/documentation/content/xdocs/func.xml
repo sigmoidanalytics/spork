@@ -87,7 +87,7 @@ decoded_strings = FOREACH encoded_strings GENERATE UrlDecode(encoded, 'UTF-8');
                <p>expression</p>
             </td>
             <td>
-               <p>Any expression whose result is a bag. The elements of the bag should be data type int, long, float, or double.</p>
+               <p>Any expression whose result is a bag. The elements of the bag should be data type int, long, float, double, bigdecimal, biginteger or bytearray.</p>
             </td>
          </tr> 
    </table>
@@ -102,7 +102,7 @@ decoded_strings = FOREACH encoded_strings GENERATE UrlDecode(encoded, 'UTF-8');
    
    <section>
    <title>Example</title>
-   <p>In this example the average GPA for each student is computed (see the <a href="basic.html#GROUP">GROUP</a> operator for information about the field names in relation B).</p>
+   <p>In this example the average GPA for each student is computed (see the <a href="basic.html#group">GROUP</a> operator for information about the field names in relation B).</p>
 <source>
 A = LOAD 'student.txt' AS (name:chararray, term:chararray, gpa:float);
 
@@ -150,6 +150,12 @@ DUMP C;
                <p>double </p>
             </td>
             <td>
+               <p>bigdecimal </p>
+            </td>
+            <td>
+               <p>biginteger </p>
+            </td>
+            <td>
                <p>chararray </p>
             </td>
             <td>
@@ -173,6 +179,12 @@ DUMP C;
                <p>double </p>
             </td>
             <td>
+               <p>bigdecimal *</p>
+            </td>
+            <td>
+               <p>bigdecimal *</p>
+            </td>
+            <td>
                <p>error </p>
             </td>
             <td>
@@ -180,19 +192,120 @@ DUMP C;
             </td>
          </tr> 
    </table>
+   <p>* Average values for datatypes bigdecimal and biginteger have precision setting <a href="http://docs.oracle.com/javase/7/docs/api/java/math/MathContext.html#DECIMAL128">java.math.MathContext.DECIMAL128</a>.</p>
    </section></section>
+
+<!-- ======================================================== -->
+
+<section id="bagtostring">
+  <title>BagToString</title>
+  <p>Concatenate the elements of a Bag into a chararray string, placing an optional delimiter between each value.</p>
+
+  <section>
+    <title>Syntax</title>
+    <table>
+      <tr>
+        <td>
+          <p>BagToString(vals:bag [, delimiter:chararray])</p>
+        </td>
+      </tr>
+  </table></section>
+
+  <section>
+    <title>Terms</title>
+    <table>
+      <tr>
+	<td><p>vals</p></td>
+        <td><p>A bag of arbitrary values. They will each be cast to chararray if they are not already.</p></td>
+      </tr>
+      <tr>
+	<td><p>delimiter</p></td>
+        <td><p>A chararray value to place between elements of the bag; defaults to underscore <code>'_'</code>.</p></td>
+      </tr>
+    </table>
+  </section>
+
+  <section>
+    <title>Usage</title>
+    <p>BagToString creates a single string from the elements of a bag, similar to SQL's <code>GROUP_CONCAT</code> function. Keep in mind the following:</p>
+    <ul>
+      <li>Bags can be of arbitrary size, while strings in Java cannot: you will either exhaust available memory or exceed the maximum number of characters (about 2 billion). One of the worst features a production job can have is thresholding behavior: everything will seem nearly fine until the data size of your largest bag grows from nearly-too-big to just-barely-too-big.</li>
+      <li>Bags are disordered unless you explicitly apply a nested <code>ORDER BY</code> operation as demonstrated below. A nested <code>FOREACH</code> will preserve ordering, letting you order by one combination of fields then project out just the values you'd like to concatenate.</li>
+      <li>The default string conversion is applied to each element. If the bags contents are not atoms (tuple, map, etc), this may be not be what you want. Use a nested <code>FOREACH</code> to format values and then compose them with BagToString as shown below</li>
+    </ul>
+    <p>Examples:</p>
+    <table>
+      <tr><th>vals</th> <th>delimiter</th> <th>BagToString(vals, delimiter)</th> <th>Notes</th> </tr>
+      <tr> <td><code>{('BOS'),('NYA'),('BAL')}</code></td> <td><code></code></td> <td><code>BOS_NYA_BAL</code></td> <td>If only one argument is given, the field is delimited with underscore characters</td></tr>
+      <tr> <td><code>{('BOS'),('NYA'),('BAL')}</code></td> <td><code>'|'</code></td> <td><code>BOS|NYA|BAL</code></td> <td>But you can supply your own delimiter</td></tr>
+      <tr> <td><code>{('BOS'),('NYA'),('BAL')}</code></td> <td><code>''</code></td> <td><code>BOSNYABAL</code></td> <td>Use an explicit empty string to just smush everything together</td></tr>
+      <tr> <td><code>{(1),(2),(3)}</code></td> <td><code>'|'</code></td> <td><code>1|2|3</code></td> <td>Elements are type-converted for you (but see examples below)</td></tr>
+    </table>
+  </section>
+  <section>
+    <title>Examples</title>
+    <p>Simple delimited strings are simple:</p>
+<source>
+team_parks = LOAD 'team_parks' AS (team_id:chararray, park_id:chararray, years:bag{(year_id:int)});
+
+-- BOS     BOS07   {(1995),(1997),(1996),(1998),(1999)}
+-- NYA     NYC16   {(1995),(1999),(1998),(1997),(1996)}
+-- NYA     NYC17   {(1998)}
+-- SDN     HON01   {(1997)}
+-- SDN     MNT01   {(1996),(1999)}
+-- SDN     SAN01   {(1999),(1997),(1998),(1995),(1996)}
+
+team_parkslist = FOREACH (GROUP team_parks BY team_id) GENERATE
+  group AS team_id, BagToString(team_parks.park_id, ';');
+
+-- BOS     BOS07
+-- NYA     NYC17;NYC16
+-- SDN     SAN01;MNT01;HON01
+</source>
+
+<p>The default handling of complex elements works, but probably isn't what you want.</p>
+<source>
+team_parkyearsugly = FOREACH (GROUP team_parks BY team_id) GENERATE
+  group AS team_id,
+  BagToString(team_parks.(park_id, years));
+
+-- BOS     BOS07_{(1995),(1997),(1996),(1998),(1999)}
+-- NYA     NYC17_{(1998)}_NYC16_{(1995),(1999),(1998),(1997),(1996)}
+-- SDN     SAN01_{(1999),(1997),(1998),(1995),(1996)}_MNT01_{(1996),(1999)}_HON01_{(1997)}
+</source>
+
+<p>Instead, assemble it in pieces. In step 2, we sort on one field but process another; it remains in the sorted order.</p>
+<source>
+team_park_yearslist = FOREACH team_parks {
+  years_o = ORDER years BY year_id;
+  GENERATE team_id, park_id, SIZE(years_o) AS n_years, BagToString(years_o, '/') AS yearslist;
+};
+team_parkyearslist = FOREACH (GROUP team_park_yearslist BY team_id) {
+  tpy_o = ORDER team_park_yearslist BY n_years DESC, park_id ASC;
+  tpy_f = FOREACH tpy_o GENERATE CONCAT(park_id, ':', yearslist);
+  GENERATE group AS team_id, BagToString(tpy_f, ';');
+  };
+
+-- BOS     BOS07:1995/1996/1997/1998/1999
+-- NYA     NYC16:1995/1996/1997/1998/1999;NYC17:1998
+-- SDN     SAN01:1995/1996/1997/1998/1999;MNT01:1996/1999;HON01:1997
+</source>
+
+  </section>
+</section>
+
    
    <!-- ++++++++++++++++++++++++++++++++++++++++++++++ --> 
    <section id="concat">
    <title>CONCAT</title>
-   <p>Concatenates two expressions of identical type.</p>
+   <p>Concatenates two or more expressions of identical type.</p>
    
    <section>
    <title>Syntax</title>
    <table>
        <tr>
             <td>
-               <p>CONCAT (expression, expression)</p>
+               <p>CONCAT (expression, expression, [...expression])</p>
             </td>
          </tr> 
    </table>
@@ -214,14 +327,14 @@ DUMP C;
    
    <section>
    <title>Usage</title>
-   <p>Use the CONCAT function to concatenate two expressions. The result values of the two expressions must have identical types.</p>
-   <p>If either subexpression is null, the resulting expression is null.</p>
+   <p>Use the CONCAT function to concatenate two or more expressions. The result values of the expressions must have identical types.</p>
+   <p>If any subexpression is null, the resulting expression is null.</p>
    </section>
 
    
    <section>
    <title>Example</title>
-   <p>In this example fields f2 and f3 are concatenated.</p>
+   <p>In this example, fields f1, an underscore string literal, f2 and f3 are concatenated.</p>
 <source>
 A = LOAD 'data' as (f1:chararray, f2:chararray, f3:chararray);
 
@@ -230,12 +343,12 @@ DUMP A;
 (hadoop,map,reduce)
 (pig,pig,latin)
 
-X = FOREACH A GENERATE CONCAT(f2,f3);
+X = FOREACH A GENERATE CONCAT(f1, '_', f2,f3);
 
 DUMP X;
-(opensource)
-(mapreduce)
-(piglatin)
+(apache_opensource)
+(hadoop_mapreduce)
+(pig_piglatin)
 </source>
 </section>
 </section>
@@ -288,7 +401,7 @@ DUMP X;
    
    <section>
    <title>Example</title>
-   <p>In this example the tuples in the bag are counted (see the <a href="basic.html#GROUP">GROUP</a> operator for information about the field names in relation B).</p>
+   <p>In this example the tuples in the bag are counted (see the <a href="basic.html#group">GROUP</a> operator for information about the field names in relation B).</p>
 <source>
 A = LOAD 'data' AS (f1:int,f2:int,f3:int);
 
@@ -553,7 +666,7 @@ Y = filter X by IsEmpty(SSN_NAME);
                <p>expression</p>
             </td>
             <td>
-               <p>An expression with data types int, long, float, double, or chararray.</p>
+               <p>An expression with data types int, long, float, double, bigdecimal, biginteger, chararray, datetime or bytearray.</p>
             </td>
          </tr> 
    </table></section>
@@ -614,7 +727,16 @@ DUMP X;
                <p>double </p>
             </td>
             <td>
+               <p>bigdecimal </p>
+            </td>
+            <td>
+               <p>biginteger </p>
+            </td>
+            <td>
                <p>chararray </p>
+            </td>
+            <td>
+               <p>datetime </p>
             </td>
             <td>
                <p>bytearray </p>
@@ -637,7 +759,16 @@ DUMP X;
                <p>double </p>
             </td>
             <td>
+               <p>bigdecimal </p>
+            </td>
+            <td>
+               <p>biginteger </p>
+            </td>
+            <td>
                <p>chararray </p>
+            </td>
+            <td>
+               <p>datetime </p>
             </td>
             <td>
                <p>cast as double</p>
@@ -670,7 +801,7 @@ DUMP X;
                <p>expression</p>
             </td>
             <td>
-               <p>An expression with data types int, long, float, double, or chararray.</p>
+               <p>An expression with data types int, long, float, double, bigdecimal, biginteger, chararray, datetime or bytearray.</p>
             </td>
          </tr> 
    </table></section>
@@ -732,7 +863,16 @@ DUMP X;
                <p>double </p>
             </td>
             <td>
+               <p>bigdecimal </p>
+            </td>
+            <td>
+               <p>biginteger </p>
+            </td>
+            <td>
                <p>chararray </p>
+            </td>
+            <td>
+               <p>datetime </p>
             </td>
             <td>
                <p>bytearray </p>
@@ -755,7 +895,16 @@ DUMP X;
                <p>double </p>
             </td>
             <td>
+               <p>bigdecimal </p>
+            </td>
+            <td>
+               <p>biginteger </p>
+            </td>
+            <td>
                <p>chararray </p>
+            </td>
+            <td>
+               <p>datetime </p>
             </td>
             <td>
                <p>cast as double</p>
@@ -775,37 +924,36 @@ DUMP X;
            <td>
              <p>DEFINE pluck PluckTuple(expression1)</p>
              <p>pluck(expression2)</p>
-            </td>
-          </tr>
-        </table>
+           </td>
+         </tr>
+       </table>
      </section>
-   </section>
-   
-   <section>
-     <title>Terms</title>
-     <table>
-       <tr>
-         <td>
-           <p>expression1</p>
-         </td>
-         <td>
-           <p>A prefix to pluck by</p>
-         </td>
-       </tr>
-       <tr>
-         <td>
-           <p>expression2</p>
-         </td>
-         <td>
-           <p>The fields to apply the pluck to, usually '*'</p>
-         </td>
-       </tr>
-     </table>
-   </section>
-   
-   <section>
-   <title>Usage</title>
-   <p>Example:</p>
+     
+     <section>
+       <title>Terms</title>
+       <table>
+	 <tr>
+           <td>
+             <p>expression1</p>
+           </td>
+           <td>
+             <p>A prefix to pluck by</p>
+           </td>
+	 </tr>
+	 <tr>
+           <td>
+             <p>expression2</p>
+           </td>
+           <td>
+             <p>The fields to apply the pluck to, usually '*'</p>
+           </td>
+	 </tr>
+       </table>
+     </section>
+     
+     <section>
+       <title>Usage</title>
+       <p>Example:</p>
 <source>
 a = load 'a' as (x, y);
 b = load 'b' as (x, y);
@@ -817,6 +965,7 @@ c: {a::x: bytearray,a::y: bytearray,b::x: bytearray,b::y: bytearray}
 describe d;
 d: {plucked::a::x: bytearray,plucked::a::y: bytearray}
 </source>
+     </section>
    </section>
    
      <!-- ++++++++++++++++++++++++++++++++++++++++++++++ -->
@@ -1033,7 +1182,7 @@ DUMP X;
                <p>expression</p>
             </td>
             <td>
-               <p>An expression with data types int, long, float, double, or bytearray cast as double.</p>
+               <p>An expression with data types int, long, float, double, bigdecimal, biginteger or bytearray cast as double.</p>
             </td>
          </tr> 
    </table></section>
@@ -1090,6 +1239,12 @@ DUMP X;
                <p>double </p>
             </td>
             <td>
+               <p>bigdecimal </p>
+            </td>
+            <td>
+               <p>biginteger </p>
+            </td>
+            <td>
                <p>chararray </p>
             </td>
             <td>
@@ -1111,6 +1266,12 @@ DUMP X;
             </td>
             <td>
                <p>double </p>
+            </td>
+            <td>
+               <p>bigdecimal </p>
+            </td>
+            <td>
+               <p>biginteger </p>
             </td>
             <td>
                <p>error </p>
@@ -1682,6 +1843,7 @@ A = LOAD 'data' USING TextLoader();
                     returned from HBase (default=false)</li>
                 <li>-gt=minKeyVal Return rows with a rowKey greater than minKeyVal</li>
                 <li>-lt=maxKeyVal Return rows with a rowKey less than maxKeyVal</li>
+                <li>-regex=regex Return rows with a rowKey that match this regex on KeyVal</li>
                 <li>-gte=minKeyVal Return rows with a rowKey greater than or equal to minKeyVal</li>
                 <li>-lte=maxKeyVal Return rows with a rowKey less than or equal to maxKeyVal</li>
                 <li>-limit=numRowsPerRegion Max number of rows to retrieve per region</li>
@@ -2091,6 +2253,244 @@ STORE measurements INTO 'measurements' USING AvroStorage(
    AvroStorage. See <a href="#AvroStorage">AvroStorage</a> for a detailed description of the
    arguments for TrevniStorage.</p>
    </section>
+
+    <!-- ++++++++++++++++++++++++++++++++++++++++++++++ -->
+    <section id="AccumuloStorage">
+        <title>AccumuloStorage</title>
+        <p>Loads or stores data from an Accumulo table. The first element in a Tuple is equivalent to the "row"
+            from the Accumulo Key, while the columns in that row are can be grouped in various static or wildcarded
+            ways. Basic wildcarding functionality exists to group various columns families/qualifiers into a Map for
+            LOADs, or serialize a Map into some group of column families or qualifiers on STOREs.
+        </p>
+
+        <section>
+            <title>Syntax</title>
+            <table>
+                <tr>
+                     <td>
+                        <p>AccumuloStorage(['columns'[, 'options']])</p>
+                     </td>
+                  </tr>
+            </table>
+        </section>
+
+        <section>
+            <title>Arguments</title>
+            <table>
+                <tr>
+                    <td>
+                        <p>'columns'</p>
+                    </td>
+                    <td>
+                        <p>A comma-separated list of "columns" to read data from to write data to.
+                           Each of these columns can be considered one of three different types:
+                        </p>
+
+                        <ol>
+                            <li>Literal</li>
+                            <li>Column family prefix</li>
+                            <li>Column qualifier prefix</li>
+                        </ol>
+
+                        <p><strong>Literal:</strong> this is the simplest specification
+                           which is a colon-delimited string that maps to a column family and column
+                           qualifier. This will read/write a simple scalar from/to Accumulo.
+                        </p>
+
+                        <p><strong>Column family prefix:</strong> When reading data, this
+                            will fetch data from Accumulo Key-Values in the current row whose column family match the 
+                            given prefix. This will result in a Map being placed into the Tuple. When writing
+                            data, a Map is also expected at the given offset in the Tuple whose Keys will be 
+                            appended to the column family prefix, an empty column qualifier is used, and the Map
+                            value will be placed in the Accumulo Value. A valid column family prefix is a literal
+                            asterisk (*) in which case the Map Key will be equivalent to the Accumulo column family.
+                        </p>
+                        
+                        <p><strong>Column qualifier prefix:</strong> Similar to the column
+                            family prefix except it operates on the column qualifier. On reads, Accumulo Key-Values
+                            in the same row that match the given column family and column qualifier prefix will be
+                            placed into a single Map. On writes, the provided column family from the column specification
+                            will be used, the Map key will be appended to the column qualifier provided in the specification,
+                            and the Map Value will be the Accumulo Value.
+                        </p>
+
+                        <p>When "columns" is not provided or is a blank String, it is treated equivalently to "*".
+                            This is to say that when a column specification string is not provided, for reads, all columns
+                            in the given Accumulo row will be placed into a single Map (with the Map keys being colon
+                            delimited to preserve the column family/qualifier from Accumulo). For writes, the Map keys
+                            will be placed into the column family and the column qualifier will be empty.
+                        </p>
+                    </td>
+               </tr>
+               <tr>
+                    <td>
+                        <p>'options'</p>
+                    </td>
+                    <td>
+                        <p>A string that contains space-separated options ("optionA valueA -optionB valueB -optionC valueC")</p>
+                        <p>The currently supported options are:</p>
+                        <ul>
+                            <li>(-c|--caster) LoadStoreCasterImpl An implementation of a LoadStoreCaster to use when serializing types into Accumulo,
+                                usually AccumuloBinaryConverter or UTF8StringConverter, defaults to UTF8StorageConverter.
+                            </li>
+                            <li>(-auths|--authorizations) auth1,auth2... A comma-separated list of Accumulo authorizations to use when reading
+                                data from Accumulo. Defaults to the empty set of authorizations (none).
+                            </li>
+                            <li>(-s|--start) start_row The Accumulo row to begin reading from, inclusive</li>
+                            <li>(-e|--end) end_row The Accumulo row to read until, inclusive</li>
+                            <li>(-buff|--mutation-buffer-size) num_bytes The number of bytes to buffer when writing data to Accumulo. A higher
+                                value requires more memory</li>
+                            <li>(-wt|--write-threads) num_threads The number of threads used to write data to Accumulo.</li>
+                            <li>(-ml|--max-latency) milliseconds Maximum time in milliseconds before data is flushed to Accumulo.</li>
+                            <li>(-sep|--separator) str The separator character used when parsing the column specification, defaults to comma (,)</li>
+                            <li>(-iw|--ignore-whitespace) (true|false) Should whitespace be stripped from the column specification, defaults to true</li>
+                       </ul>
+                    </td>
+               </tr>
+            </table>
+        </section>
+
+        <section>
+            <title>Usage</title>
+   
+            <p>AccumuloStorage has the functionality to store or fetch data from Accumulo. Its goal is to provide
+                a simple, widely applicable table schema compatible with Pig's API. Each Tuple contains some subset
+                of the columns stored within one row of the Accumulo table, which depends on the columns provided
+                as an argument to the function. If '*' is provided, all columns in the table will be returned. The
+                second argument provides control over a variety of options that can be used to change various properties.</p>
+            <p>When invoking Pig Scripts that use AccumuloStorage, it's important to ensure that Pig has the Accumulo
+                jars on its classpath. This is easily achieved using the ACCUMULO_HOME environment variable.
+            </p>
+<source>
+PIG_CLASSPATH="$ACCUMULO_HOME/lib/*:$PIG_CLASSPATH" pig my_script.pig
+</source>
+        </section>
+
+        <section>
+            <title>Load Example</title>
+            <p>It is simple to fetch all columns from Airport codes that fall between Boston and San Francisco
+                that can be viewed with 'auth1' and/or 'auth2' Accumulo authorizations.</p>
+<source>
+raw = LOAD 'accumulo://airports?instance=accumulo&amp;user=root&amp;password=passwd&amp;zookeepers=localhost'
+      USING org.apache.pig.backend.hadoop.accumulo.AccumuloStorage(
+      '*', '-a auth1,auth2 -s BOS -e SFO') AS
+      (code:chararray, all_columns:map[]);
+</source>
+            <p>The datatypes of the columns are declared with the "AS" clause. In this example, the row key,
+                which is the unique airport code is assigned to the "code" variable while all of the other
+                columns are placed into the map. When there is a non-empty column qualifier, the key in that
+                map will have a colon which separates which portion of the key came from the column family and
+                which portion came from the column qualifier. The Accumulo value is placed in the Map value.</p>
+                
+            <p>Most times, it is not necessary, nor desired for performance reasons, to fetch all columns.</p>
+<source>
+raw = LOAD 'accumulo://airports?instance=accumulo&amp;user=root&amp;password=passwd&amp;zookeepers=localhost'
+      USING org.apache.pig.backend.hadoop.accumulo.AccumuloStorage(
+      'name,building:num_terminals,carrier*,reviews:transportation*') AS
+      (code:chararray name:bytearray carrier_map:map[] transportion_reviews_map:map[]);
+</source>      
+            <p>An asterisk can be used when requesting columns to group a collection of columns into a single 
+                Map instead of enumerating each column.</p>
+        </section>
+
+        <section>
+            <title>Store Example</title>
+            <p>Data can be easily stored into Accumulo.</p>
+<source>
+A = LOAD 'flights.txt' AS (id:chararray, carrier_name:chararray, src_airport:chararray, dest_airport:chararray, tail_number:int);
+STORE A INTO 'accumulo://flights?instance=accumulo&amp;user=root&amp;password=passwd&amp;zookeepers=localhost' USING 
+    org.apache.pig.backend.hadoop.accumulo.AccumuloStorage('carrier_name,src_airport,dest_airport,tail_number');
+</source>
+            <p>Here, we read the file 'flights.txt' out of HDFS and store the results into the relation A.
+                We extract a unique ID for the flight, its source and destination and the tail number from the
+                given file. When STORE'ing back into Accumulo, we specify the column specifications (in this case,
+                just a column family). It is also important to note that four elements are provided as columns
+                because the first element in the Tuple is used as the row in Accumulo.
+            </p>
+        </section>
+    </section>
+
+    <section id="OrcStorage">
+        <title>OrcStorage</title>
+        <p>Loads from or stores data to Orc file.</p>
+        <section>
+        <title>Syntax</title>
+        <table>
+        <tr>
+            <td>
+                <p>OrcStorage(['options'])</p>
+            </td>
+        </tr>
+        </table>
+        </section>
+        <section>
+        <title>Options</title>
+        <table>
+        <tr>
+            <td>
+               <p>A string that contains space-separated options (&lsquo;-optionA valueA -optionB valueB -optionC &rsquo;). Current options are only applicable with STORE operation and not for LOAD.</p>
+               <p>Currently supported options are:</p>
+               <ul>
+               <li>--stripeSize or -s Set the stripe size for the file. Default is 268435456(256 MB).</li>
+               <li>--rowIndexStride or -r Set the distance between entries in the row index. Default is 10000.</li>
+               <li>--bufferSize or -b Set the size of the memory buffers used for compressing and storing the stripe in memory. Default is 262144 (256K).</li>
+               <li>--blockPadding or -p Sets whether the HDFS blocks are padded to prevent stripes from straddling blocks. Default is true.</li>
+               <li>--compress or -c Sets the generic compression that is used to compress the data. Valid codecs are: NONE, ZLIB, SNAPPY, LZO. Default is ZLIB.</li>
+               <li>--version or -v Sets the version of the file that will be written</li>
+               </ul>
+            </td>
+        </tr>
+        </table>
+        </section>
+        <section>
+        <title>Example</title>
+        <p>OrcStorage as a StoreFunc.</p>
+<source>
+A = LOAD 'student.txt' as (name:chararray, age:int, gpa:double);
+store A into 'student.orc' using OrcStorage('-c SNAPPY'); -- store student.txt into data.orc with SNAPPY compression
+</source>
+        <p>OrcStorage as a LoadFunc.</p>
+<source>
+A = LOAD 'student.orc' USING OrcStorage();
+describe A; -- See the schema of student.orc
+B = filter A by age &gt; 25 and gpa &lt; 3; -- filter condition will be pushed up to loader
+dump B; -- dump the content of student.orc
+</source>
+        </section>
+        <section>
+        <title>Data types</title>
+        <p>Most Orc data type has one to one mapping to Pig data type. Several exceptions are:</p>
+        <p>Loader side:</p>
+        <ul>
+        <li>Orc STRING/CHAR/VARCHAR all map to Pig varchar</li>
+        <li>Orc BYTE/BINARY all map to Pig bytearray</li>
+        <li>Orc TIMESTAMP/DATE all maps to Pig datetime</li>
+        <li>Orc DECIMAL maps to Pig bigdecimal</li>
+        </ul>
+        <p>Storer side:</p>
+        <ul>
+        <li>Pig chararray maps to Orc STRING</li>
+        <li>Pig datetime maps to Orc TIMESTAMP</li>
+        <li>Pig bigdecimal/biginteger all map to Orc DECIMAL</li>
+        <li>Pig bytearray maps to Orc BINARY</li>
+        </ul>
+        </section>
+        <section>
+        <title>Predicate pushdown</title>
+        <p>If there is a filter statement right after OrcStorage, Pig will push the filter condition to the loader.
+           OrcStorage will prune file/stripe/row group which does not satisfy the condition entirely. For the file/stripe/row group contains
+           data that satisfies the filter condition, OrcStorage will load the file/stripe/row group and Pig will evaluate the filter condition
+           again to remove additional data which does not satisfy the filter condition.</p>
+        <p>OrcStorage predicate pushdown currently support all primitive data types but none of the complex data types. For example, map condition
+           cannot push into OrcStorage:</p>
+<source>
+A = LOAD 'student.orc' USING OrcStorage();
+B = filter A by info#'age' > 25; -- map condition cannot push to OrcStorage
+dump B;
+</source>
+        <p>Currently, the following expressions in filter condition are supported in OrcStorage predicate pushdown: &gt;, &gt;=, &lt;, &lt;=, ==, !=, between, in, and, or, not. The missing expressions are: is null, is not null, matches.</p>
+        </section>
+    </section>
 </section>
 
 <!-- ======================================================== -->  
@@ -2617,7 +3017,7 @@ This function never increases the result value.
                <p>x</p>
             </td>
             <td>
-               <p>CEIL(x)</p>
+               <p>FLOOR(x)</p>
             </td>
          </tr>
         
@@ -2847,7 +3247,12 @@ Use the RANDOM function to return a pseudo random number (type double) greater t
 <section>
      <title>Usage</title>
      <p>
-Use the ROUND function to return the value of an expression rounded to an integer (if the result type is float) or rounded to a long (if the result type is double).
+       Use the ROUND function to return the value of an expression rounded to an
+       integer (if the result type is float) or rounded to a long (if the result
+       type is double).
+     </p>
+     <p>
+       Values are rounded towards positive infinity: <code>round(x) = floor(x + 0.5)</code>.
      </p>
         <table>
        <tr>
@@ -2934,7 +3339,120 @@ Use the ROUND function to return the value of an expression rounded to an intege
    </table>
    </section>
 </section>       
+
+<!-- ======================================================== -->
+
+<section id="round_to">
+  <title>ROUND_TO</title>
+  <p>Returns the value of an expression rounded to a fixed number of decimal digits.</p>
+
+  <section>
+    <title>Syntax</title>
+    <table>
+      <tr>
+        <td>
+          <p>ROUND_TO(val, digits [, mode])</p>
+        </td>
+      </tr>
+  </table></section>
+
+  <section>
+    <title>Terms</title>
+    <table>
+      <tr>
+        <td>
+          <p>val</p>
+        </td>
+        <td>
+          <p>An expression whose result is type float or double: the value to round.</p>
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <p>digits</p>
+        </td>
+        <td>
+          <p>An expression whose result is type int: the number of digits to preserve.</p>
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <p>mode</p>
+        </td>
+        <td>
+          <p>
+            An optional int specifying the
+            <a href="https://en.wikipedia.org/wiki/Rounding#Tie-breaking">rounding mode</a>,
+            according to the <a href="http://docs.oracle.com/javase/7/docs/api/constant-values.html#java.math">constants Java provides</a>.
+          </p>
+        </td>
+      </tr>
+    </table>
+  </section>
   
+  <section>
+    <title>Usage</title>
+    <p>
+      Use the ROUND function to return the value of an expression rounded to a
+      fixed number of digits. Given a float, its result is a float; given a
+      double its result is a double.
+    </p>
+    <p>
+      The result is a multiple of the <code>digits</code>-th power of ten: 0
+      leads to no fractional digits; a negative value zeros out correspondingly
+      many places to the left of the decimal point.
+    </p>
+    <p>
+      When <code>mode</code> is omitted or has the value 6 (<a href="http://docs.oracle.com/javase/7/docs/api/java/math/RoundingMode.html#HALF_EVEN"><code>RoundingMode.HALF_EVEN</code></a>),
+      the result is rounded towards the nearest neighbor, and ties are
+      <a href="https://en.wikipedia.org/wiki/Rounding#Round_half_to_even">rounded to the nearest even digit</a>.
+      This mode minimizes cumulative error and tends to preserve the average of a set of values.
+    </p>
+    <p>
+      When <code>mode</code> has the value 4 (<a href="http://docs.oracle.com/javase/7/docs/api/java/math/RoundingMode.html#HALF_UP"><code>RoundingMode.HALF_UP</code></a>), the result is
+      rounded towards the nearest neighbor, and ties are
+      <a href="https://en.wikipedia.org/wiki/Rounding#Round_half_away_from_zero">rounded
+      away from zero</a>.  This mode matches the behavior of most SQL systems.
+    </p>
+    <p>
+      For other rounding modes, consult
+      <a href="http://docs.oracle.com/javase/7/docs/api/java/math/RoundingMode.html">Java's
+      documentation</a>. There is no rounding mode that matches
+      <code>Math.round</code>'s behavior (i.e. round towards positive infinity)
+      -- blame Java, not Pig.
+    </p>
+    <table>
+
+      <tr><th><p>val</p></th> <th><p>digits</p></th> <th><p>mode</p></th> <th><p>ROUND_TO(val, digits)</p></th></tr>
+
+      <tr><td><p>  1234.1789</p> </td> <td><p> 8</p></td> <td><p></p></td> <td><p> 1234.1789</p> </td> </tr>
+      <tr><td><p>  1234.1789</p> </td> <td><p> 4</p></td> <td><p></p></td> <td><p> 1234.1789</p> </td> </tr>
+      <tr><td><p>  1234.1789</p> </td> <td><p> 1</p></td> <td><p></p></td> <td><p> 1234.2</p>    </td> </tr>
+      <tr><td><p>  1234.1789</p> </td> <td><p> 0</p></td> <td><p></p></td> <td><p> 1234.0</p>    </td> </tr>
+      <tr><td><p>  1234.1789</p> </td> <td><p>-1</p></td> <td><p></p></td> <td><p> 1230.0</p>    </td> </tr>
+      <tr><td><p>  1234.1789</p> </td> <td><p>-3</p></td> <td><p></p></td> <td><p> 1000.0</p>    </td> </tr>
+      <tr><td><p>  1234.1789</p> </td> <td><p>-4</p></td> <td><p></p></td> <td><p> 0.0</p>       </td> </tr>
+
+      <tr><td><p>     3.25000001</p></td> <td><p> 1</p></td> <td><p></p></td> <td><p> 3.3</p>    </td> </tr>
+      <tr><td><p>     3.25</p>   </td> <td><p> 1</p></td> <td><p></p></td> <td><p> 3.2</p>       </td> </tr>
+      <tr><td><p>    -3.25</p>   </td> <td><p> 1</p></td> <td><p></p></td> <td><p> -3.2</p>      </td> </tr>
+      <tr><td><p>     3.15</p>   </td> <td><p> 1</p></td> <td><p></p></td> <td><p> 3.2</p>       </td> </tr>
+      <tr><td><p>    -3.15</p>   </td> <td><p> 1</p></td> <td><p></p></td> <td><p> -3.2</p>      </td> </tr>
+      <tr><td><p>     3.25</p>   </td> <td><p> 1</p></td> <td><p>4</p></td> <td><p> 3.3</p>       </td> </tr>
+      <tr><td><p>    -3.25</p>   </td> <td><p> 1</p></td> <td><p>4</p></td> <td><p> -3.3</p>      </td> </tr>
+      
+      <tr><td><p>     3.5</p>    </td> <td><p> 0</p></td> <td><p></p></td> <td><p> 4.0</p>       </td> </tr>
+      <tr><td><p>    -3.5</p>    </td> <td><p> 0</p></td> <td><p></p></td> <td><p> -4.0</p>      </td> </tr>
+      <tr><td><p>     2.5</p>    </td> <td><p> 0</p></td> <td><p></p></td> <td><p> 2.0</p>       </td> </tr>
+      <tr><td><p>    -2.5</p>    </td> <td><p> 0</p></td> <td><p></p></td> <td><p> -2.0</p>      </td> </tr>
+      <tr><td><p>     3.5</p>    </td> <td><p> 0</p></td> <td><p>4</p></td> <td><p> 4.0</p>       </td> </tr>
+      <tr><td><p>    -3.5</p>    </td> <td><p> 0</p></td> <td><p>4</p></td> <td><p> -4.0</p>      </td> </tr>
+      <tr><td><p>     2.5</p>    </td> <td><p> 0</p></td> <td><p>4</p></td> <td><p> 3.0</p>       </td> </tr>
+      <tr><td><p>    -2.5</p>    </td> <td><p> 0</p></td> <td><p>4</p></td> <td><p> -3.0</p>      </td> </tr>
+    </table>
+  </section>
+</section>
+
 <!-- ======================================================== -->  
  <section id="sin">
    <title>SIN</title>
@@ -3154,6 +3672,101 @@ Use the TANH function to return the hyperbolic tangent of an expression.
 </ul>
  
    <!-- ++++++++++++++++++++++++++++++++++++++++++++++ -->
+<section id="endswith">
+   <title>ENDSWITH</title>
+   <p>Tests inputs to determine if the first argument ends with the string in the second. </p>
+
+<section>
+   <title>Syntax</title>
+   <table>
+       <tr>
+            <td>
+               <p>ENDSWITH(string, testAgainst)</p>
+            </td>
+         </tr> 
+        
+   </table></section>
+   
+<section>
+   <title>Terms</title>
+   <table>
+       <tr>
+            <td>
+               <p>string</p>
+            </td>
+            <td>
+               <p>The string to be tested.</p>
+            </td>
+         </tr> 
+         <tr>
+            <td>
+               <p>testAgainst</p>
+            </td>
+            <td>
+               <p>The string to test against.</p>
+            </td>
+         </tr> 
+   </table>
+</section>
+
+<section>
+     <title>Usage</title>
+     <p>
+Use the ENDSWITH function to determine if the first argument ends with the string in the second.
+     </p>
+     <p>
+For example, ENDSWITH ('foobar', 'foo') will false, whereas ENDSWITH ('foobar', 'bar') will return true.
+     </p>
+</section>
+</section> 
+
+<!-- ++++++++++++++++++++++++++++++++++++++++++++++ -->
+<section id="equalsignorecase">
+   <title>EqualsIgnoreCase</title>
+   <p>Compares two Strings ignoring case considerations. </p>
+
+<section>
+   <title>Syntax</title>
+   <table>
+       <tr>
+            <td>
+               <p>EqualsIgnoreCase(string1, string2)</p>
+            </td>
+         </tr>
+
+   </table></section>
+  
+<section>
+   <title>Terms</title>
+   <table>
+       <tr>
+            <td>
+               <p>string1</p>
+            </td>
+            <td>
+               <p>The source string.</p>
+            </td>
+         </tr>
+         <tr>
+            <td>
+               <p>string2</p>
+            </td>
+            <td>
+               <p>The string to compare against.</p>
+            </td>
+         </tr>
+   </table>
+</section>
+
+<section>
+     <title>Usage</title>
+     <p>
+Use the EqualsIgnoreCase function to determine if two string are equal ignoring case.
+     </p>
+</section>
+</section>
+
+<!-- ======================================================== -->  
  <section id="indexof">
    <title>INDEXOF</title>
    <p>Returns the index of the first occurrence of a character in a string, searching forward from a start index. </p>
@@ -3332,6 +3945,43 @@ Use the LOWER function to convert all characters in a string to lower case.
 </section>
 </section> 
 
+<!-- ======================================================== -->  
+ <section id="ltrim">
+   <title>LTRIM</title>
+   <p>Returns a copy of a string with only leading white space removed.</p>
+
+<section>
+   <title>Syntax</title>
+   <table>
+       <tr>
+            <td>
+               <p>LTRIM(expression)</p>
+            </td>
+         </tr> 
+        
+   </table></section>
+   
+<section>
+   <title>Terms</title>
+   <table>
+       <tr>
+            <td>
+               <p>expression</p>
+            </td>
+            <td>
+               <p>An expression whose result is chararray. </p>
+            </td>
+         </tr> 
+   </table>
+</section>
+
+<section>
+     <title>Usage</title>
+     <p>
+Use the LTRIM function to remove leading white space from a string.
+     </p>
+</section>
+</section> 
 
 <!-- ======================================================== -->
  <section id="regex-extract">
@@ -3535,6 +4185,202 @@ by prefixing them with double backslashes (e.g. '\\[').
 </section> 
 
 <!-- ======================================================== -->  
+ <section id="rtrim">
+   <title>RTRIM</title>
+   <p>Returns a copy of a string with only trailing white space removed.</p>
+
+<section>
+   <title>Syntax</title>
+   <table>
+       <tr>
+            <td>
+               <p>RTRIM(expression)</p>
+            </td>
+         </tr> 
+        
+   </table></section>
+   
+<section>
+   <title>Terms</title>
+   <table>
+       <tr>
+            <td>
+               <p>expression</p>
+            </td>
+            <td>
+               <p>An expression whose result is chararray. </p>
+            </td>
+         </tr> 
+   </table>
+</section>
+
+<section>
+     <title>Usage</title>
+     <p>
+Use the RTRIM function to remove trailing white space from a string.
+     </p>
+</section>
+</section> 
+
+
+<!-- ======================================================== -->
+<section id="sprintf">
+  <title>SPRINTF</title>
+  <p>Formats a set of values according to a printf-style template, using the <a href="http://docs.oracle.com/javase/7/docs/api/java/util/Formatter.html">native Java Formatter</a> library.</p>
+
+  <section>
+    <title>Syntax</title>
+    <table>
+      <tr>
+        <td>
+          <p>SPRINTF(format, [...vals])</p>
+        </td>
+      </tr>
+
+  </table></section>
+
+  <section>
+    <title>Terms</title>
+    <table>
+      <tr>
+        <td>
+          <p>format</p>
+        </td>
+        <td>
+          <p>The printf-style string describing the template.</p>
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <p>vals</p>
+        </td>
+        <td>
+          <p>
+            The values to place in the template.  There must be a tuple element
+            for each formatting placeholder, and it must have the correct type:
+            <code>int</code> or <code>long</code> for integer formats such as
+            <code>%d</code>; <code>float</code> or <code>double</code> for
+            decimal formats such as <code>%f</code>; and <code>long</code> for
+            date/time formats such as <code>%t</code>.
+          </p>
+        </td>
+      </tr>
+    </table>
+  </section>
+
+  <section>
+    <title>Usage</title>
+    <p>
+      Use the SPRINTF function to format a string according to a template. For example, SPRINTF("part-%05d", 69) will return 'part-00069'.
+    </p>
+    <table>
+
+      <tr><th><p>String&nbsp;format&nbsp;specification</p></th> <th><p>arg1</p></th> <th><p>arg2</p></th> <th><p>arg3</p></th> <th><p>SPRINTF(format, arg1, arg2)</p></th> <th><p>notes</p></th></tr>
+
+      <tr><td><p><code>'%8s|%8d|%-8s'</code></p></td>
+      <td><p><code>1234567</code></p></td>      <td><p><code>1234567</code></p></td>    <td><p><code>'yay'</code></p></td>
+      <td><p><code>' 1234567| 1234567|yay     '</code></p></td>
+      <td><p>Format strings with %s, integers with %d. Types are converted for you where reasonable (here, int -&gt; string).</p></td></tr>
+
+
+      <tr><td><p>(null value)</p></td>
+      <td><p><code>1234567</code></p></td>      <td><p><code>1234567</code></p></td>    <td><p><code>'yay'</code></p></td>
+      <td><p>(null value)</p></td>
+      <td><p>Returns null (no error or warning) with a null format string.</p></td></tr>
+
+      <tr><td><p><code>'%8s|%8d|%-8s'</code></p></td>
+      <td><p><code>1234567</code></p></td>      <td><p>(null value)</p></td>    <td><p><code>'yay'</code></p></td>
+      <td><p>(null value)</p></td>
+      <td><p>Returns null (no error or warning) if any single argument is null.</p></td></tr>
+
+      <tr><td><p><code>'%8.3f|%6x'</code></p></td>
+      <td><p><code>123.14159</code></p></td>    <td><p><code>665568</code></p></td>     <td><p><code></code></p></td>
+      <td><p><code>' 123.142| a27e0'</code></p></td>
+      <td><p>Format floats/doubles with %f, hexadecimal integers with %x (there are others besides -- see the <a href='http://docs.oracle.com/javase/7/docs/api/java/util/Formatter.html'>Java docs</a>)</p></td></tr>
+
+      <tr><td><p><code>'%,+10d|%(06d'</code></p></td>
+      <td><p><code>1234567</code></p></td>      <td><p><code>-123</code></p></td>       <td><p><code></code></p></td>
+      <td><p><code>'+1,234,567|(0123)'</code></p></td>
+      <td><p>Numerics take a prefix modifier: <code>,</code> for locale-specific thousands-delimiting, 0 for zero-padding; <code>+</code> to always show a plus sign for positive numbers; space <code> </code> to allow a space preceding positive numbers; <code>(</code> to indicate negative numbers with parentheses (accountant-style).</p></td></tr>
+
+      <tr><td><p><code>'%2$5d: %3$6s %1$3s %2$4x (%&lt;4X)'</code></p></td>
+      <td><p><code>'the'</code></p></td>   <td><p><code>48879</code></p></td>           <td><p><code>'wheres'</code></p></td>
+      <td><p><code>'48879: wheres the beef (BEEF)'</code></p></td>
+      <td><p>Refer to args positionally and as many times as you like using <code>%(pos)$...</code>. Use <code>%&lt;...</code> to refer to the previously-specified arg.</p></td></tr>
+
+
+      <tr><td><p><code>'Launch Time: %14d %s'</code></p></td>
+        <td><p><code>ToMilliSeconds(CurrentTime())</code></p></td>   <td><p><code>ToString(CurrentTime(), 'yyyy-MM-dd HH:mm:ss Z')</code></p></td>     <td><p><code></code></p></td>
+        <td><p><code>'Launch Time:  1400164132000 2014-05-15 09:28:52 -0500'</code></p></td>
+        <td><p>Instead use ToString to format the date/time portions and SPRINTF to layout the results.</p></td></tr>
+      
+      <tr><td><p><code>'%8s|%-8s'</code></p></td>                 <td><p><code>1234567</code></p></td> <td><p><code></code></p></td> <td><p><code></code></p></td>
+      <td><p><code>MissingFormatArgumentException: Format specifier '%-8s' </code></p></td><td><p>You must supply arguments for all specifiers</p></td></tr>
+
+      <tr><td><p><code>'%8s'</code></p></td>                      <td><p><code>1234567</code></p></td> <td><p><code>'ignored'</code></p></td> <td><p><code>'also'</code></p></td>
+      <td><p><code> 1234567</code></p></td>                     <td><p>It's OK to supply too many, though</p></td></tr>
+
+    </table>
+    <p>
+      <em>Note: although the Java formatter (and thus this function) offers the
+      <code>%t</code> specifier for date/time elements, it's best avoided: it's
+      cumbersome, the output and timezone handling may differ from what you
+      expect, and it doesn't accept datetime objects from pig. Instead, just
+      prepare dates usint the ToString UDF as shown.</em>
+    </p>
+  </section>
+</section>
+
+<!-- ======================================================== -->  
+<section id="startswith">
+   <title>STARTSWITH</title>
+   <p>Tests inputs to determine if the first argument starts with the string in the second. </p>
+
+<section>
+   <title>Syntax</title>
+   <table>
+       <tr>
+            <td>
+               <p>STARTSWITH(string, testAgainst)</p>
+            </td>
+         </tr> 
+        
+   </table></section>
+   
+<section>
+   <title>Terms</title>
+   <table>
+       <tr>
+            <td>
+               <p>string</p>
+            </td>
+            <td>
+               <p>The string to be tested.</p>
+            </td>
+         </tr> 
+         <tr>
+            <td>
+               <p>testAgainst</p>
+            </td>
+            <td>
+               <p>The string to test against.</p>
+            </td>
+         </tr> 
+   </table>
+</section>
+
+<section>
+     <title>Usage</title>
+     <p>
+Use the STARTSWITH function to determine if the first argument starts with the string in the second.
+     </p>
+     <p>
+For example, STARTSWITH ('foobar', 'foo') will true, whereas STARTSWITH ('foobar', 'bar') will return false.
+     </p>
+</section>
+</section> 
+
+<!-- ======================================================== -->  
  <section id="strsplit">
    <title>STRSPLIT</title>
    <p>Splits a string around matches of a given regular expression. </p>
@@ -3593,7 +4439,70 @@ For example, given the string (open:source:software), STRSPLIT (string, ':',2) w
 </section>
 </section> 
 
-<!-- ======================================================== -->  
+<!-- ======================================================== -->
+    <section id="strsplittobag">
+        <title>STRSPLITTOBAG</title>
+        <p>Splits a string around matches of a given regular expression and returns a databag</p>
+        <section>
+            <title>Syntax</title>
+            <table>
+                <tr>
+                    <td>
+                        <p>STRSPLITTOBAG(string, regex, limit)</p>
+                    </td>
+                </tr>
+            </table>
+        </section>
+        <section>
+            <title>Terms</title>
+            <table>
+                <tr>
+                    <td>
+                        <p>string</p>
+                    </td>
+                    <td>
+                        <p>The string to be split.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <p>regex</p>
+                    </td>
+                    <td>
+                        <p>The regular expression.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <p>limit</p>
+                    </td>
+                    <td>
+                        <p>If the value is positive, the pattern (the compiled representation of the regular expression)
+                            is applied at most limit-1 times, therefore the value of the argument means the maximum size
+                            of the result bag. The last tuple of the result bag will contain all input after the last
+                            match.
+                        </p>
+                        <p>If the value is negative, no limit is applied to the size of the result bag.</p>
+                        <p>If the value is zero, no limit is applied to the size of the result bag too, and trailing
+                            empty strings (if any) will be removed.
+                        </p>
+                    </td>
+                </tr>
+            </table>
+        </section>
+        <section>
+            <title>Usage</title>
+            <p>
+                Use the STRSPLITTOBAG function to split a string around matches of a given regular expression.
+            </p>
+            <p>
+                For example, given the string (open:source:software), STRSPLITTOBAG (string, ':',2) will return
+                {(open),(source:software)} and STRSPLITTOBAG (string, ':',3) will return {(open),(source),(software)}.
+            </p>
+        </section>
+    </section>
+
+    <!-- ======================================================== -->
  <section id="substring">
    <title>SUBSTRING</title>
    <p>Returns a substring from a given string. </p>
@@ -3765,6 +4674,16 @@ Use the UPPER function to convert all characters in a string to upper case.
    </section>
 </section>
  
+ <section id="uniqueid">
+   <title>UniqueID</title>
+   <p>Returns a unique id string for each record in the alias. </p>
+   <section>
+     <title>Usage</title>
+     <p>
+       UniqueID generates a unique id for each records. The id takes form "taskindex-sequence"
+     </p>
+   </section>
+ </section>
 </section>
 <!-- End String Functions -->
 
@@ -4636,6 +5555,54 @@ Use the ToDate function to generate a DateTime object. Note that if the timezone
 </section>
 
 <!-- ======================================================== -->
+<section id="to-string">
+    <title>ToString</title>
+    <p>
+        ToString converts the DateTime object to the ISO or the customized string.
+    </p>
+
+    <section>
+        <title>Syntax</title>
+        <table>
+            <tr>
+                <td>
+                    <p>ToString(datetime [, format string])</p>
+                </td>
+            </tr>
+        </table>
+    </section>
+
+    <section>
+        <title>Terms</title>
+        <table>
+            <tr>
+                <td>
+                    <p>datetime</p>
+                </td>
+                <td>
+                    <p>A datetime object.</p>
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <p>format string</p>
+                </td>
+                <td>
+                    <p>The date time format pattern string (see <a href="http://docs.oracle.com/javase/6/docs/api/java/text/SimpleDateFormat.html">Java SimpleDateFormat class</a>).</p>
+                </td>
+            </tr>
+        </table>
+    </section>
+
+    <section>
+        <title>Usage</title>
+        <p>
+            Use the ToString function to convert the DateTime to the customized string.
+        </p>
+    </section>
+</section>
+
+<!-- ======================================================== -->
 <section id="to-unix-time">
     <title>ToUnixTime</title>
     <p>
@@ -5036,8 +6003,15 @@ Output (results)
 <section>
      <title>Usage</title>
      <p>
-TOP function returns a bag containing top N tuples from the input bag where N is controlled by the first parameter to the function. The tuple comparison is performed based on a single column from the tuple. The column position is determined by the second parameter to the function. The function assumes that all tuples in the bag contain an element of the same type in the compared column
+TOP function returns a bag containing top N tuples from the input bag where N is controlled by the first parameter to the function. The tuple comparison is performed based on a single column from the tuple. The column position is determined by the second parameter to the function. The function assumes that all tuples in the bag contain an element of the same type in the compared column.
      </p>
+     <p>
+By default, TOP function uses descending order. But it can be configured via DEFINE statement.
+     </p>
+<source>
+DEFINE asc TOP('ASC'); -- ascending order
+DEFINE desc TOP('DESC'); -- descending order
+</source>
 </section>
  
  <section>
@@ -5046,12 +6020,20 @@ TOP function returns a bag containing top N tuples from the input bag where N is
 In this example the top 10 occurrences are returned.
      </p>
  <source>
+DEFINE asc TOP('ASC'); -- ascending order
+DEFINE desc TOP('DESC'); -- descending order
+
 A = LOAD 'data' as (first: chararray, second: chararray);
 B = GROUP A BY (first, second);
 C = FOREACH B generate FLATTEN(group), COUNT(A) as count;
-D = GROUP C BY first; // again group by first
+D = GROUP C BY first; -- again group by first
 topResults = FOREACH D {
-    result = TOP(10, 2, C); // and retain top 10 occurrences of 'second' in first
+    result = asc(10, 1, C); -- and retain top 10 (in ascending order) occurrences of 'second' in first  
+    GENERATE FLATTEN(result);
+}
+
+bottomResults = FOREACH D {
+    result = desc(10, 1, C); -- and retain top 10  (in descending order) occurrences of 'second' in first  
     GENERATE FLATTEN(result);
 }
 </source>

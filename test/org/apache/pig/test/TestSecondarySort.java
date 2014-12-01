@@ -26,47 +26,52 @@ import java.io.FileOutputStream;
 import java.io.PrintStream;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Random;
 
-import org.apache.pig.ExecType;
 import org.apache.pig.PigServer;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.executionengine.ExecJob;
-import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.SecondaryKeyOptimizer;
-import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.MROperPlan;
-import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
+import org.apache.pig.backend.hadoop.executionengine.optimizer.SecondaryKeyOptimizer;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.io.FileLocalizer;
 import org.apache.pig.impl.logicalLayer.schema.Schema;
+import org.apache.pig.impl.plan.VisitorException;
 import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
-public class TestSecondarySort {
-    static MiniCluster cluster = MiniCluster.buildCluster();
-    private PigServer pigServer;
-
-    static PigContext pc;
-    static {
-        pc = new PigContext(ExecType.MAPREDUCE, MiniCluster.buildCluster().getProperties());
-        try {
-            pc.connect();
-        } catch (ExecException e) {
-            throw new RuntimeException(e);
-        }
-    }
+// ant sends abstract classes also to junit. skipNonTests attribute does not work with all ant versions
+@Ignore
+public abstract class TestSecondarySort {
+    protected static MiniGenericCluster cluster = null;
+    protected PigServer pigServer;
+    protected static PigContext pc;
 
     @AfterClass
     public static void oneTimeTearDown() throws Exception {
         cluster.shutDown();
+        cluster = null;
     }
 
     @Before
     public void setUp() throws Exception {
-        FileLocalizer.setR(new Random());
-        pigServer = new PigServer(ExecType.MAPREDUCE, cluster.getProperties());
+        if (cluster == null) {
+            cluster = getCluster();
+            pc = new PigContext(cluster.getExecType(), cluster.getProperties());
+            try {
+                pc.connect();
+            } catch (ExecException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        pigServer = new PigServer(pc);
     }
+
+    public abstract SecondaryKeyOptimizer visitSecondaryKeyOptimizer(
+            String query) throws Exception, VisitorException;
+
+    public abstract MiniGenericCluster getCluster();
 
     @Test
     public void testDistinctOptimization1() throws Exception {
@@ -76,15 +81,11 @@ public class TestSecondarySort {
         "C = foreach B { D = distinct A; generate group, D;};"+
 
         "store C into 'output';");
-        PhysicalPlan pp = Util.buildPp(pigServer, query);
-        MROperPlan mrPlan = Util.buildMRPlan(pp, pc);
+        SecondaryKeyOptimizer so = visitSecondaryKeyOptimizer(query);
 
-        SecondaryKeyOptimizer so = new SecondaryKeyOptimizer(mrPlan);
-        so.visit();
-
-        assertEquals(1, so.getNumMRUseSecondaryKey());
+        assertEquals(1, so.getNumUseSecondaryKey());
         assertEquals(0, so.getNumSortRemoved());
-        assertEquals(1, so.getDistinctChanged());
+        assertEquals(1, so.getNumDistinctChanged());
     }
 
     @Test
@@ -95,15 +96,11 @@ public class TestSecondarySort {
         "C = foreach B { D = limit A 10; E = order D by $1; generate group, E;};" +
 
         "store C into 'output';");
-        PhysicalPlan pp = Util.buildPp(pigServer, query);
-        MROperPlan mrPlan = Util.buildMRPlan(pp, pc);
+        SecondaryKeyOptimizer so = visitSecondaryKeyOptimizer(query);
 
-        SecondaryKeyOptimizer so = new SecondaryKeyOptimizer(mrPlan);
-        so.visit();
-
-        assertEquals(1, so.getNumMRUseSecondaryKey());
+        assertEquals(1, so.getNumUseSecondaryKey());
         assertEquals(1, so.getNumSortRemoved());
-        assertEquals(0, so.getDistinctChanged());
+        assertEquals(0, so.getNumDistinctChanged());
     }
 
     @Test
@@ -114,15 +111,11 @@ public class TestSecondarySort {
         "C = foreach B { D = limit A 10; E = order D by $0; generate group, E;};" +
 
         "store C into 'output';");
-        PhysicalPlan pp = Util.buildPp(pigServer, query);
-        MROperPlan mrPlan = Util.buildMRPlan(pp, pc);
+        SecondaryKeyOptimizer so = visitSecondaryKeyOptimizer(query);
 
-        SecondaryKeyOptimizer so = new SecondaryKeyOptimizer(mrPlan);
-        so.visit();
-
-        assertEquals(0, so.getNumMRUseSecondaryKey());
+        assertEquals(0, so.getNumUseSecondaryKey());
         assertEquals(1, so.getNumSortRemoved());
-        assertEquals(0, so.getDistinctChanged());
+        assertEquals(0, so.getNumDistinctChanged());
     }
 
     @Test
@@ -133,15 +126,11 @@ public class TestSecondarySort {
         "C = foreach B { D = limit A 10; E = order D by $1; F = order E by $0; generate group, F;};"+
 
         "store C into 'output';");
-        PhysicalPlan pp = Util.buildPp(pigServer, query);
-        MROperPlan mrPlan = Util.buildMRPlan(pp, pc);
+        SecondaryKeyOptimizer so = visitSecondaryKeyOptimizer(query);
 
-        SecondaryKeyOptimizer so = new SecondaryKeyOptimizer(mrPlan);
-        so.visit();
-
-        assertEquals(1, so.getNumMRUseSecondaryKey());
+        assertEquals(1, so.getNumUseSecondaryKey());
         assertEquals(2, so.getNumSortRemoved());
-        assertEquals(0, so.getDistinctChanged());
+        assertEquals(0, so.getNumDistinctChanged());
     }
 
     @Test
@@ -152,15 +141,11 @@ public class TestSecondarySort {
         "C = foreach B { D = limit A 10; E = order D by $0, $1, $2; generate group, E;};" +
 
         "store C into 'output';");
-        PhysicalPlan pp = Util.buildPp(pigServer, query);
-        MROperPlan mrPlan = Util.buildMRPlan(pp, pc);
 
-        SecondaryKeyOptimizer so = new SecondaryKeyOptimizer(mrPlan);
-        so.visit();
-
-        assertEquals(1, so.getNumMRUseSecondaryKey());
+        SecondaryKeyOptimizer so = visitSecondaryKeyOptimizer(query);
+        assertEquals(1, so.getNumUseSecondaryKey());
         assertEquals(1, so.getNumSortRemoved());
-        assertEquals(0, so.getDistinctChanged());
+        assertEquals(0, so.getNumDistinctChanged());
     }
 
     @Test
@@ -170,15 +155,11 @@ public class TestSecondarySort {
         "B = group A by $0;" +
         "C = foreach B { D = limit A 10; E = order D by $1; F = order E by $2; generate group, F;};" +
         "store C into 'output';");
-        PhysicalPlan pp = Util.buildPp(pigServer, query);
-        MROperPlan mrPlan = Util.buildMRPlan(pp, pc);
 
-        SecondaryKeyOptimizer so = new SecondaryKeyOptimizer(mrPlan);
-        so.visit();
-
-        assertEquals(1, so.getNumMRUseSecondaryKey());
+        SecondaryKeyOptimizer so = visitSecondaryKeyOptimizer(query);
+        assertEquals(1, so.getNumUseSecondaryKey());
         assertEquals(1, so.getNumSortRemoved());
-        assertEquals(0, so.getDistinctChanged());
+        assertEquals(0, so.getNumDistinctChanged());
     }
 
     @Test
@@ -189,15 +170,11 @@ public class TestSecondarySort {
         "C = foreach B { D = order A by $0 desc; generate group, D;};" +
 
         "store C into 'output';");
-        PhysicalPlan pp = Util.buildPp(pigServer, query);
-        MROperPlan mrPlan = Util.buildMRPlan(pp, pc);
 
-        SecondaryKeyOptimizer so = new SecondaryKeyOptimizer(mrPlan);
-        so.visit();
-
-        assertEquals(1, so.getNumMRUseSecondaryKey());
+        SecondaryKeyOptimizer so = visitSecondaryKeyOptimizer(query);
+        assertEquals(1, so.getNumUseSecondaryKey());
         assertEquals(1, so.getNumSortRemoved());
-        assertEquals(0, so.getDistinctChanged());
+        assertEquals(0, so.getNumDistinctChanged());
     }
 
     @Test
@@ -208,15 +185,11 @@ public class TestSecondarySort {
         "C = foreach B { D = order A by $0, $1 desc; generate group, D;};" +
 
         "store C into 'output';");
-        PhysicalPlan pp = Util.buildPp(pigServer, query);
-        MROperPlan mrPlan = Util.buildMRPlan(pp, pc);
 
-        SecondaryKeyOptimizer so = new SecondaryKeyOptimizer(mrPlan);
-        so.visit();
-
-        assertEquals(1, so.getNumMRUseSecondaryKey());
+        SecondaryKeyOptimizer so = visitSecondaryKeyOptimizer(query);
+        assertEquals(1, so.getNumUseSecondaryKey());
         assertEquals(1, so.getNumSortRemoved());
-        assertEquals(0, so.getDistinctChanged());
+        assertEquals(0, so.getNumDistinctChanged());
     }
 
     // See PIG-1193
@@ -228,15 +201,11 @@ public class TestSecondarySort {
         "C = foreach B { D = order A by $0 desc; generate DIFF(D, D);};" +
 
         "store C into 'output';");
-        PhysicalPlan pp = Util.buildPp(pigServer, query);
-        MROperPlan mrPlan = Util.buildMRPlan(pp, pc);
 
-        SecondaryKeyOptimizer so = new SecondaryKeyOptimizer(mrPlan);
-        so.visit();
-
-        assertEquals(1, so.getNumMRUseSecondaryKey());
+        SecondaryKeyOptimizer so = visitSecondaryKeyOptimizer(query);
+        assertEquals(1, so.getNumUseSecondaryKey());
         assertEquals(2, so.getNumSortRemoved());
-        assertEquals(0, so.getDistinctChanged());
+        assertEquals(0, so.getNumDistinctChanged());
     }
 
     @Test
@@ -380,10 +349,12 @@ public class TestSecondarySort {
         ps2.println("1\t4\t4");
         ps2.println("2\t3\t1");
         ps2.close();
-        Util.copyFromLocalToCluster(cluster, tmpFile1.getCanonicalPath(), tmpFile1.getCanonicalPath());
-        Util.copyFromLocalToCluster(cluster, tmpFile2.getCanonicalPath(), tmpFile2.getCanonicalPath());
-        pigServer.registerQuery("A = LOAD '" + Util.encodeEscape(tmpFile1.getCanonicalPath()) + "' AS (a0, a1, a2);");
-        pigServer.registerQuery("B = LOAD '" + Util.encodeEscape(tmpFile2.getCanonicalPath()) + "' AS (b0, b1, b2);");
+        String clusterPath1 = tmpFile1.getName();
+        String clusterPath2 = tmpFile2.getName();
+        Util.copyFromLocalToCluster(cluster, tmpFile1.getCanonicalPath(), clusterPath1);
+        Util.copyFromLocalToCluster(cluster, tmpFile2.getCanonicalPath(), clusterPath2);
+        pigServer.registerQuery("A = LOAD '" + clusterPath1 + "' AS (a0, a1, a2);");
+        pigServer.registerQuery("B = LOAD '" + clusterPath2 + "' AS (b0, b1, b2);");
         pigServer.registerQuery("C = cogroup A by (a0,a1), B by (b0,b1) parallel 2;");
         pigServer.registerQuery("D = ORDER C BY group;");
         pigServer.registerQuery("E = foreach D { F = limit A 10; G = ORDER F BY a2; generate group, COUNT(G);};");
@@ -397,31 +368,84 @@ public class TestSecondarySort {
         assertTrue(iter.hasNext());
         assertEquals("((2,3),1)", iter.next().toString());
         assertFalse(iter.hasNext());
-        Util.deleteFile(cluster, tmpFile1.getCanonicalPath());
-        Util.deleteFile(cluster, tmpFile2.getCanonicalPath());
+        Util.deleteFile(cluster, clusterPath1);
+        Util.deleteFile(cluster, clusterPath2);
     }
 
     @Test
     public void testNestedSortMultiQueryEndToEnd1() throws Exception {
-        pigServer.setBatchOn();
-        Util.copyFromLocalToCluster(cluster, "test/org/apache/pig/test/data/passwd",
-                "testNestedSortMultiQueryEndToEnd1-input.txt");
-        pigServer.registerQuery("a = load 'testNestedSortMultiQueryEndToEnd1-input.txt'"
-                + " using PigStorage(':') as (uname:chararray, passwd:chararray, uid:int, gid:int);");
-        pigServer.registerQuery("b = group a by uname parallel 2;");
-        pigServer.registerQuery("c = group a by gid parallel 2;");
-        pigServer.registerQuery("d = foreach b generate SUM(a.gid);");
-        pigServer.registerQuery("e = foreach c { f = order a by uid; generate group, f; };");
-        pigServer.registerQuery("store d into '/tmp/output1';");
-        pigServer.registerQuery("store e into '/tmp/output2';");
+        try {
+            pigServer.setBatchOn();
+            Util.copyFromLocalToCluster(cluster, "test/org/apache/pig/test/data/passwd",
+                    "testNestedSortMultiQueryEndToEnd1-input.txt");
+            pigServer.registerQuery("a = load 'testNestedSortMultiQueryEndToEnd1-input.txt'"
+                    + " using PigStorage(':') as (uname:chararray, passwd:chararray, uid:int, gid:int);");
+            pigServer.registerQuery("b = group a by uname parallel 2;");
+            pigServer.registerQuery("c = group a by gid parallel 2;");
+            pigServer.registerQuery("d = foreach b generate SUM(a.gid);");
+            pigServer.registerQuery("e = foreach c { f = order a by uid; generate group, f; };");
+            pigServer.registerQuery("store d into '/tmp/output1';");
+            pigServer.registerQuery("store e into '/tmp/output2';");
 
-        List<ExecJob> jobs = pigServer.executeBatch();
-        for (ExecJob job : jobs) {
-            assertEquals(ExecJob.JOB_STATUS.COMPLETED, job.getStatus());
+            List<ExecJob> jobs = pigServer.executeBatch();
+            for (ExecJob job : jobs) {
+                assertEquals(ExecJob.JOB_STATUS.COMPLETED, job.getStatus());
+            }
+        } finally {
+            FileLocalizer.delete("/tmp/output1", pigServer.getPigContext());
+            FileLocalizer.delete("/tmp/output2", pigServer.getPigContext());
+            Util.deleteFile(cluster, "testNestedSortMultiQueryEndToEnd1-input.txt");
         }
-        FileLocalizer.delete("/tmp/output1", pigServer.getPigContext());
-        FileLocalizer.delete("/tmp/output2", pigServer.getPigContext());
-        Util.deleteFile(cluster, "testNestedSortMultiQueryEndToEnd1-input.txt");
+    }
+
+    @Test
+    public void testNestedSortMultiQueryEndToEnd2() throws Exception {
+        File input = Util.createTempFileDelOnExit("test", "txt");
+        PrintStream ps1 = new PrintStream(new FileOutputStream(input));
+        ps1.println("2\t2\t4");
+        ps1.println("2\t3\t4");
+        ps1.println("1\t2\t3");
+        ps1.println("1\t3\t4");
+        ps1.println("1\t2\t4");
+        ps1.println("1\t2\t5");
+        ps1.close();
+        Util.copyFromLocalToCluster(cluster, input.getCanonicalPath(), "testNestedSortMultiQueryEndToEnd2-input.txt");
+
+        try {
+            pigServer.setBatchOn();
+            pigServer.registerQuery("a = load 'testNestedSortMultiQueryEndToEnd2-input.txt' as (a0, a1, a2);");
+            pigServer.registerQuery("b = group a by a0 parallel 2;");
+            pigServer.registerQuery("c = group a by a1 parallel 2;");
+            pigServer.registerQuery("d = foreach b generate group, SUM(a.a2);");
+            pigServer.registerQuery("e = foreach c { f = order a by a0,a2; generate group, f; };");
+            pigServer.registerQuery("store d into '/tmp/output1';");
+            pigServer.registerQuery("store e into '/tmp/output2';");
+
+            List<ExecJob> jobs = pigServer.executeBatch();
+            for (ExecJob job : jobs) {
+                assertTrue(job.getStatus() == ExecJob.JOB_STATUS.COMPLETED);
+            }
+            pigServer.registerQuery("D = load '/tmp/output1';");
+            pigServer.registerQuery("E = load '/tmp/output2';");
+            pigServer.executeBatch();
+
+            Iterator<Tuple> iter = pigServer.openIterator("D");
+            Schema s = pigServer.dumpSchema("D");
+            String[] expectedD = { "(1,16.0)", "(2,8.0)" };
+            Util.checkQueryOutputsAfterSortRecursive(iter, expectedD,
+                    org.apache.pig.newplan.logical.Util.translateSchema(s));
+
+            iter = pigServer.openIterator("E");
+            s = pigServer.dumpSchema("E");
+            String[] expectedE = { "(2,{(1,2,3),(1,2,4),(1,2,5),(2,2,4)})", "(3,{(1,3,4),(2,3,4)})" };
+            Util.checkQueryOutputsAfterSortRecursive(iter, expectedE,
+                    org.apache.pig.newplan.logical.Util.translateSchema(s));
+        } finally {
+            FileLocalizer.delete("/tmp/output1", pigServer.getPigContext());
+            FileLocalizer.delete("/tmp/output2", pigServer.getPigContext());
+            Util.deleteFile(cluster, "testNestedSortMultiQueryEndToEnd2-input.txt");
+        }
+
     }
 
     // See PIG-1978
@@ -453,7 +477,38 @@ public class TestSecondarySort {
 
         Util.checkQueryOutputsAfterSortRecursive(iter, expected, org.apache.pig.newplan.logical.Util.translateSchema(s));
 
-        Util.deleteFile(cluster, tmpFile1.getCanonicalPath());
+        Util.deleteFile(cluster, clusterFilePath);
+    }
+
+    @Test
+    // Once custom partitioner is used, we cannot use secondary key optimizer, see PIG-3827
+    public void testCustomPartitionerWithSort() throws Exception {
+        File tmpFile1 = Util.createTempFileDelOnExit("test", "txt");
+        PrintStream ps1 = new PrintStream(new FileOutputStream(tmpFile1));
+        ps1.println("1\t2\t3");
+        ps1.println("1\t3\t4");
+        ps1.println("1\t4\t4");
+        ps1.println("1\t2\t4");
+        ps1.println("1\t8\t4");
+        ps1.println("2\t3\t4");
+        ps1.close();
+
+        String clusterPath = Util.removeColon(tmpFile1.getCanonicalPath());
+
+        Util.copyFromLocalToCluster(cluster, tmpFile1.getCanonicalPath(), clusterPath);
+        pigServer.registerQuery("A = LOAD '" + Util.encodeEscape(clusterPath) + "' AS (a0, a1, a2);");
+        pigServer.registerQuery("B = group A by $0 PARTITION BY org.apache.pig.test.utils.WrongCustomPartitioner parallel 2;");
+        pigServer.registerQuery("C = foreach B { D = order A by a1 desc; generate group, D;};");
+        boolean captureException = false;
+        try {
+            pigServer.openIterator("C");
+        } catch (Exception e) {
+            captureException = true;
+        }
+
+        assertTrue(captureException);
+
+        Util.deleteFile(cluster, clusterPath);
     }
 }
 

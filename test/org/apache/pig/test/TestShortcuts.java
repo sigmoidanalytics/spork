@@ -1,3 +1,20 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.pig.test;
 
 import static org.apache.pig.builtin.mock.Storage.resetData;
@@ -57,7 +74,7 @@ public class TestShortcuts {
     }
 
     /**
-     * When no alias is passed, last alias should be explained
+     * When no alias is passed, entire script should be explained
      *
      * @throws Throwable
      */
@@ -74,11 +91,12 @@ public class TestShortcuts {
     }
 
     /**
-     * When no alias is defined earlier, exception is expected
+     * When no alias is defined earlier, empty output is expected. Note that
+     * ParseException is thrown in interactive mode.
      *
      * @throws Throwable
      */
-    @Test(expected = ParseException.class)
+    @Test
     public void testExplainShortcutNoAliasDefined() throws Throwable {
         String cmd = "\\e";
 
@@ -86,7 +104,7 @@ public class TestShortcuts {
         InputStreamReader reader = new InputStreamReader(cmdstream);
 
         Grunt grunt = new Grunt(new BufferedReader(reader), context);
-        grunt.exec();
+        grunt.exec(); // Interactive is set to false.
     }
 
     @Test

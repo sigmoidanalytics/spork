@@ -19,21 +19,26 @@ package org.apache.pig.builtin;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.math.BigDecimal;
 
+import org.joda.time.format.ISODateTimeFormat;
+import org.joda.time.format.DateTimeFormatter;
 import org.codehaus.jackson.JsonFactory;
+import org.codehaus.jackson.JsonParseException;
 import org.codehaus.jackson.JsonParser;
 import org.codehaus.jackson.JsonToken;
-
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
-
 import org.apache.pig.Expression;
 import org.apache.pig.LoadCaster;
 import org.apache.pig.LoadFunc;
@@ -43,14 +48,13 @@ import org.apache.pig.ResourceSchema;
 import org.apache.pig.ResourceSchema.ResourceFieldSchema;
 import org.apache.pig.ResourceStatistics;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigSplit;
-import org.apache.pig.backend.hadoop.executionengine.spark.BroadCastClient;
-import org.apache.pig.backend.hadoop.executionengine.spark.SparkLauncher;
 import org.apache.pig.data.BagFactory;
 import org.apache.pig.data.DataBag;
 import org.apache.pig.data.DataByteArray;
 import org.apache.pig.data.DataType;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.data.TupleFactory;
+import org.apache.pig.impl.util.JarManager;
 import org.apache.pig.impl.util.UDFContext;
 import org.apache.pig.impl.util.Utils;
 import org.apache.pig.parser.ParserException;
@@ -110,11 +114,7 @@ public class JsonLoader extends LoadFunc implements LoadMetadata {
             udfc.getUDFProperties(this.getClass(), new String[]{udfcSignature});
         String strSchema = p.getProperty(SCHEMA_SIGNATURE);
         if (strSchema == null) {
-            //throw new IOException("Could not find schema in UDF context");
-        	BroadCastClient bc = new BroadCastClient(System.getenv("BROADCAST_MASTER_IP"), Integer.parseInt(System.getenv("BROADCAST_PORT")));
-        	p = (Properties) bc.getBroadCastMessage("json_schema");
-        	p = (Properties) bc.getBroadCastMessage("json_schema");
-            strSchema = p.getProperty(SCHEMA_SIGNATURE);
+            throw new IOException("Could not find schema in UDF context");
         }
 
         // Parse the schema from the string stored in the properties object.
@@ -152,23 +152,31 @@ public class JsonLoader extends LoadFunc implements LoadMetadata {
         // isn't what we expect we return a tuple with null fields rather than
         // throwing an exception.  That way a few mangled lines don't fail the
         // job.
-        if (p.nextToken() != JsonToken.START_OBJECT) {
-            warn("Bad record, could not find start of record " +
-                val.toString(), PigWarning.UDF_WARNING_1);
-            return t;
+        
+        try {
+            if (p.nextToken() != JsonToken.START_OBJECT) {
+                warn("Bad record, could not find start of record " +
+                    val.toString(), PigWarning.UDF_WARNING_1);
+                return t;
+            }
+    
+            // Read each field in the record
+            for (int i = 0; i < fields.length; i++) {
+                t.set(i, readField(p, fields[i], i));
+            }
+    
+            if (p.nextToken() != JsonToken.END_OBJECT) {
+                warn("Bad record, could not find end of record " +
+                    val.toString(), PigWarning.UDF_WARNING_1);
+                return t;
+            }
+            
+        } catch (JsonParseException jpe) {
+            warn("Bad record, returning null for " + val, PigWarning.UDF_WARNING_1);
+        } finally {
+            p.close();
         }
-
-        // Read each field in the record
-        for (int i = 0; i < fields.length; i++) {
-            t.set(i, readField(p, fields[i], i));
-        }
-
-        if (p.nextToken() != JsonToken.END_OBJECT) {
-            warn("Bad record, could not find end of record " +
-                val.toString(), PigWarning.UDF_WARNING_1);
-            return t;
-        }
-        p.close();
+        
         return t;
     }
 
@@ -188,6 +196,11 @@ public class JsonLoader extends LoadFunc implements LoadMetadata {
 
         // Read based on our expected type
         switch (field.getType()) {
+        case DataType.BOOLEAN:
+            tok = p.nextToken();
+            if (tok == JsonToken.VALUE_NULL) return null;
+            return p.getBooleanValue();
+
         case DataType.INTEGER:
             // Read the field name
             tok = p.nextToken();
@@ -201,12 +214,19 @@ public class JsonLoader extends LoadFunc implements LoadMetadata {
 
         case DataType.FLOAT:
             tok = p.nextToken();
+            if (tok == JsonToken.VALUE_NULL) return null;
             return p.getFloatValue();
 
         case DataType.DOUBLE:
             tok = p.nextToken();
             if (tok == JsonToken.VALUE_NULL) return null;
             return p.getDoubleValue();
+
+        case DataType.DATETIME:
+            tok = p.nextToken();
+            if (tok == JsonToken.VALUE_NULL) return null;
+            DateTimeFormatter formatter = ISODateTimeFormat.dateTimeParser();
+            return formatter.withOffsetParsed().parseDateTime(p.getText());
 
         case DataType.BYTEARRAY:
             tok = p.nextToken();
@@ -220,6 +240,16 @@ public class JsonLoader extends LoadFunc implements LoadMetadata {
             tok = p.nextToken();
             if (tok == JsonToken.VALUE_NULL) return null;
             return p.getText();
+
+        case DataType.BIGINTEGER:
+            tok = p.nextToken();
+            if (tok == JsonToken.VALUE_NULL) return null;
+            return p.getBigIntegerValue();
+
+        case DataType.BIGDECIMAL:
+            tok = p.nextToken();
+            if (tok == JsonToken.VALUE_NULL) return null;
+            return new BigDecimal(p.getText());
 
         case DataType.MAP:
             // Should be a start of the map object
@@ -330,16 +360,6 @@ public class JsonLoader extends LoadFunc implements LoadMetadata {
             udfc.getUDFProperties(this.getClass(), new String[]{udfcSignature});
         p.setProperty(SCHEMA_SIGNATURE, s.toString());
 
-        try{
-        	
-        	if(SparkLauncher.bcaster != null){
-        		SparkLauncher.bcaster.addResource("json_schema","json_schema", p);
-        	}
-        	
-        }catch(Exception e){
-        	e.printStackTrace();
-        }
-        
         return s;
     }
 
@@ -358,5 +378,12 @@ public class JsonLoader extends LoadFunc implements LoadMetadata {
     public void setPartitionFilter(Expression partitionFilter)
     throws IOException {
         // We don't have partitions
+    }
+
+    @Override
+    public List<String> getShipFiles() {
+        List<String> cacheFiles = new ArrayList<String>();
+        Class[] classList = new Class[] {JsonFactory.class};
+        return FuncUtils.getShipFiles(classList);
     }
 }

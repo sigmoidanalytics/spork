@@ -85,9 +85,13 @@ query : ^( QUERY statement* )
 statement : general_statement
           | split_statement
           | realias_statement
+          | assert_statement
 ;
 
 split_statement : split_clause
+;
+
+assert_statement: assert_clause
 ;
 
 realias_statement : realias_clause
@@ -132,6 +136,7 @@ op_clause : define_clause
           | split_clause
           | foreach_clause
           | cube_clause
+          | assert_clause
 ;
 
 define_clause
@@ -222,7 +227,7 @@ bag_type
     : ^( BAG_TYPE IDENTIFIER? tuple_type? )
 ;
 
-map_type : ^( MAP_TYPE type? )
+map_type : ^( MAP_TYPE IDENTIFIER? type? )
 ;
 
 func_clause
@@ -299,6 +304,13 @@ store_clause
     : ^( STORE alias filename func_clause? )
 ;
 
+assert_clause
+    : ^( ASSERT alias cond comment? )
+;
+
+comment : QUOTEDSTRING
+;
+
 filter_clause
     : ^( FILTER rel cond )
 ;
@@ -315,7 +327,7 @@ cond
 ;
 
 in_eval
-    : ^( IN expr expr+ )
+    : ^( IN ( ^( IN_LHS expr ) ^( IN_RHS expr ) )+ )
 ;
 
 func_eval
@@ -357,7 +369,7 @@ var_expr
 ;
 
 projectable_expr
-    : func_eval | col_ref | bin_expr | case_expr
+    : func_eval | col_ref | bin_expr | case_expr | case_cond
 ;
 
 dot_proj
@@ -389,7 +401,11 @@ bin_expr
 ;
 
 case_expr
-    : ^( CASE expr+ )
+    : ^( CASE_EXPR ( ^( CASE_EXPR_LHS expr ) ( ^( CASE_EXPR_RHS expr) )+ )+ )
+;
+
+case_cond
+    : ^( CASE_COND ^( WHEN cond+ ) ^( THEN expr+ ) )
 ;
 
 limit_clause
@@ -691,6 +707,7 @@ eid : rel_str_op
     | TOBAG
     | TOMAP
     | TOTUPLE
+    | ASSERT
 ;
 
 // relational operator

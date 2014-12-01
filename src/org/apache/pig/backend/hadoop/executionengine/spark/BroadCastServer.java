@@ -8,120 +8,79 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Stack;
-import java.util.Iterator;
 
 /* TCPServer thread to serve missed Objects */
 
-public class BroadCastServer extends Thread{
+public class BroadCastServer extends Thread {
 
-	private ServerSocket serverSocket;
-	private static Map<Object, Object> storage = null;
+    private ServerSocket serverSocket;
+    private static Map<Object, Object> storage = null;
 
-	private static Stack<Object> stack;
+    int port;
 
-	int port;
+    public BroadCastServer() {
+    }
 
-	public BroadCastServer(){}
+    public BroadCastServer(int port) throws IOException {
 
-	public BroadCastServer(int port) throws IOException{
+        this.port = port;
+        serverSocket = new ServerSocket(port);
 
-		this.port = port;	
-		serverSocket = new ServerSocket(port);
+    }
 
-	}
+    public void run() {
+        while (true) {
+            try {
 
-	public void run(){
-		while(true){
-			try{
+                System.out.println("Waiting for client on port "
+                        + serverSocket.getLocalPort() + "...");
 
-				System.out.println("Waiting for client on port " +
-						serverSocket.getLocalPort() + "...");
+                Socket server = serverSocket.accept();
+                System.out.println("Just connected to "
+                        + server.getRemoteSocketAddress());
+                DataInputStream in = new DataInputStream(
+                        server.getInputStream());
+                String request = in.readUTF();
+                System.out.println("Executor asking for :" + request);
+                ObjectOutputStream out = new ObjectOutputStream(
+                        server.getOutputStream());
 
-				Socket server = serverSocket.accept();
-				System.out.println("Just connected to "
-						+ server.getRemoteSocketAddress());
-				DataInputStream in =
-						new DataInputStream(server.getInputStream());
-				String request = in.readUTF();
-				System.out.println("Executor asking for :" + request);
-				ObjectOutputStream out =
-						new ObjectOutputStream(server.getOutputStream());
+                if (storage.get(request) != null) {
 
-				
-				if(request.equalsIgnoreCase("json_schema")){
-					
-					try{
-						Object schema = stack.pop();
-						System.out.println("Sending Json_Schema :" + schema);							
-						out.writeObject(schema);
-					}catch(Exception e){ 
-						//e.printStackTrace();
-						out.writeObject(storage.get(request));
-					}
-					
-				}else{
-					
-					if(storage.get(request) != null){
-						out.writeObject(storage.get(request));						
+                    out.writeObject(storage.get(request));
 
-					}else{
+                } else {
 
-						out.writeObject(null);
-					}
-				}
-				
-				server.close();
+                    out.writeUTF("Requested resource not available!!");
 
-			}catch(Exception s){				
-				s.printStackTrace();
-				break;
-			}
-		}
-	}
+                }
 
-	public void startBroadcastServer(int port){
+                server.close();
 
-		try{	
+            } catch (Exception s) {
+                s.printStackTrace();
+                break;
+            }
+        }
+    }
 
-			storage = new HashMap<Object, Object>();
-			stack = new Stack<Object>();
+    public void startBroadcastServer(int port) {
 
-			Thread t = new BroadCastServer(port);
-			t.start();
+        try {
 
-		}catch(Exception e){
-			e.printStackTrace();
-		}
-	}
+            storage = new HashMap<Object, Object>();
+            Thread t = new BroadCastServer(port);
+            t.start();
 
-	public void addResource(String reference, Object resource){
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 
-		storage.put(reference, resource);
+    public void addResource(String reference, Object resource) {
 
-	}
+        storage.put(reference, resource);
 
-	public void addResource(String schema, String reference, Object resource){
-
-		if(schema.equalsIgnoreCase("json_schema")){
-			
-			Stack<Object> tmp_stack = stack;
-			
-			Iterator<Object> iterator = tmp_stack.iterator();
-			boolean found = false;
-			
-			while(iterator.hasNext()){
-				if(iterator.next().equals(resource)){
-					found = true;
-				}
-			}
-			if(!found){
-				stack.push((Object) resource);
-				storage.put(reference, resource);
-			}
-			
-		}
-
-	}
+    }
 
 }

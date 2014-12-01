@@ -32,41 +32,47 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
-import junit.framework.Assert;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.Counters;
 import org.apache.pig.ExecType;
+import org.apache.pig.PigConfiguration;
 import org.apache.pig.PigRunner;
 import org.apache.pig.PigRunner.ReturnCode;
 import org.apache.pig.backend.hadoop.datastorage.ConfigurationUtil;
-import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.MROperPlan;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRConfiguration;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.io.FileLocalizer;
+import org.apache.pig.impl.plan.OperatorPlan;
 import org.apache.pig.newplan.Operator;
+import org.apache.pig.tools.pigstats.EmptyPigStats;
 import org.apache.pig.tools.pigstats.InputStats;
 import org.apache.pig.tools.pigstats.JobStats;
 import org.apache.pig.tools.pigstats.OutputStats;
 import org.apache.pig.tools.pigstats.PigProgressNotificationListener;
 import org.apache.pig.tools.pigstats.PigStats;
 import org.apache.pig.tools.pigstats.PigStatsUtil;
+import org.apache.pig.tools.pigstats.mapreduce.MRJobStats;
+import org.apache.pig.tools.pigstats.mapreduce.MRPigStatsUtil;
 import org.junit.AfterClass;
+import org.junit.Assume;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
 public class TestPigRunner {
-    
-    private static MiniCluster cluster; 
-    
+
+    private static MiniGenericCluster cluster;
+    private static String execType;
+
     private static final String INPUT_FILE = "input";
     private static final String OUTPUT_FILE = "output";
     private static final String PIG_FILE = "test.pig";
 
     @BeforeClass
     public static void setUpBeforeClass() throws Exception {
-        cluster = MiniCluster.buildCluster();
+        cluster = MiniGenericCluster.buildCluster();
+        execType = cluster.getExecType().name().toLowerCase();
         PrintWriter w = new PrintWriter(new FileWriter(INPUT_FILE));
         w.println("1\t2\t3");
         w.println("5\t3\t4");
@@ -81,13 +87,14 @@ public class TestPigRunner {
     public static void tearDownAfterClass() throws Exception {
         new File(INPUT_FILE).delete();
         cluster.shutDown();
-    }    
+    }
 
     @Before
     public void setUp() {
         deleteAll(new File(OUTPUT_FILE));
-    }    
-    
+        Util.resetStateForExecModeSwitch();
+    }
+
     @Test
     public void testErrorLogFile() throws Exception {
         PrintWriter w = new PrintWriter(new FileWriter(PIG_FILE));
@@ -95,22 +102,22 @@ public class TestPigRunner {
         w.println("B = foreach A generate StringSize(a0);");
         w.println("store B into '" + OUTPUT_FILE + "';");
         w.close();
-        
+
         try {
             String[] args = { "-x", "local", PIG_FILE };
             PigStats stats = PigRunner.run(args, null);
-     
+
             assertTrue(!stats.isSuccessful());
- 
+
             Properties props = stats.getPigProperties();
             String logfile = props.getProperty("pig.logfile");
             File f = new File(logfile);
-            assertTrue(f.exists());            
+            assertTrue(f.exists());
         } finally {
-            new File(PIG_FILE).delete(); 
+            new File(PIG_FILE).delete();
         }
     }
-    
+
     @Test
     public void testErrorLogFile2() throws Exception {
         PrintWriter w = new PrintWriter(new FileWriter(PIG_FILE));
@@ -118,29 +125,29 @@ public class TestPigRunner {
         w.println("B = foreach A generate StringSize(a0);");
         w.println("store B into '" + OUTPUT_FILE + "';");
         w.close();
-        
+
         try {
             String[] args = { "-M", "-x", "local", PIG_FILE };
             PigStats stats = PigRunner.run(args, null);
-     
+
             assertTrue(!stats.isSuccessful());
- 
+
             Properties props = stats.getPigProperties();
-            // If test on nfs, the pig script complaining "output" exists 
+            // If test on nfs, the pig script complaining "output" exists
             // and does not actually launch the job. This could due to a mapreduce
-            // bug which removing file before closing it. 
+            // bug which removing file before closing it.
             // If this happens, props is null because we only set pigContext before
             // launching job.
             if (props!=null) {
                 String logfile = props.getProperty("pig.logfile");
                 File f = new File(logfile);
-                assertTrue(f.exists());          
+                assertTrue(f.exists());
             }
         } finally {
             new File(PIG_FILE).delete();
         }
     }
-    
+
     @Test
     public void simpleTest() throws Exception {
         PrintWriter w = new PrintWriter(new FileWriter(PIG_FILE));
@@ -149,32 +156,62 @@ public class TestPigRunner {
         w.println("C = foreach B generate group, COUNT(A);");
         w.println("store C into '" + OUTPUT_FILE + "';");
         w.close();
-        
+
         try {
-            String[] args = { "-Dstop.on.failure=true", "-Dopt.multiquery=false", "-Daggregate.warning=false", PIG_FILE };
-            PigStats stats = PigRunner.run(args, new TestNotificationListener());
-     
+            String[] args = { "-Dstop.on.failure=true", "-Dopt.multiquery=false", "-Dopt.fetch=false", "-Daggregate.warning=false", "-x", execType, PIG_FILE };
+            PigStats stats = PigRunner.run(args, new TestNotificationListener(execType));
+
             assertTrue(stats.isSuccessful());
-            
+
             assertEquals(1, stats.getNumberJobs());
             String name = stats.getOutputNames().get(0);
             assertEquals(OUTPUT_FILE, name);
             assertEquals(12, stats.getBytesWritten());
-            assertEquals(3, stats.getRecordWritten());       
-            
+            assertEquals(3, stats.getRecordWritten());
+
             assertEquals("A,B,C",
                     ((JobStats)stats.getJobGraph().getSinks().get(0)).getAlias());
-            
+
             Configuration conf = ConfigurationUtil.toConfiguration(stats.getPigProperties());
-            assertTrue(conf.getBoolean("stop.on.failure", false));           
+            assertTrue(conf.getBoolean("stop.on.failure", false));
             assertTrue(!conf.getBoolean("aggregate.warning", true));
-            assertTrue(!conf.getBoolean("opt.multiquery", true));
+            assertTrue(!conf.getBoolean(PigConfiguration.PIG_OPT_MULTIQUERY, true));
+            assertTrue(!conf.getBoolean("opt.fetch", true));
         } finally {
             new File(PIG_FILE).delete();
             Util.deleteFile(cluster, OUTPUT_FILE);
         }
     }
-    
+
+    @Test
+    public void simpleTest2() throws Exception {
+        PrintWriter w = new PrintWriter(new FileWriter(PIG_FILE));
+        w.println("A = load '" + INPUT_FILE + "' as (a0:int, a1:int, a2:int);");
+        w.println("B = filter A by a0 == 3;");
+        w.println("C = limit B 1;");
+        w.println("dump C;");
+        w.close();
+
+        try {
+            String[] args = { "-Dstop.on.failure=true", "-Dopt.multiquery=false", "-Daggregate.warning=false", "-x", execType, PIG_FILE };
+            PigStats stats = PigRunner.run(args, new TestNotificationListener(execType));
+
+            assertTrue(stats instanceof EmptyPigStats);
+            assertTrue(stats.isSuccessful());
+            assertEquals(0, stats.getNumberJobs());
+            assertEquals(stats.getJobGraph().size(), 0);
+
+            Configuration conf = ConfigurationUtil.toConfiguration(stats.getPigProperties());
+            assertTrue(conf.getBoolean("stop.on.failure", false));
+            assertTrue(!conf.getBoolean("aggregate.warning", true));
+            assertTrue(!conf.getBoolean(PigConfiguration.PIG_OPT_MULTIQUERY, true));
+            assertTrue(conf.getBoolean("opt.fetch", true));
+        } finally {
+            new File(PIG_FILE).delete();
+            Util.deleteFile(cluster, OUTPUT_FILE);
+        }
+    }
+
     @Test
     public void scriptsInDfsTest() throws Exception {
         PrintWriter w = new PrintWriter(new FileWriter(PIG_FILE));
@@ -185,19 +222,19 @@ public class TestPigRunner {
         w.close();
         Util.copyFromLocalToCluster(cluster, PIG_FILE, PIG_FILE);
         Path inputInDfs = new Path(cluster.getFileSystem().getHomeDirectory(), PIG_FILE);
-        
+
         try {
-            String[] args = { inputInDfs.toString() };
-            PigStats stats = PigRunner.run(args, new TestNotificationListener());
-     
+            String[] args = { "-x", execType, inputInDfs.toString() };
+            PigStats stats = PigRunner.run(args, new TestNotificationListener(execType));
+
             assertTrue(stats.isSuccessful());
-            
+
             assertTrue(stats.getJobGraph().size() == 1);
             String name = stats.getOutputNames().get(0);
             assertEquals(OUTPUT_FILE, name);
             assertEquals(12, stats.getBytesWritten());
-            assertEquals(3, stats.getRecordWritten());       
-            
+            assertEquals(3, stats.getRecordWritten());
+
             assertEquals("A,B,C",
                     ((JobStats)stats.getJobGraph().getSinks().get(0)).getAlias());
         } finally {
@@ -206,7 +243,7 @@ public class TestPigRunner {
             Util.deleteFile(cluster, OUTPUT_FILE);
         }
     }
-    
+
     @Test
     public void orderByTest() throws Exception {
         PrintWriter w = new PrintWriter(new FileWriter(PIG_FILE));
@@ -215,11 +252,17 @@ public class TestPigRunner {
         w.println("C = limit B 2;");
         w.println("store C into '" + OUTPUT_FILE + "';");
         w.close();
-        String[] args = { PIG_FILE };
+        String[] args = { "-x", execType, PIG_FILE };
         try {
-            PigStats stats = PigRunner.run(args, new TestNotificationListener());
+            PigStats stats = PigRunner.run(args, new TestNotificationListener(execType));
             assertTrue(stats.isSuccessful());
-            assertTrue(stats.getJobGraph().size() == 4);
+            if (execType.equals("tez")) {
+                assertEquals(stats.getJobGraph().size(), 1);
+                // 5 vertices
+                assertEquals(stats.getJobGraph().getSources().get(0).getPlan().size(), 5);
+            } else {
+                assertEquals(stats.getJobGraph().size(), 4);
+            }
             assertTrue(stats.getJobGraph().getSinks().size() == 1);
             assertTrue(stats.getJobGraph().getSources().size() == 1);
             JobStats js = (JobStats) stats.getJobGraph().getSinks().get(0);
@@ -229,22 +272,31 @@ public class TestPigRunner {
             assertEquals(OUTPUT_FILE, stats.getOutputNames().get(0));
             assertEquals(2, stats.getRecordWritten());
             assertEquals(12, stats.getBytesWritten());
-            
-            assertEquals("A", ((JobStats) stats.getJobGraph().getSources().get(
-                    0)).getAlias());
-            assertEquals("B", ((JobStats) stats.getJobGraph().getPredecessors(
-                    js).get(0)).getAlias());
-            assertEquals("B", js.getAlias()); 
+
+            if (execType.equals("tez")) {
+                assertEquals("A,B", ((JobStats) stats.getJobGraph().getSources().get(
+                        0)).getAlias());
+                // TODO: alias is not set for sample-aggregation/partition/sort job.
+                //       Need to investigate
+                // assertEquals("B", ((JobStats) stats.getJobGraph().getPredecessors(
+                //        js).get(0)).getAlias());
+            } else {
+                assertEquals("A", ((JobStats) stats.getJobGraph().getSources().get(
+                        0)).getAlias());
+                assertEquals("B", ((JobStats) stats.getJobGraph().getPredecessors(
+                        js).get(0)).getAlias());
+                assertEquals("B", js.getAlias());
+            }
         } finally {
             new File(PIG_FILE).delete();
             Util.deleteFile(cluster, OUTPUT_FILE);
         }
     }
-    
+
     @Test
     public void simpleMultiQueryTest() throws Exception {
         final String OUTPUT_FILE_2 = "output2";
-        
+
         PrintWriter w = new PrintWriter(new FileWriter(PIG_FILE));
         w.println("A = load '" + INPUT_FILE + "' as (a0:int, a1:int, a2:int);");
         w.println("B = filter A by a0 >= 4;");
@@ -252,10 +304,10 @@ public class TestPigRunner {
         w.println("store B into '" + OUTPUT_FILE_2 + "';");
         w.println("store C into '" + OUTPUT_FILE + "';");
         w.close();
-        
+
         try {
-            String[] args = { PIG_FILE };
-            PigStats stats = PigRunner.run(args, new TestNotificationListener());
+            String[] args = { "-x", execType, PIG_FILE };
+            PigStats stats = PigRunner.run(args, new TestNotificationListener(execType));
             assertTrue(stats.isSuccessful());
             assertTrue(stats.getJobGraph().size() == 1);
             // Each output file should include the following:
@@ -277,8 +329,8 @@ public class TestPigRunner {
                     assertEquals(3, stats.getNumberRecords(fname));
                 } else {
                     assertEquals(2, stats.getNumberRecords(fname));
-                }                
-            }            
+                }
+            }
             assertEquals("A,B,C",
                     ((JobStats)stats.getJobGraph().getSinks().get(0)).getAlias());
         } finally {
@@ -287,11 +339,11 @@ public class TestPigRunner {
             Util.deleteFile(cluster, OUTPUT_FILE_2);
         }
     }
-    
+
     @Test
     public void simpleMultiQueryTest2() throws Exception {
         final String OUTPUT_FILE_2 = "output2";
-        
+
         PrintWriter w = new PrintWriter(new FileWriter(PIG_FILE));
         w.println("A = load '" + INPUT_FILE + "' as (a0:int, a1:int, a2:int);");
         w.println("B = filter A by a0 >= 4;");
@@ -301,12 +353,13 @@ public class TestPigRunner {
         w.println("store B into '" + OUTPUT_FILE_2 + "';");
         w.println("store E into '" + OUTPUT_FILE + "';");
         w.close();
-        
+
         try {
-            String[] args = { PIG_FILE };
-            PigStats stats = PigRunner.run(args, new TestNotificationListener());
+            String[] args = { "-x", execType, PIG_FILE };
+            PigStats stats = PigRunner.run(args, new TestNotificationListener(execType));
             assertTrue(stats.isSuccessful());
-            assertTrue(stats.getJobGraph().size() == 1);
+            assertEquals(stats.getJobGraph().size(), 1);
+
             // Each output file should include the following:
             // output:
             //   5\t3\t4\n
@@ -322,14 +375,14 @@ public class TestPigRunner {
             assertEquals((numOfRecords1 * numOfCharsPerRecord1) + (numOfRecords2 * numOfCharsPerRecord2),
                     stats.getBytesWritten());
             assertTrue(stats.getOutputNames().size() == 2);
-            for (String fname : stats.getOutputNames()) {               
+            for (String fname : stats.getOutputNames()) {
                 assertTrue(fname.equals(OUTPUT_FILE) || fname.equals(OUTPUT_FILE_2));
                 if (fname.equals(OUTPUT_FILE)) {
                     assertEquals(2, stats.getNumberRecords(fname));
                 } else {
                     assertEquals(2, stats.getNumberRecords(fname));
-                }                
-            }           
+                }
+            }
             assertEquals("A,B,C,D,E",
                     ((JobStats)stats.getJobGraph().getSinks().get(0)).getAlias());
         } finally {
@@ -350,15 +403,19 @@ public class TestPigRunner {
         w.println("store C into '" + OUTPUT_FILE + "';");
         w.close();
         try {
-            String[] args = { PIG_FILE };
+            String[] args = { "-x", execType, PIG_FILE };
             PigStats stats = PigRunner.run(args, null);
             Iterator<JobStats> iter = stats.getJobGraph().iterator();
             while (iter.hasNext()) {
                  JobStats js=iter.next();
-                 if(js.getState().name().equals("FAILED")) {
-                     List<Operator> ops=stats.getJobGraph().getSuccessors(js);
-                     for(Operator op : ops ) {
-                         assertEquals(((JobStats)op).getState().toString(), "UNKNOWN");
+                 if (execType.equals("tez")) {
+                     assertEquals(js.getState().name(), "FAILED");
+                 } else {
+                     if(js.getState().name().equals("FAILED")) {
+                         List<Operator> ops=stats.getJobGraph().getSuccessors(js);
+                         for(Operator op : ops ) {
+                             assertEquals(((JobStats)op).getState().toString(), "UNKNOWN");
+                         }
                      }
                  }
             }
@@ -377,34 +434,35 @@ public class TestPigRunner {
         w.println("C = foreach B generate group, COUNT(A);");
         w.println("store C into '" + OUTPUT_FILE + "';");
         w.close();
-        String[] args = { "-c", PIG_FILE };
+        String[] args = { "-x", execType, "-c", PIG_FILE };
         PigStats stats = PigRunner.run(args, null);
         assertTrue(stats.getReturnCode() == ReturnCode.PIG_EXCEPTION);
         // TODO: error message has changed. Need to catch the new message generated from the
         // new parser.
 //        assertTrue(stats.getErrorCode() == 1000);
-//        assertEquals("Error during parsing. Invalid alias: a in {a0: int,a1: int,a2: int}", 
+//        assertEquals("Error during parsing. Invalid alias: a in {a0: int,a1: int,a2: int}",
 //                stats.getErrorMessage());
     }
-    
+
     @Test
     public void simpleNegativeTest2() throws Exception {
-        String[] args = { "-c", "-e", "this is a test" };
-        PigStats stats = PigRunner.run(args, new TestNotificationListener());        
+        String[] args = { "-x", execType, "-c", "-e", "this is a test" };
+        PigStats stats = PigRunner.run(args, new TestNotificationListener(execType));
         assertTrue(stats.getReturnCode() == ReturnCode.ILLEGAL_ARGS);
     }
 
     @Test
     public void simpleNegativeTest3() throws Exception {
-        String[] args = { "-c", "-y" };
-        PigStats stats = PigRunner.run(args, new TestNotificationListener());     
+        String[] args = { "-x", execType, "-c", "-y" };
+        PigStats stats = PigRunner.run(args, new TestNotificationListener(execType));
         assertTrue(stats.getReturnCode() == ReturnCode.PARSE_EXCEPTION);
-        assertEquals("Found unknown option (-y) at position 2", 
+        assertEquals("Found unknown option (-y) at position 4",
                 stats.getErrorMessage());
     }
-     
+
     @Test
-    public void NagetiveTest() throws Exception {
+    public void streamNegativeTest() throws Exception {
+        Assume.assumeTrue("Skip this test for TEZ temporarily as it hangs", Util.isMapredExecType(cluster.getExecType()));
         final String OUTPUT_FILE_2 = "output2";
         PrintWriter w = new PrintWriter(new FileWriter(PIG_FILE));
         w.println("A = load '" + INPUT_FILE + "' as (a0:int, a1:int, a2:int);");
@@ -415,24 +473,35 @@ public class TestPigRunner {
         w.println("D = load '" + OUTPUT_FILE_2 + "';");
         w.println("E = stream D through `false`;");
         w.println("store E into 'ee';");
-        w.close(); 
-        
+        w.close();
+
         try {
-            String[] args = { PIG_FILE };
-            PigStats stats = PigRunner.run(args, null);             
-            assertTrue(!stats.isSuccessful());            
-            assertTrue(stats.getReturnCode() == ReturnCode.PARTIAL_FAILURE);
-            assertTrue(stats.getJobGraph().size() == 2);
-            JobStats job = (JobStats)stats.getJobGraph().getSources().get(0);
-            assertTrue(job.isSuccessful());
-            job = (JobStats)stats.getJobGraph().getSinks().get(0);
-            assertTrue(!job.isSuccessful());
-            assertTrue(stats.getOutputStats().size() == 3);
-            for (OutputStats output : stats.getOutputStats()) {
-                if (output.getName().equals("ee")) {
+            String[] args = { "-x", execType, PIG_FILE };
+            PigStats stats = PigRunner.run(args, null);
+            assertTrue(!stats.isSuccessful());
+            if (execType.equals("tez")) {
+                assertTrue(stats.getReturnCode() == ReturnCode.FAILURE);
+                assertTrue(stats.getJobGraph().size() == 1);
+                JobStats job = (JobStats)stats.getJobGraph().getSinks().get(0);
+                assertTrue(!job.isSuccessful());
+                assertTrue(stats.getOutputStats().size() == 3);
+                for (OutputStats output : stats.getOutputStats()) {
                     assertTrue(!output.isSuccessful());
-                } else {
-                    assertTrue(output.isSuccessful());
+                }
+            } else {
+                assertTrue(stats.getReturnCode() == ReturnCode.PARTIAL_FAILURE);
+                assertTrue(stats.getJobGraph().size() == 2);
+                JobStats job = (JobStats)stats.getJobGraph().getSources().get(0);
+                assertTrue(job.isSuccessful());
+                job = (JobStats)stats.getJobGraph().getSinks().get(0);
+                assertTrue(!job.isSuccessful());
+                assertTrue(stats.getOutputStats().size() == 3);
+                for (OutputStats output : stats.getOutputStats()) {
+                    if (output.getName().equals("ee")) {
+                        assertTrue(!output.isSuccessful());
+                    } else {
+                        assertTrue(output.isSuccessful());
+                    }
                 }
             }
         } finally {
@@ -441,7 +510,7 @@ public class TestPigRunner {
             Util.deleteFile(cluster, OUTPUT_FILE_2);
         }
     }
-    
+
     @Test
     public void testIsTempFile() throws Exception {
         PigContext context = new PigContext(ExecType.LOCAL, new Properties());
@@ -451,20 +520,20 @@ public class TestPigRunner {
             assertTrue("not a temp file: " + file, PigStatsUtil.isTempFile(file));
         }
     }
-    
+
     @Test
     public void testCounterName() throws Exception {
         String s = "jdbc:hsqldb:file:/tmp/batchtest;hsqldb.default_table_type=cached;hsqldb.cache_rows=100";
-        String name = PigStatsUtil.getMultiInputsCounterName(s, 0);
-        assertEquals(PigStatsUtil.MULTI_INPUTS_RECORD_COUNTER + "_0_batchtest", name);
+        String name = MRPigStatsUtil.getMultiInputsCounterName(s, 0);
+        assertEquals(MRPigStatsUtil.MULTI_INPUTS_RECORD_COUNTER + "_0_batchtest", name);
         s = "file:///tmp/batchtest{1,2}.txt";
-        name = PigStatsUtil.getMultiInputsCounterName(s, 1);
-        assertEquals(PigStatsUtil.MULTI_INPUTS_RECORD_COUNTER + "_1_batchtest{1,2}.txt", name);
+        name = MRPigStatsUtil.getMultiInputsCounterName(s, 1);
+        assertEquals(MRPigStatsUtil.MULTI_INPUTS_RECORD_COUNTER + "_1_batchtest{1,2}.txt", name);
         s = "file:///tmp/batchtest*.txt";
-        name = PigStatsUtil.getMultiInputsCounterName(s, 2);
-        assertEquals(PigStatsUtil.MULTI_INPUTS_RECORD_COUNTER + "_2_batchtest*.txt", name);
+        name = MRPigStatsUtil.getMultiInputsCounterName(s, 2);
+        assertEquals(MRPigStatsUtil.MULTI_INPUTS_RECORD_COUNTER + "_2_batchtest*.txt", name);
     }
-    
+
     @Test
     public void testLongCounterName() throws Exception {
         // Pig now restricts the string size of its counter name to less than 64 characters.
@@ -477,20 +546,20 @@ public class TestPigRunner {
         w.close();
         String longfilename = "longlonglonglonglonglonglonglonglonglonglonglongfilefilefilename";
         Util.copyFromLocalToCluster(cluster, "myinputfile", longfilename);
-        
+
         PrintWriter w1 = new PrintWriter(new FileWriter(PIG_FILE));
         w1.println("A = load '" + INPUT_FILE + "' as (a0:int, a1:int, a2:int);");
         w1.println("B = load '" + longfilename + "' as (a0:int, a1:int, a2:int);");
         w1.println("C = join A by a0, B by a0;");
         w1.println("store C into '" + OUTPUT_FILE + "';");
         w1.close();
-        
+
         try {
-            String[] args = { PIG_FILE };
-            PigStats stats = PigRunner.run(args, new TestNotificationListener());
-     
+            String[] args = { "-x", execType, PIG_FILE };
+            PigStats stats = PigRunner.run(args, new TestNotificationListener(execType));
+
             assertTrue(stats.isSuccessful());
-            
+
             assertEquals(1, stats.getNumberJobs());
             List<InputStats> inputs = stats.getInputStats();
             assertEquals(2, inputs.size());
@@ -502,7 +571,7 @@ public class TestPigRunner {
             Util.deleteFile(cluster, OUTPUT_FILE);
         }
     }
-    
+
     @Test
     public void testDuplicateCounterName() throws Exception {
         // Pig now restricts the string size of its counter name to less than 64 characters.
@@ -512,20 +581,20 @@ public class TestPigRunner {
         w.close();
         String samefilename = "tmp/input";
         Util.copyFromLocalToCluster(cluster, "myinputfile", samefilename);
-        
+
         PrintWriter w1 = new PrintWriter(new FileWriter(PIG_FILE));
         w1.println("A = load '" + INPUT_FILE + "' as (a0:int, a1:int, a2:int);");
         w1.println("B = load '" + samefilename + "' as (a0:int, a1:int, a2:int);");
         w1.println("C = join A by a0, B by a0;");
         w1.println("store C into '" + OUTPUT_FILE + "';");
         w1.close();
-        
+
         try {
-            String[] args = { PIG_FILE };
-            PigStats stats = PigRunner.run(args, new TestNotificationListener());
-     
+            String[] args = { "-x", execType, PIG_FILE };
+            PigStats stats = PigRunner.run(args, new TestNotificationListener(execType));
+
             assertTrue(stats.isSuccessful());
-            
+
             assertEquals(1, stats.getNumberJobs());
             List<InputStats> inputs = stats.getInputStats();
             assertEquals(2, inputs.size());
@@ -541,23 +610,23 @@ public class TestPigRunner {
             Util.deleteFile(cluster, OUTPUT_FILE);
         }
     }
-    
+
     @Test
     public void testDuplicateCounterName2() throws Exception {
-        
+
         PrintWriter w1 = new PrintWriter(new FileWriter(PIG_FILE));
         w1.println("A = load '" + INPUT_FILE + "' as (a0:int, a1:int, a2:int);");
         w1.println("B = filter A by a0 > 3;");
         w1.println("store A into 'output';");
         w1.println("store B into 'tmp/output';");
         w1.close();
-        
+
         try {
-            String[] args = { PIG_FILE };
-            PigStats stats = PigRunner.run(args, new TestNotificationListener());
-     
+            String[] args = { "-x", execType, PIG_FILE };
+            PigStats stats = PigRunner.run(args, new TestNotificationListener(execType));
+
             assertTrue(stats.isSuccessful());
-            
+
             assertEquals(1, stats.getNumberJobs());
             List<OutputStats> outputs = stats.getOutputStats();
             assertEquals(2, outputs.size());
@@ -574,46 +643,44 @@ public class TestPigRunner {
             Util.deleteFile(cluster, "tmp/output");
         }
     }
-    
+
     @Test
     public void testRegisterExternalJar() throws Exception {
-        String[] args = { "-Dpig.additional.jars=pig-withouthadoop.jar",
-                "-Dmapred.job.queue.name=default",
+        String jarName = Util.findPigJarName();
+
+        String[] args = { "-Dpig.additional.jars=" + jarName,
+                "-Dmapred.job.queue.name=default", "-x", execType,
                 "-e", "A = load '" + INPUT_FILE + "';store A into '" + OUTPUT_FILE + "';\n" };
-        PigStats stats = PigRunner.run(args, new TestNotificationListener());        
+        PigStats stats = PigRunner.run(args, new TestNotificationListener(execType));
 
         Util.deleteFile(cluster, OUTPUT_FILE);
-        
-        java.lang.reflect.Method getPigContext = stats.getClass()
-                .getDeclaredMethod("getPigContext");
+        PigContext ctx = stats.getPigContext();
 
-        getPigContext.setAccessible(true);
+        assertNotNull(ctx);
 
-        PigContext ctx = (PigContext) getPigContext.invoke(stats);
+        assertTrue(ctx.extraJars.contains(ClassLoader.getSystemResource(jarName)));
+        assertTrue("default", ctx.getProperties().getProperty(MRConfiguration.JOB_QUEUE_NAME) != null
+                && ctx.getProperties().getProperty(MRConfiguration.JOB_QUEUE_NAME).equals("default")
+                || ctx.getProperties().getProperty("mapreduce.job.queuename") != null
+                && ctx.getProperties().getProperty("mapreduce.job.queuename").equals("default"));
 
-        Assert.assertNotNull(ctx);
-
-        assertTrue(ctx.extraJars.contains(ClassLoader.getSystemResource("pig-withouthadoop.jar")));
-        assertTrue("default", ctx.getProperties().getProperty("mapred.job.queue.name")!=null && ctx.getProperties().getProperty("mapred.job.queue.name").equals("default")||
-                ctx.getProperties().getProperty("mapreduce.job.queuename")!=null && ctx.getProperties().getProperty("mapreduce.job.queuename").equals("default"));
-       
     }
 
     @Test
     public void classLoaderTest() throws Exception {
         // Skip in hadoop 23 test, see PIG-2449
-        if (Util.isHadoop23() || Util.isHadoop2_0())
+        if (org.apache.pig.impl.util.Utils.isHadoop23() || org.apache.pig.impl.util.Utils.isHadoop2())
             return;
         PrintWriter w = new PrintWriter(new FileWriter(PIG_FILE));
         w.println("register test/org/apache/pig/test/data/pigtestloader.jar");
         w.println("A = load '" + INPUT_FILE + "' using org.apache.pig.test.PigTestLoader();");
         w.println("store A into '" + OUTPUT_FILE + "';");
         w.close();
-        
+
         try {
-            String[] args = { PIG_FILE };
-            PigStats stats = PigRunner.run(args, new TestNotificationListener());     
-            assertTrue(stats.isSuccessful());          
+            String[] args = { "-x", execType, PIG_FILE };
+            PigStats stats = PigRunner.run(args, new TestNotificationListener(execType));
+            assertTrue(stats.isSuccessful());
         } finally {
             new File(PIG_FILE).delete();
             Util.deleteFile(cluster, OUTPUT_FILE);
@@ -625,37 +692,37 @@ public class TestPigRunner {
         PrintWriter w = new PrintWriter(new FileWriter(PIG_FILE));
         w.println("fs -mv nonexist.file dummy.file");
         w.close();
-        
+
         try {
-            String[] args = { PIG_FILE };
-            PigStats stats = PigRunner.run(args, new TestNotificationListener());
-     
+            String[] args = { "-x", execType, PIG_FILE };
+            PigStats stats = PigRunner.run(args, new TestNotificationListener(execType));
+
             assertTrue(!stats.isSuccessful());
             assertTrue(stats.getReturnCode() == PigRunner.ReturnCode.IO_EXCEPTION);
         } finally {
             new File(PIG_FILE).delete();
         }
     }
-    
+
     @Test // PIG-2006
     public void testEmptyFile() throws IOException {
-        File f1 = new File( PIG_FILE );
- 
+        File f1 = new File(PIG_FILE);
+
         FileWriter fw1 = new FileWriter(f1);
         fw1.close();
 
         try {
            String[] args = { "-x", "local", "-c", PIG_FILE };
            PigStats stats = PigRunner.run(args, null);
-       
-           Assert.assertTrue(stats.isSuccessful());
-           Assert.assertEquals( 0, stats.getReturnCode() );
+
+           assertTrue(stats.isSuccessful());
+           assertEquals( 0, stats.getReturnCode() );
         } finally {
             new File(PIG_FILE).delete();
             Util.deleteFile(cluster, OUTPUT_FILE);
         }
     }
-    
+
     @Test
     public void returnCodeTest() throws Exception {
         PrintWriter w = new PrintWriter(new FileWriter(PIG_FILE));
@@ -665,21 +732,21 @@ public class TestPigRunner {
         w.println("D = join C by $0, B by $0;");
         w.println("store D into '" + OUTPUT_FILE + "';");
         w.close();
-        
+
         try {
-            String[] args = { PIG_FILE };
+            String[] args = { "-x", execType, PIG_FILE };
             PigStats stats = PigRunner.run(args, null);
-            
+
             assertTrue(!stats.isSuccessful());
             assertTrue(stats.getReturnCode() != 0);
             assertTrue(stats.getOutputStats().size() == 0);
-            
+
         } finally {
             new File(PIG_FILE).delete();
             Util.deleteFile(cluster, OUTPUT_FILE);
         }
     }
-    
+
     @Test
     public void returnCodeTest2() throws Exception {
         PrintWriter w = new PrintWriter(new FileWriter(PIG_FILE));
@@ -688,43 +755,43 @@ public class TestPigRunner {
         w.println("C = join B by b0, A by a0 using 'repl';");
         w.println("store C into '" + OUTPUT_FILE + "';");
         w.close();
-        
+
         try {
-            String[] args = { PIG_FILE };
+            String[] args = { "-x", execType, PIG_FILE };
             PigStats stats = PigRunner.run(args, null);
-            
+
             assertTrue(!stats.isSuccessful());
             assertTrue(stats.getReturnCode() != 0);
             assertTrue(stats.getOutputStats().size() == 0);
-            
+
         } finally {
             new File(PIG_FILE).delete();
             Util.deleteFile(cluster, OUTPUT_FILE);
         }
     }
-        
-    
+
+
     @Test //PIG-1893
     public void testEmptyFileCounter() throws Exception {
-      
+
         PrintWriter w = new PrintWriter(new FileWriter("myinputfile"));
         w.close();
-         
+
         Util.copyFromLocalToCluster(cluster, "myinputfile", "1.txt");
-        
+
         PrintWriter w1 = new PrintWriter(new FileWriter(PIG_FILE));
         w1.println("A = load '" + INPUT_FILE + "' as (a0:int, a1:int, a2:int);");
         w1.println("B = load '1.txt' as (a0:int, a1:int, a2:int);");
         w1.println("C = join A by a0, B by a0;");
         w1.println("store C into '" + OUTPUT_FILE + "';");
         w1.close();
-        
+
         try {
-            String[] args = { PIG_FILE };
-            PigStats stats = PigRunner.run(args, new TestNotificationListener());
-     
+            String[] args = { "-x", execType, PIG_FILE };
+            PigStats stats = PigRunner.run(args, new TestNotificationListener(execType));
+
             assertTrue(stats.isSuccessful());
-            
+
             assertEquals(1, stats.getNumberJobs());
             List<InputStats> inputs = stats.getInputStats();
             assertEquals(2, inputs.size());
@@ -740,7 +807,7 @@ public class TestPigRunner {
             Util.deleteFile(cluster, OUTPUT_FILE);
         }
     }
-    
+
     @Test //PIG-1893
     public void testEmptyFileCounter2() throws Exception {
 
@@ -750,13 +817,13 @@ public class TestPigRunner {
         w1.println("store A into '" + OUTPUT_FILE + "';");
         w1.println("store B into 'output2';");
         w1.close();
-        
+
         try {
-            String[] args = { PIG_FILE };
-            PigStats stats = PigRunner.run(args, new TestNotificationListener());
-     
+            String[] args = { "-x", execType, PIG_FILE };
+            PigStats stats = PigRunner.run(args, new TestNotificationListener(execType));
+
             assertTrue(stats.isSuccessful());
-            
+
             assertEquals(1, stats.getNumberJobs());
             List<OutputStats> outputs = stats.getOutputStats();
             assertEquals(2, outputs.size());
@@ -773,30 +840,35 @@ public class TestPigRunner {
             Util.deleteFile(cluster, "output2");
         }
     }
-    
+
     @Test // PIG-2208: Restrict number of PIG generated Haddop counters
-    public void testDisablePigCounters() throws Exception {        
+    public void testDisablePigCounters() throws Exception {
         PrintWriter w1 = new PrintWriter(new FileWriter(PIG_FILE));
         w1.println("A = load '" + INPUT_FILE + "' as (a0:int, a1:int, a2:int);");
         w1.println("B = load '" + INPUT_FILE + "' as (a0:int, a1:int, a2:int);");
         w1.println("C = join A by a0, B by a0;");
         w1.println("store C into '" + OUTPUT_FILE + "';");
         w1.close();
-        
+
         try {
-            String[] args = { "-Dpig.disable.counter=true", PIG_FILE };
-            PigStats stats = PigRunner.run(args, new TestNotificationListener());
-     
+            String[] args = {"-Dpig.disable.counter=true", "-x", execType, PIG_FILE };
+            PigStats stats = PigRunner.run(args, new TestNotificationListener(execType));
+
             assertTrue(stats.isSuccessful());
-            
+
             assertEquals(1, stats.getNumberJobs());
             List<InputStats> inputs = stats.getInputStats();
             assertEquals(2, inputs.size());
-            for (InputStats instats : inputs) {
-                // the multi-input counters are disabled
-                assertEquals(-1, instats.getNumberRecords());
+            if (execType.equals("tez")) {
+                assertEquals(5, inputs.get(0).getNumberRecords());
+                assertEquals(5, inputs.get(1).getNumberRecords());
+            } else {
+                for (InputStats instats : inputs) {
+                    // the multi-input counters are disabled
+                    assertEquals(-1, instats.getNumberRecords());
+                }
             }
-            
+
             List<OutputStats> outputs = stats.getOutputStats();
             assertEquals(1, outputs.size());
             OutputStats outstats = outputs.get(0);
@@ -806,11 +878,11 @@ public class TestPigRunner {
             Util.deleteFile(cluster, OUTPUT_FILE);
         }
     }
-    
+
     @Test             //Pig-2358
     public void testGetHadoopCounters() throws Exception {
         final String OUTPUT_FILE_2 = "output2";
-        
+
         PrintWriter w = new PrintWriter(new FileWriter(PIG_FILE));
         w.println("A = load '" + INPUT_FILE + "' as (a0:int, a1:int, a2:int);");
         w.println("B = filter A by a0 >= 4;");
@@ -820,60 +892,82 @@ public class TestPigRunner {
         w.println("store B into '" + OUTPUT_FILE_2 + "';");
         w.println("store E into '" + OUTPUT_FILE + "';");
         w.close();
-        
+
         try {
-            String[] args = { PIG_FILE };
-            PigStats stats = PigRunner.run(args, new TestNotificationListener());
-            
-            Counters counter= ((JobStats)stats.getJobGraph().getSinks().get(0)).getHadoopCounters();
-            assertEquals(5, counter.getGroup(PigStatsUtil.TASK_COUNTER_GROUP).getCounterForName(
-                    PigStatsUtil.MAP_INPUT_RECORDS).getValue());
-            assertEquals(3, counter.getGroup(PigStatsUtil.TASK_COUNTER_GROUP).getCounterForName(
-                    PigStatsUtil.MAP_OUTPUT_RECORDS).getValue());
-            assertEquals(2, counter.getGroup(PigStatsUtil.TASK_COUNTER_GROUP).getCounterForName(
-                    PigStatsUtil.REDUCE_INPUT_RECORDS).getValue());
-            assertEquals(0, counter.getGroup(PigStatsUtil.TASK_COUNTER_GROUP).getCounterForName(
-                    PigStatsUtil.REDUCE_OUTPUT_RECORDS).getValue());
-            assertEquals(20,counter.getGroup(PigStatsUtil.FS_COUNTER_GROUP).getCounterForName(
-            		PigStatsUtil.HDFS_BYTES_WRITTEN).getValue());
-            
-            // Skip for hadoop 20.203+, See PIG-2446
-            if (Util.isHadoop203plus())
-                return;
-            
-            assertEquals(30,counter.getGroup(PigStatsUtil.FS_COUNTER_GROUP).getCounterForName(
-            		PigStatsUtil.HDFS_BYTES_READ).getValue());
+            String[] args = { "-x", execType, PIG_FILE };
+            PigStats stats = PigRunner.run(args, new TestNotificationListener(execType));
+
+            String TASK_COUNTER_GROUP = execType.equals("tez") ? "org.apache.tez.common.counters.TaskCounter" : MRPigStatsUtil.TASK_COUNTER_GROUP;
+            String FS_COUNTER_GROUP = execType.equals("tez") ? "org.apache.tez.common.counters.FileSystemCounter" : MRPigStatsUtil.FS_COUNTER_GROUP;
+
+            if (execType.equals("tez")) {
+                Counters counter= ((JobStats)stats.getJobGraph().getSinks().get(0)).getHadoopCounters();
+                assertEquals(5, counter.getGroup(TASK_COUNTER_GROUP).getCounterForName(
+                        "INPUT_RECORDS_PROCESSED").getValue());
+                assertEquals(2, counter.getGroup(TASK_COUNTER_GROUP).getCounterForName(
+                        MRPigStatsUtil.REDUCE_INPUT_RECORDS).getValue());
+                assertEquals(7, counter.getGroup(TASK_COUNTER_GROUP).getCounterForName(
+                        "OUTPUT_RECORDS").getValue());
+                assertEquals(20,counter.getGroup(FS_COUNTER_GROUP).getCounterForName(
+                        MRPigStatsUtil.HDFS_BYTES_WRITTEN).getValue());
+                assertEquals(30,counter.getGroup(FS_COUNTER_GROUP).getCounterForName(
+                        MRPigStatsUtil.HDFS_BYTES_READ).getValue());
+            } else {
+                Counters counter= ((MRJobStats)stats.getJobGraph().getSinks().get(0)).getHadoopCounters();
+                assertEquals(5, counter.getGroup(MRPigStatsUtil.TASK_COUNTER_GROUP).getCounterForName(
+                        MRPigStatsUtil.MAP_INPUT_RECORDS).getValue());
+                assertEquals(3, counter.getGroup(MRPigStatsUtil.TASK_COUNTER_GROUP).getCounterForName(
+                        MRPigStatsUtil.MAP_OUTPUT_RECORDS).getValue());
+                assertEquals(2, counter.getGroup(MRPigStatsUtil.TASK_COUNTER_GROUP).getCounterForName(
+                        MRPigStatsUtil.REDUCE_INPUT_RECORDS).getValue());
+                assertEquals(0, counter.getGroup(MRPigStatsUtil.TASK_COUNTER_GROUP).getCounterForName(
+                        MRPigStatsUtil.REDUCE_OUTPUT_RECORDS).getValue());
+                assertEquals(20,counter.getGroup(MRPigStatsUtil.FS_COUNTER_GROUP).getCounterForName(
+                        MRPigStatsUtil.HDFS_BYTES_WRITTEN).getValue());
+
+                // Skip for hadoop 20.203+, See PIG-2446
+                if (Util.isHadoop203plus())
+                    return;
+
+                assertEquals(30,counter.getGroup(MRPigStatsUtil.FS_COUNTER_GROUP).getCounterForName(
+                        MRPigStatsUtil.HDFS_BYTES_READ).getValue());
+            }
         } finally {
             new File(PIG_FILE).delete();
             Util.deleteFile(cluster, OUTPUT_FILE);
             Util.deleteFile(cluster, OUTPUT_FILE_2);
         }
     }
-    
+
     @Test // PIG-2208: Restrict number of PIG generated Haddop counters
     public void testDisablePigCounters2() throws Exception {
-        
+
         PrintWriter w1 = new PrintWriter(new FileWriter(PIG_FILE));
         w1.println("A = load '" + INPUT_FILE + "' as (a0:int, a1:int, a2:int);");
         w1.println("B = filter A by a0 > 3;");
         w1.println("store A into 'output';");
         w1.println("store B into 'tmp/output';");
         w1.close();
-        
+
         try {
-            String[] args = { "-Dpig.disable.counter=true", PIG_FILE };
-            PigStats stats = PigRunner.run(args, new TestNotificationListener());
-     
+            String[] args = { "-Dpig.disable.counter=true", "-x", execType, PIG_FILE };
+            PigStats stats = PigRunner.run(args, new TestNotificationListener(execType));
+
             assertTrue(stats.isSuccessful());
-            
+
             assertEquals(1, stats.getNumberJobs());
             List<OutputStats> outputs = stats.getOutputStats();
             assertEquals(2, outputs.size());
-            for (OutputStats outstats : outputs) {
-                // the multi-output counters are disabled
-                assertEquals(-1, outstats.getNumberRecords());
+            if (execType.equals("tez")) {
+                assertEquals(outputs.get(0).getNumberRecords(), 5);
+                assertEquals(outputs.get(1).getNumberRecords(), 2);
+            } else {
+                for (OutputStats outstats : outputs) {
+                    // the multi-output counters are disabled
+                    assertEquals(-1, outstats.getNumberRecords());
+                }
             }
-            
+
             List<InputStats> inputs = stats.getInputStats();
             assertEquals(1, inputs.size());
             InputStats instats = inputs.get(0);
@@ -884,7 +978,7 @@ public class TestPigRunner {
             Util.deleteFile(cluster, "tmp/output");
         }
     }
-    
+
     /**
      * PIG-2780: In this test case, Pig submits three jobs at the same time and
      * one of them will fail due to nonexistent input file. If users enable
@@ -893,7 +987,7 @@ public class TestPigRunner {
      */
     @Test
     public void testStopOnFailure() throws Exception {
-        
+
         PrintWriter w1 = new PrintWriter(new FileWriter(PIG_FILE));
         w1.println("A1 = load '" + INPUT_FILE + "';");
         w1.println("B1 = load 'nonexist';");
@@ -904,13 +998,13 @@ public class TestPigRunner {
         w1.println("ret = union A2,B2,C2;");
         w1.println("store ret into 'tmp/output';");
         w1.close();
-        
+
         try {
-            String[] args = { "-F", PIG_FILE };
-            PigStats stats = PigRunner.run(args, new TestNotificationListener());
-     
+            String[] args = { "-x", execType, "-F", PIG_FILE };
+            PigStats stats = PigRunner.run(args, new TestNotificationListener(execType));
+
             assertTrue(!stats.isSuccessful());
-            
+
             int successfulJobs = 0;
             Iterator<Operator> it = stats.getJobGraph().getOperators();
             while (it.hasNext()){
@@ -918,10 +1012,10 @@ public class TestPigRunner {
                 if (js.isSuccessful())
                     successfulJobs++;
             }
-            
+
             // we should have less than 2 successful jobs
             assertTrue("Should have less than 2 successful jobs", successfulJobs < 2);
-            
+
         } finally {
             new File(PIG_FILE).delete();
             Util.deleteFile(cluster, OUTPUT_FILE);
@@ -929,23 +1023,32 @@ public class TestPigRunner {
         }
     }
     public static class TestNotificationListener implements PigProgressNotificationListener {
-        
+
         private Map<String, int[]> numMap = new HashMap<String, int[]>();
-        
+
         private static final int JobsToLaunch = 0;
         private static final int JobsSubmitted = 1;
         private static final int JobStarted = 2;
         private static final int JobFinished = 3;
+        private String execType;
+
+        public TestNotificationListener(String execType) {
+            this.execType = execType;
+        }
+
+        public TestNotificationListener() {
+            this.execType = "mr";
+        }
 
         @Override
-        public void initialPlanNotification(String id, MROperPlan plan) {
+        public void initialPlanNotification(String id, OperatorPlan<?> plan) {
             System.out.println("id: " + id + " planNodes: " + plan.getKeys().size());
             assertNotNull(plan);
         }
 
         @Override
-        public void launchStartedNotification(String id, int numJobsToLaunch) {            
-            System.out.println("id: " + id + " numJobsToLaunch: " + numJobsToLaunch);  
+        public void launchStartedNotification(String id, int numJobsToLaunch) {
+            System.out.println("id: " + id + " numJobsToLaunch: " + numJobsToLaunch);
             int[] nums = new int[4];
             numMap.put(id, nums);
             nums[JobsToLaunch] = numJobsToLaunch;
@@ -953,19 +1056,19 @@ public class TestPigRunner {
 
         @Override
         public void jobFailedNotification(String id, JobStats jobStats) {
-            System.out.println("id: " + id + " job failed: " + jobStats.getJobId());           
+            System.out.println("id: " + id + " job failed: " + jobStats.getJobId());
         }
 
         @Override
         public void jobFinishedNotification(String id, JobStats jobStats) {
-            System.out.println("id: " + id + " job finished: " + jobStats.getJobId()); 
+            System.out.println("id: " + id + " job finished: " + jobStats.getJobId());
             int[] nums = numMap.get(id);
-            nums[JobFinished]++;            
+            nums[JobFinished]++;
         }
 
         @Override
         public void jobStartedNotification(String id, String assignedJobId) {
-            System.out.println("id: " + id + " job started: " + assignedJobId);   
+            System.out.println("id: " + id + " job started: " + assignedJobId);
             int[] nums = numMap.get(id);
             nums[JobStarted]++;
         }
@@ -979,7 +1082,7 @@ public class TestPigRunner {
 
         @Override
         public void launchCompletedNotification(String id, int numJobsSucceeded) {
-            System.out.println("id: " + id + " numJobsSucceeded: " + numJobsSucceeded);   
+            System.out.println("id: " + id + " numJobsSucceeded: " + numJobsSucceeded);
             System.out.println("");
             int[] nums = numMap.get(id);
             assertEquals(nums[JobsToLaunch], numJobsSucceeded);
@@ -995,9 +1098,9 @@ public class TestPigRunner {
 
         @Override
         public void progressUpdatedNotification(String id, int progress) {
-            System.out.println("id: " + id + " progress: " + progress + "%");           
+            System.out.println("id: " + id + " progress: " + progress + "%");
         }
-        
+
     }
 
     private void deleteAll(File d) {
@@ -1006,7 +1109,7 @@ public class TestPigRunner {
             for (File f : d.listFiles()) {
                 deleteAll(f);
             }
-        } 
-        d.delete();        
+        }
+        d.delete();
     }
 }

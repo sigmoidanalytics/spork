@@ -18,7 +18,10 @@
 
 package org.apache.pig.backend.hadoop.executionengine.physicalLayer.expressionOperators;
 
-import static org.apache.pig.PigConfiguration.TIME_UDFS_PROP;
+import static org.apache.pig.PigConfiguration.PIG_UDF_PROFILE;
+import static org.apache.pig.PigConfiguration.PIG_UDF_PROFILE_FREQUENCY;
+import static org.apache.pig.PigConstants.TIME_UDFS_ELAPSED_TIME_COUNTER;
+import static org.apache.pig.PigConstants.TIME_UDFS_INVOCATION_COUNTER;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -57,18 +60,14 @@ import org.apache.pig.impl.util.UDFContext;
 import org.apache.pig.tools.pigstats.PigStatusReporter;
 
 public class POUserFunc extends ExpressionOperator {
+    private static final long serialVersionUID = 1L;
     private static final Log LOG = LogFactory.getLog(POUserFunc.class);
-    private final static String TIMING_COUNTER = "approx_microsecs";
-    private final static String INVOCATION_COUNTER = "approx_invocations";
-    private final static int TIMING_FREQ = 100;
+    private static final TupleFactory tf = TupleFactory.getInstance();
 
     private transient String counterGroup;
-    /**
-     *
-     */
-    private static final long serialVersionUID = 1L;
-    transient EvalFunc func;
-    transient private String[] cacheFiles = null;
+    private transient EvalFunc func;
+    private transient List<String> cacheFiles = null;
+    private transient List<String> shipFiles = null;
 
     FuncSpec funcSpec;
     FuncSpec origFSpec;
@@ -84,6 +83,7 @@ public class POUserFunc extends ExpressionOperator {
     private boolean haveCheckedIfTerminatingAccumulator;
 
     private long numInvocations = 0L;
+    private long timingFrequency = 100L;
     private boolean doTiming = false;
 
     public PhysicalOperator getReferencedOperator() {
@@ -95,9 +95,7 @@ public class POUserFunc extends ExpressionOperator {
     }
 
     public POUserFunc(OperatorKey k, int rp, List<PhysicalOperator> inp) {
-        super(k, rp);
-        inputs = inp;
-
+        this(k, rp, inp, null);
     }
 
     public POUserFunc(
@@ -122,14 +120,14 @@ public class POUserFunc extends ExpressionOperator {
         instantiateFunc(funcSpec);
     }
 
+    public void setFuncInputSchema(){
+        setFuncInputSchema(signature);
+    }
+
     private void instantiateFunc(FuncSpec fSpec) {
         this.func = (EvalFunc) PigContext.instantiateFuncFromSpec(fSpec);
         this.setSignature(signature);
-        Properties props = UDFContext.getUDFContext().getUDFProperties(func.getClass());
-    	Schema tmpS=(Schema)props.get("pig.evalfunc.inputschema."+signature);
-
-    	if(tmpS!=null)
-    		this.func.setInputSchema(tmpS);
+        this.setFuncInputSchema(signature);
         if (func.getClass().isAnnotationPresent(MonitoredUDF.class)) {
             executor = new MonitoredUDFExecutor(func);
         }
@@ -159,8 +157,11 @@ public class POUserFunc extends ExpressionOperator {
             func.setPigLogger(pigLogger);
             Configuration jobConf = UDFContext.getUDFContext().getJobConf();
             if (jobConf != null) {
-                doTiming = "true".equalsIgnoreCase(jobConf.get(TIME_UDFS_PROP, "false"));
-                counterGroup = funcSpec.toString();
+                doTiming = jobConf.getBoolean(PIG_UDF_PROFILE, false);
+                if (doTiming) {
+                    counterGroup = funcSpec.toString();
+                    timingFrequency = jobConf.getLong(PIG_UDF_PROFILE_FREQUENCY, 100L);
+                }
             }
             // We initialize here instead of instantiateFunc because this is called
             // when actual processing has begun, whereas a function can be instantiated
@@ -190,9 +191,7 @@ public class POUserFunc extends ExpressionOperator {
         }
 
         Result res = new Result();
-        Tuple inpValue = null;
         if (input == null && (inputs == null || inputs.size()==0)) {
-//			log.warn("No inputs found. Signaling End of Processing.");
             res.returnStatus = POStatus.STATUS_EOP;
             return res;
         }
@@ -233,8 +232,8 @@ public class POUserFunc extends ExpressionOperator {
                             if (knownSize) {
                                 rslt.set(knownIndex++, trslt.get(i));
                             } else {
-                            rslt.append(trslt.get(i));
-                        }
+                                rslt.append(trslt.get(i));
+                            }
                         }
                         continue;
                     }
@@ -242,8 +241,8 @@ public class POUserFunc extends ExpressionOperator {
                 if (knownSize) {
                     ((Tuple)res.result).set(knownIndex++, temp.result);
                 } else {
-                ((Tuple)res.result).append(temp.result);
-            }
+                    ((Tuple)res.result).append(temp.result);
+                }
             }
             res.returnStatus = temp.returnStatus;
 
@@ -273,13 +272,11 @@ public class POUserFunc extends ExpressionOperator {
 
     private Result getNext() throws ExecException {
         Result result = processInput();
-        String errMsg = "";
         long startNanos = 0;
-        boolean timeThis = doTiming && (numInvocations++ % TIMING_FREQ == 0);
+        boolean timeThis = doTiming && (numInvocations++ % timingFrequency == 0);
         if (timeThis) {
             startNanos = System.nanoTime();
-            PigStatusReporter.getInstance().getCounter(counterGroup, INVOCATION_COUNTER).increment(TIMING_FREQ);
-
+            PigStatusReporter.getInstance().incrCounter(counterGroup, TIME_UDFS_INVOCATION_COUNTER, timingFrequency);
         }
         try {
             if(result.returnStatus == POStatus.STATUS_OK) {
@@ -300,10 +297,10 @@ public class POUserFunc extends ExpressionOperator {
                             result.result = null;
                             isAccumulationDone = false;
                         } else {
-                        ((Accumulator)func).accumulate((Tuple)result.result);
-                        result.returnStatus = POStatus.STATUS_BATCH_OK;
-                        result.result = null;
-                        isAccumulationDone = false;
+                            ((Accumulator)func).accumulate((Tuple)result.result);
+                            result.returnStatus = POStatus.STATUS_BATCH_OK;
+                            result.result = null;
+                            isAccumulationDone = false;
                         }
                     }else{
                         if(isAccumulationDone){
@@ -327,13 +324,13 @@ public class POUserFunc extends ExpressionOperator {
                     if (executor != null) {
                         result.result = executor.monitorExec((Tuple) result.result);
                     } else {
-                    result.result = func.exec((Tuple) result.result);
+                        result.result = func.exec((Tuple) result.result);
                     }
                 }
             }
             if (timeThis) {
-                PigStatusReporter.getInstance().getCounter(counterGroup, TIMING_COUNTER).increment(
-                        ( Math.round((System.nanoTime() - startNanos) / 1000)) * TIMING_FREQ);
+                PigStatusReporter.getInstance().incrCounter(counterGroup, TIME_UDFS_ELAPSED_TIME_COUNTER,
+                        Math.round((System.nanoTime() - startNanos) / 1000) * timingFrequency);
             }
             return result;
         } catch (ExecException ee) {
@@ -359,7 +356,7 @@ public class POUserFunc extends ExpressionOperator {
         } catch (IndexOutOfBoundsException ie) {
             int errCode = 2078;
             String msg = "Caught error from UDF: " + funcSpec.getClassName() +
-            ", Out of bounds access [" + ie.getMessage() + "]";
+                    ", Out of bounds access [" + ie.getMessage() + "]";
             throw new ExecException(msg, errCode, PigException.BUG, ie);
         }
     }
@@ -381,13 +378,11 @@ public class POUserFunc extends ExpressionOperator {
 
     @Override
     public Result getNextBoolean() throws ExecException {
-
         return getNext();
     }
 
     @Override
     public Result getNextDataByteArray() throws ExecException {
-
         return getNext();
     }
 
@@ -514,7 +509,7 @@ public class POUserFunc extends ExpressionOperator {
 
     @Override
     public String name() {
-        return "POUserFunc" + "(" + funcSpec.toString() + ")" + "[" + DataType.findTypeName(resultType) + "]" + " - " + mKey.toString();
+        return "POUserFunc" + "(" + func.getClass().getName() + ")" + "[" + DataType.findTypeName(resultType) + "]" + " - " + mKey.toString();
     }
 
     @Override
@@ -539,12 +534,25 @@ public class POUserFunc extends ExpressionOperator {
         return funcSpec;
     }
 
-    public String[] getCacheFiles() {
+    public void setFuncSpec(FuncSpec funcSpec) {
+        this.funcSpec = funcSpec;
+        instantiateFunc(funcSpec);
+    }
+
+    public List<String> getCacheFiles() {
         return cacheFiles;
     }
 
-    public void setCacheFiles(String[] cf) {
+    public void setCacheFiles(List<String> cf) {
         cacheFiles = cf;
+    }
+
+    public List<String> getShipFiles() {
+        return shipFiles;
+    }
+
+    public void setShipFiles(List<String> sf) {
+        shipFiles = sf;
     }
 
     public boolean combinable() {
@@ -604,4 +612,17 @@ public class POUserFunc extends ExpressionOperator {
             this.func.setUDFContextSignature(signature);
         }
     }
+
+    /**
+     * Sets EvalFunc's inputschema based on the signature
+     * @param signature
+     */
+    public void setFuncInputSchema(String signature) {
+        Properties props = UDFContext.getUDFContext().getUDFProperties(func.getClass());
+        Schema tmpS=(Schema)props.get("pig.evalfunc.inputschema."+signature);
+        if(tmpS!=null) {
+            this.func.setInputSchema(tmpS);
+        }
+    }
+
 }

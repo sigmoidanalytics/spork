@@ -26,26 +26,27 @@ import java.io.PrintStream;
 
 import org.apache.pig.ExecType;
 import org.apache.pig.PigServer;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRConfiguration;
 import org.junit.AfterClass;
 import org.junit.Test;
 
 public class TestPigProgressReporting {
 
-    static MiniCluster cluster = MiniCluster.buildCluster();
+    static MiniGenericCluster cluster = MiniGenericCluster.buildCluster();
 
     @Test
     public void testProgressReportingWithStatusMessage() throws Exception {
 
         // Get the default time out value
-        String taskTimeout = cluster.getProperties().getProperty("mapred.task.timeout");
+        String taskTimeout = cluster.getProperties().getProperty(MRConfiguration.TASK_TIMEOUT);
 
         try{
             // Override the timeout as 10 secs
-            cluster.setProperty("mapred.task.timeout", "10000");
+            cluster.setProperty(MRConfiguration.TASK_TIMEOUT, "10000");
 
             Util.createInputFile(cluster, "a.txt", new String[] { "dummy"});
 
-            PigServer pig = new PigServer(ExecType.MAPREDUCE, cluster.getProperties());
+            PigServer pig = new PigServer(cluster.getExecType(), cluster.getProperties());
 
             String filename = prepareTempFile();
             filename = filename.replace("\\", "\\\\");
@@ -58,7 +59,7 @@ public class TestPigProgressReporting {
         }finally{
             // Set back the orginal value
             if (taskTimeout!=null)
-                cluster.setProperty("mapred.task.timeout", taskTimeout);
+                cluster.setProperty(MRConfiguration.TASK_TIMEOUT, taskTimeout);
         }
 
     }

@@ -64,7 +64,6 @@ import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.logicalLayer.schema.Schema;
 import org.apache.pig.impl.util.Utils;
 import org.apache.pig.parser.ParserException;
-import org.apache.pig.tools.pigstats.PigStats;
 
 /**
  * A convenient mock Storage for unit tests
@@ -103,7 +102,7 @@ import org.apache.pig.tools.pigstats.PigStats;
  *  pigServer.registerQuery("STORE B INTO 'bar' USING mock.Storage();");
  *
  *  assertEquals(schema("a:chararray,b:chararray"), data.getSchema("bar"));
- *
+ *  
  *  List<Tuple> out = data.get("bar");
  *  assertEquals(tuple("a", "a"), out.get(0));
  *  assertEquals(tuple("b", "b"), out.get(1));
@@ -133,7 +132,7 @@ public class Storage extends LoadFunc implements StoreFuncInterface, LoadMetadat
   public static DataBag bag(Tuple... tuples) {
     return new NonSpillableDataBag(Arrays.asList(tuples));
   }
-
+  
   /**
    * @param schema
    * @return the schema represented by the string
@@ -250,7 +249,7 @@ public class Storage extends LoadFunc implements StoreFuncInterface, LoadMetadat
     public void set(String location, String schema, Tuple... data) throws ParserException {
       set(location, Utils.getSchemaFromString(schema), Arrays.asList(data));
     }
-
+    
     /**
      * to set the data in a location with a known schema
      *
@@ -317,11 +316,7 @@ public class Storage extends LoadFunc implements StoreFuncInterface, LoadMetadat
     public void set(String location, Tuple... data) {
         set(location, Arrays.asList(data));
     }
-
-    private boolean contains(String location) {
-        return locationToData.containsKey(location);
-    }
-
+    
     /**
      *
      * @param location
@@ -329,15 +324,13 @@ public class Storage extends LoadFunc implements StoreFuncInterface, LoadMetadat
      */
     public List<Tuple> get(String location) {
       if (!locationToData.containsKey(location)) {
-          PigStats pigStats = PigStats.get();
-          boolean successful = pigStats.isSuccessful();
-          throw new RuntimeException("No data for location '" + location + "'." + (successful ? "" : " It seems the job has failled, check logs"));
+        throw new RuntimeException("No data for location '" + location + "'");
       }
       return locationToData.get(location).getAll();
     }
 
     /**
-     *
+     * 
      * @param location
      * @return the schema stored in this location
      */
@@ -359,7 +352,7 @@ public class Storage extends LoadFunc implements StoreFuncInterface, LoadMetadat
   private String location;
 
   private Data data;
-
+  
   private Schema schema;
 
   private Iterator<Tuple> dataBeingRead;
@@ -403,7 +396,6 @@ private MockRecordWriter mockRecordWriter;
     if (dataBeingRead == null) {
       throw new IOException("data was not correctly initialized in MockLoader");
     }
-
     return dataBeingRead.hasNext() ? dataBeingRead.next() : null;
   }
 
@@ -411,9 +403,9 @@ private MockRecordWriter mockRecordWriter;
   public void setUDFContextSignature(String signature) {
     super.setUDFContextSignature(signature);
   }
-
+  
   // LoadMetaData
-
+  
   @Override
   public ResourceSchema getSchema(String location, Job job) throws IOException {
 	init(location, job);
@@ -485,7 +477,7 @@ private MockRecordWriter mockRecordWriter;
   }
 
   // StoreMetaData
-
+  
   @Override
   public void storeStatistics(ResourceStatistics stats, String location, Job job)
   		throws IOException {
@@ -498,7 +490,7 @@ private MockRecordWriter mockRecordWriter;
 	init(location, job);
 	data.setSchema(location, Schema.getPigSchema(schema));
   }
-
+  
   // Mocks for LoadFunc
 
   private static class MockRecordReader extends RecordReader<Object, Object> {

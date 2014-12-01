@@ -13,8 +13,10 @@ public class SparkStats extends PigStats {
     private List<OutputStats> outputStatsList = new ArrayList<OutputStats>();
     private JobGraph jobGraph = new JobGraph();
 
-    public void addOutputInfo(POStore poStore, long totalBytes, long totalRecords, boolean success, Configuration conf) {
-        OutputStats outputStats = new OutputStats(poStore.getSFile().getFileName(), totalBytes, totalRecords, success);
+    public void addOutputInfo(POStore poStore, long totalBytes,
+            long totalRecords, boolean success, Configuration conf) {
+        OutputStats outputStats = new OutputStats(poStore.getSFile()
+                .getFileName(), totalBytes, totalRecords, success);
         outputStats.setPOStore(poStore);
         outputStats.setConf(conf);
         outputStatsList.add(outputStats);
@@ -23,7 +25,9 @@ public class SparkStats extends PigStats {
     @Override
     public boolean isSuccessful() {
         for (OutputStats output : outputStatsList) {
-            if (!output.isSuccessful()) { return false; }
+            if (!output.isSuccessful()) {
+                return false;
+            }
         }
         return true;
     }
