@@ -15,6 +15,7 @@ import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.util.ObjectSerializer;
+import org.apache.pig.spark.StoreSparkFunc;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.rdd.PairRDDFunctions;
@@ -54,10 +55,18 @@ public class StoreConverter implements
         JobConf storeJobConf = SparkUtil.newJobConf(pigContext);
         POStore poStore = configureStorer(storeJobConf, physicalOperator);
 
+        StoreFuncInterface storeFunc = poStore.getStoreFunc();
+        if(storeFunc instanceof StoreSparkFunc)
+        {
+        	StoreSparkFunc storeSparkFunc = (StoreSparkFunc)storeFunc;
+        	storeSparkFunc.putRDD(rdd, poStore.getSFile().getFileName(), storeJobConf);
+        }
+        else
+        {
         pairRDDFunctions.saveAsNewAPIHadoopFile(poStore.getSFile()
                 .getFileName(), Text.class, Tuple.class, PigOutputFormat.class,
                 storeJobConf);
-
+        }
         return rddPairs.rdd();
     }
 

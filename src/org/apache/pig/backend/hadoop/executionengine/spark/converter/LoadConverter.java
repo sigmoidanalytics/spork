@@ -8,7 +8,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.Job;
@@ -23,10 +22,14 @@ import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.io.FileSpec;
 import org.apache.pig.impl.plan.OperatorKey;
 import org.apache.pig.impl.util.ObjectSerializer;
+import org.apache.pig.spark.LoadSparkFunc;
+
 import com.google.common.collect.Lists;
+
 import scala.Function1;
 import scala.Tuple2;
 import scala.runtime.AbstractFunction1;
+
 import org.apache.spark.rdd.RDD;
 import org.apache.spark.SparkContext;
 import org.apache.commons.logging.Log;
@@ -64,6 +67,15 @@ public class LoadConverter implements POConverter<Tuple, Tuple, POLoad> {
         JobConf loadJobConf = SparkUtil.newJobConf(pigContext);
         configureLoader(physicalPlan, poLoad, loadJobConf);
 
+        LoadFunc loadFunc = poLoad.getLoadFunc();
+        if(loadFunc instanceof LoadSparkFunc)
+        {
+        	//LOG.info("!!!!!!!!!!  LoadSparkFunc  !!!!!!!!!!!!");
+        	LoadSparkFunc loadSparkFunc = (LoadSparkFunc) loadFunc;
+        	return loadSparkFunc.getRDDfromContext(sparkContext, poLoad.getLFile().getFileName(), loadJobConf);
+        }
+        else
+        {
         // don't know why but just doing this cast for now
         RDD<Tuple2<Text, Tuple>> hadoopRDD = sparkContext.newAPIHadoopFile(
                 poLoad.getLFile().getFileName(), PigInputFormatSpark.class,
@@ -73,6 +85,7 @@ public class LoadConverter implements POConverter<Tuple, Tuple, POLoad> {
         // map to get just RDD<Tuple>
         return hadoopRDD.map(TO_TUPLE_FUNCTION,
                 SparkUtil.getManifest(Tuple.class));
+        }
     }
 
     private void registerUdfFiles() {
