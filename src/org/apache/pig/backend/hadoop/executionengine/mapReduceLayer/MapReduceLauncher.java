@@ -147,10 +147,14 @@ public class MapReduceLauncher extends Launcher{
             ExecException,
             JobCreationException,
             Exception {
+    	
+    	log.info(php);
         long sleepTime = 500;
         aggregateWarning = Boolean.valueOf(pc.getProperties().getProperty("aggregate.warning"));
         MROperPlan mrp = compile(php, pc);
 
+        log.info(mrp);
+        
         ConfigurationValidator.validatePigProperties(pc.getProperties());
         Configuration conf = ConfigurationUtil.toConfiguration(pc.getProperties());
 

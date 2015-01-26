@@ -93,7 +93,7 @@ public class SparkLauncher extends Launcher {
     public PigStats launchPig(PhysicalPlan physicalPlan, String grpName,
             PigContext pigContext) throws Exception {
         LOG.info("!!!!!!!!!!  Launching Spark (woot) !!!!!!!!!!!!");
-        LOG.debug(physicalPlan);
+        LOG.info(physicalPlan);
         JobConf c = SparkUtil.newJobConf(pigContext);
         c.set(PigConstants.LOCAL_CODE_DIR, System.getProperty("java.io.tmpdir"));
 

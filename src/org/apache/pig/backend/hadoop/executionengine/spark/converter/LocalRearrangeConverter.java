@@ -20,7 +20,7 @@ import org.apache.spark.rdd.RDD;
 public class LocalRearrangeConverter implements
         POConverter<Tuple, Tuple, POLocalRearrange> {
     private static final Log LOG = LogFactory
-            .getLog(GlobalRearrangeConverter.class);
+            .getLog(LocalRearrangeConverter.class);
 
     @Override
     public RDD<Tuple> convert(List<RDD<Tuple>> predecessors,
@@ -60,8 +60,8 @@ public class LocalRearrangeConverter implements
                 case POStatus.STATUS_OK:
                     // (index, key, value without keys)
                     Tuple resultTuple = (Tuple) result.result;
-                    if (LOG.isDebugEnabled())
-                        LOG.debug("LocalRearrangeFunction out " + resultTuple);
+//                    if (LOG.isDebugEnabled())
+//                        LOG.debug("LocalRearrangeFunction out " + resultTuple);
                     return resultTuple;
                 default:
                     throw new RuntimeException(
