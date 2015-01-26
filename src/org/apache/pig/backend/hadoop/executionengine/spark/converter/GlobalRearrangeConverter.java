@@ -13,9 +13,7 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOpe
 import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.data.TupleFactory;
-import org.apache.pig.parser.AliasMasker.map_key_return;
 import org.apache.spark.HashPartitioner;
-import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.rdd.CoGroupedRDD;
@@ -26,7 +24,6 @@ import scala.Product2;
 import scala.Tuple2;
 import scala.collection.JavaConversions;
 import scala.collection.Seq;
-import scala.reflect.ClassTag;
 //import scala.reflect.ClassManifest;
 import scala.runtime.AbstractFunction1;
 import scala.runtime.AbstractFunction2;
@@ -57,7 +54,7 @@ public class GlobalRearrangeConverter implements
 	public RDD<Tuple> convert(List<RDD<Tuple>> predecessors,
 			POGlobalRearrange physicalOperator) throws IOException {
 		SparkUtil.assertPredecessorSizeGreaterThan(predecessors,
-				physicalOperator, 0);
+				physicalOperator, 0);//
 		int parallelism = SparkUtil.getParallelism(predecessors,
 				physicalOperator);
 
@@ -81,7 +78,7 @@ public class GlobalRearrangeConverter implements
 							ADD_ITERABLE_ITERABLE_FUNCTION);
 			RDD<Tuple> map2 = combineByKey.map(GROUP_TUPLE_FUNCTION2,
 					SparkUtil.getManifest(Tuple.class));
-			map2.saveAsTextFile("debug1");
+			//map2.saveAsTextFile("debug1");
 			return map2;
 			// jrdd.saveAsTextFile("debug1");
 			// JavaPairRDD<Object, Iterable<Tuple>> prdd =

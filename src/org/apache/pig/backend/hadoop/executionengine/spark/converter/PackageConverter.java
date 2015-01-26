@@ -25,121 +25,124 @@ import org.apache.spark.rdd.RDD;
 
 @SuppressWarnings({ "serial" })
 public class PackageConverter implements POConverter<Tuple, Tuple, POPackage> {
-    private static final Log LOG = LogFactory.getLog(PackageConverter.class);
+	private static final Log LOG = LogFactory.getLog(PackageConverter.class);
 
-    private transient JobConf jobConf;
-    private byte[] confBytes;
+	private transient JobConf jobConf;
+	private byte[] confBytes;
 
-    public PackageConverter(byte[] confBytes) {
-        this.confBytes = confBytes;
-    }
+	public PackageConverter(byte[] confBytes) {
+		this.confBytes = confBytes;
+	}
 
-    @Override
-    public RDD<Tuple> convert(List<RDD<Tuple>> predecessors,
-            POPackage physicalOperator) throws IOException {
-        SparkUtil.assertPredecessorSize(predecessors, physicalOperator, 1);
-        RDD<Tuple> rdd = predecessors.get(0);
-        // package will generate the group from the result of the local
-        // rearrange
-        return rdd.map(new PackageFunction(physicalOperator, this.confBytes),
-                SparkUtil.getManifest(Tuple.class));
-    }
+	@Override
+	public RDD<Tuple> convert(List<RDD<Tuple>> predecessors,
+			POPackage physicalOperator) throws IOException {
+		SparkUtil.assertPredecessorSize(predecessors, physicalOperator, 1);
+		RDD<Tuple> rdd = predecessors.get(0);
+		// package will generate the group from the result of the local
+		// rearrange
+		return rdd.map(new PackageFunction(physicalOperator, this.confBytes),
+				SparkUtil.getManifest(Tuple.class));
+	}
 
-    private static class PackageFunction extends
-            AbstractFunction1<Tuple, Tuple> implements Serializable {
+	private static class PackageFunction extends
+			AbstractFunction1<Tuple, Tuple> implements Serializable {
 
-        private final POPackage physicalOperator;
-        private byte[] confBytes;
+		private final POPackage physicalOperator;
+		private byte[] confBytes;
 
-        public PackageFunction(POPackage physicalOperator, byte[] confBytes) {
-            this.physicalOperator = physicalOperator;
-            this.confBytes = confBytes;
-        }
+		public PackageFunction(POPackage physicalOperator, byte[] confBytes) {
+			this.physicalOperator = physicalOperator;
+			this.confBytes = confBytes;
+		}
 
-        void initializeJobConf() {
-            JobConf jobConf = KryoSerializer.deserializeJobConf(this.confBytes);
-            jobConf.set("pig.cachedbag.type", "default");
-            PigMapReduce.sJobConfInternal.set(jobConf);
-        }
+		void initializeJobConf() {
+			if (PigMapReduce.sJobConfInternal.get() == null) {
+				JobConf jobConf = KryoSerializer
+						.deserializeJobConf(this.confBytes);
+				jobConf.set("pig.cachedbag.type", "default");
+				PigMapReduce.sJobConfInternal.set(jobConf);
+			}
+		}
 
-        @Override
-        public Tuple apply(final Tuple t) {
-            initializeJobConf();
+		@Override
+		public Tuple apply(final Tuple t) {
+			initializeJobConf();
 
-            // (key, Seq<Tuple>:{(index, key, value without key)})
-            if (LOG.isDebugEnabled())
-                LOG.debug("PackageFunction in " + t);
-            Result result;
-            try {
-                PigNullableWritable key = new PigNullableWritable() {
+			// (key, Seq<Tuple>:{(index, key, value without key)})
+			if (LOG.isDebugEnabled())
+				LOG.debug("PackageFunction in " + t);
+			Result result;
+			try {
+				PigNullableWritable key = new PigNullableWritable() {
 
-                    public Object getValueAsPigType() {
-                        try {
-                            Object keyTuple = t.get(0);
-                            return keyTuple;
-                        } catch (ExecException e) {
-                            throw new RuntimeException(e);
-                        }
-                    }
-                };
-                final Iterator<Tuple> bagIterator = (Iterator<Tuple>) t.get(1);
-                Iterator<NullableTuple> iterator = new Iterator<NullableTuple>() {
-                    public boolean hasNext() {
-                        return bagIterator.hasNext();
-                    }
+					public Object getValueAsPigType() {
+						try {
+							Object keyTuple = t.get(0);
+							return keyTuple;
+						} catch (ExecException e) {
+							throw new RuntimeException(e);
+						}
+					}
+				};
+				final Iterator<Tuple> bagIterator = (Iterator<Tuple>) t.get(1);
+				Iterator<NullableTuple> iterator = new Iterator<NullableTuple>() {
+					public boolean hasNext() {
+						return bagIterator.hasNext();
+					}
 
-                    public NullableTuple next() {
-                        try {
-                            // we want the value and index only
-                            Tuple next = bagIterator.next();
-                            NullableTuple nullableTuple = new NullableTuple(
-                                    (Tuple) next.get(2));
-                            nullableTuple.setIndex(((Number) next.get(0))
-                                    .byteValue());
-                            return nullableTuple;
-                        } catch (ExecException e) {
-                            throw new RuntimeException(e);
-                        }
-                    }
+					public NullableTuple next() {
+						try {
+							// we want the value and index only
+							Tuple next = bagIterator.next();
+							NullableTuple nullableTuple = new NullableTuple(
+									(Tuple) next.get(2));
+							nullableTuple.setIndex(((Number) next.get(0))
+									.byteValue());
+							return nullableTuple;
+						} catch (ExecException e) {
+							throw new RuntimeException(e);
+						}
+					}
 
-                    public void remove() {
-                        throw new UnsupportedOperationException();
-                    }
-                };
-                physicalOperator.setInputs(null);
-                physicalOperator.attachInput(key, iterator);
-                result = physicalOperator.getNextTuple();
-            } catch (ExecException e) {
-                throw new RuntimeException(
-                        "Couldn't do Package on tuple: " + t, e);
-            }
+					public void remove() {
+						throw new UnsupportedOperationException();
+					}
+				};
+				physicalOperator.setInputs(null);
+				physicalOperator.attachInput(key, iterator);
+				result = physicalOperator.getNextTuple();
+			} catch (ExecException e) {
+				throw new RuntimeException(
+						"Couldn't do Package on tuple: " + t, e);
+			}
 
-            if (result == null) {
-                throw new RuntimeException(
-                        "Null response found for Package on tuple: " + t);
-            }
-            Tuple out;
-            switch (result.returnStatus) {
-            case POStatus.STATUS_OK:
-                // (key, {(value)...})
-                if (LOG.isDebugEnabled())
-                    LOG.debug("PackageFunction out " + result.result);
-                out = (Tuple) result.result;
-                break;
-            case POStatus.STATUS_NULL:
-                out = null;
-                break;
-            default:
-                throw new RuntimeException(
-                        "Unexpected response code from operator "
-                                + physicalOperator + " : " + result + " "
-                                + result.returnStatus);
-            }
-            if (LOG.isDebugEnabled())
-                LOG.debug("PackageFunction out " + out);
-            return out;
-        }
+			if (result == null) {
+				throw new RuntimeException(
+						"Null response found for Package on tuple: " + t);
+			}
+			Tuple out;
+			switch (result.returnStatus) {
+			case POStatus.STATUS_OK:
+				// (key, {(value)...})
+				if (LOG.isDebugEnabled())
+					LOG.debug("PackageFunction out " + result.result);
+				out = (Tuple) result.result;
+				break;
+			case POStatus.STATUS_NULL:
+				out = null;
+				break;
+			default:
+				throw new RuntimeException(
+						"Unexpected response code from operator "
+								+ physicalOperator + " : " + result + " "
+								+ result.returnStatus);
+			}
+			if (LOG.isDebugEnabled())
+				LOG.debug("PackageFunction out " + out);
+			return out;
+		}
 
-    }
+	}
 
 }

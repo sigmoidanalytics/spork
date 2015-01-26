@@ -16,7 +16,7 @@
 # under the License.
 
 # ***** Set root logger level to DEBUG and its only appender to A.
-log4j.logger.org.apache.pig=info, A
+log4j.logger.org.apache.pig=error, A
 
 # ***** A is set to be a ConsoleAppender.
 log4j.appender.A=org.apache.log4j.ConsoleAppender
