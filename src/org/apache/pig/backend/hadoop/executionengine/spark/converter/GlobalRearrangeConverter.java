@@ -75,7 +75,7 @@ public class GlobalRearrangeConverter implements
 			RDD<Tuple2<Object, Iterable<Tuple>>> combineByKey = pairRDDFunctions
 					.combineByKey(TUPLE2_ITERABLE_FUNCTION,
 							ADD_TUPLE2_ITERABLE_FUNCTION,
-							ADD_ITERABLE_ITERABLE_FUNCTION);
+							ADD_ITERABLE_ITERABLE_FUNCTION, parallelism);
 			RDD<Tuple> map2 = combineByKey.map(GROUP_TUPLE_FUNCTION2,
 					SparkUtil.getManifest(Tuple.class));
 			//map2.saveAsTextFile("debug1");

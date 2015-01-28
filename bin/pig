@@ -409,7 +409,19 @@ if [ -n "$HADOOP_BIN" ]; then
         echo
     else
         #exec "$HADOOP_BIN" jar "$PIG_JAR" "${remaining[@]}"
-        $SPARK_HOME/bin/spark-submit --class  org.apache.pig.Main "$PIG_JAR" "${remaining[@]}"
+        if [ -z "$SPARK_EXECUTOR_CORES" ]; then
+        	export SPARK_EXECUTOR_CORES=1
+        fi
+        if [ -z "$SPARK_EXECUTOR_MEMORY" ]; then
+        	export SPARK_EXECUTOR_MEMORY=2000m
+        fi
+        if [ -z "$SPARK_MEM" ]; then
+        	export SPARK_MEM=2000m
+        fi
+        if [ -z "$SPARK_EXECUTOR_INSTANCES" ]; then
+        	export SPARK_EXECUTOR_INSTANCES=1
+        fi
+        $SPARK_HOME/bin/spark-submit --num-executors $SPARK_EXECUTOR_INSTANCES --driver-memory $SPARK_MEM --executor-memory $SPARK_EXECUTOR_MEMORY --executor-cores $SPARK_EXECUTOR_CORES --class  org.apache.pig.Main "$PIG_JAR"  "${remaining[@]}"
     fi
 else
     # use hadoop-core.jar to run local mode
