@@ -67,8 +67,8 @@ public class GlobalRearrangeConverter implements
 		if (predecessors.size() == 1) {
 			// GROUP
 			// JavaRDD<Tuple> jrdd = predecessors.get(0).toJavaRDD();
-			RDD<Tuple2<Object, Object>> map = predecessors.get(0).map(
-					MAKE_TUPLE2_FUNCTION, SparkUtil.getTuple2Manifest());
+			RDD<Tuple2<Object, Object>> map = predecessors.get(0)
+					.map(MAKE_TUPLE2_FUNCTION, SparkUtil.getTuple2Manifest());
 			PairRDDFunctions<Object, Object> pairRDDFunctions = new PairRDDFunctions<Object, Object>(
 					map, SparkUtil.getManifest(Object.class),
 					SparkUtil.getManifest(Object.class), null);
@@ -78,7 +78,7 @@ public class GlobalRearrangeConverter implements
 							ADD_ITERABLE_ITERABLE_FUNCTION, parallelism);
 			RDD<Tuple> map2 = combineByKey.map(GROUP_TUPLE_FUNCTION2,
 					SparkUtil.getManifest(Tuple.class));
-			//map2.saveAsTextFile("debug1");
+			// map2.saveAsTextFile("debug1");
 			return map2;
 			// jrdd.saveAsTextFile("debug1");
 			// JavaPairRDD<Object, Iterable<Tuple>> prdd =
