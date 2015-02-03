@@ -80,11 +80,11 @@ if [ -z "$SPARK_HOME" ]; then
 fi
 
 # Cluster settings
-export SPARK_WORKER_CORES=1
-export SPARK_WORKER_MEMORY=2048m
-export SPARK_MEM=2048m
-export SPARK_WORKER_INSTANCES=1
-export SPARK_REDUCERS=4
+export SPARK_EXECUTOR_CORES=2
+export SPARK_EXECUTOR_MEMORY=1200m
+export SPARK_MEM=1200m
+export SPARK_EXECUTOR_INSTANCES=4
+export SPARK_PARALLELISM=4;
 export SPARK_REPARTITION_LOAD=true
 
 ${PIG_HOME}/bin/pig -x spark "$@"

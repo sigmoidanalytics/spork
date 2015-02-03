@@ -34,11 +34,12 @@ import org.apache.spark.rdd.RDD;
 import org.apache.spark.SparkContext;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+
 /**
  * Converter that loads data via POLoad and converts it to RRD&lt;Tuple>. Abuses
  * the interface a bit in that there is no inoput RRD to convert in this case.
  * Instead input is the source path of the POLoad.
- *
+ * 
  */
 @SuppressWarnings({ "serial" })
 public class LoadConverter implements POConverter<Tuple, Tuple, POLoad> {
@@ -70,18 +71,18 @@ public class LoadConverter implements POConverter<Tuple, Tuple, POLoad> {
 
 		int parallelism = SparkUtil.getParallelism(predecessorRdds, poLoad);
 
-		String reducers = System.getenv("SPARK_REDUCERS");
-		log.info("SPARK_REDUCERS:" + reducers);
-		if (reducers != null) {
-			parallelism = Integer.parseInt(reducers);
+		String parallelismStr = System.getenv("SPARK_PARALLELISM");
+		if (parallelismStr != null) {
+			parallelism = Integer.parseInt(parallelismStr);
 		}
-
+		log.info("Parallelism for Spark load repartition: " + parallelism);
 
 		String repart = System.getenv("SPARK_REPARTITION_LOAD");
 		boolean repartition = false;
 		if (repart != null && repart.equalsIgnoreCase("true")) {
 			repartition = true;
 		}
+		log.info("Parallelism for Spark repartition on: " + repartition);
 
 		LoadFunc loadFunc = poLoad.getLoadFunc();
 		RDD<Tuple> loadedRDD;
@@ -92,9 +93,9 @@ public class LoadConverter implements POConverter<Tuple, Tuple, POLoad> {
 
 		} else {
 			RDD<Tuple2<Text, Tuple>> hadoopRDD;
-				hadoopRDD = sparkContext.newAPIHadoopFile(poLoad.getLFile()
-						.getFileName(), PigInputFormatSpark.class, Text.class,
-						Tuple.class, loadJobConf);
+			hadoopRDD = sparkContext.newAPIHadoopFile(poLoad.getLFile()
+					.getFileName(), PigInputFormatSpark.class, Text.class,
+					Tuple.class, loadJobConf);
 
 			registerUdfFiles();
 			return hadoopRDD.map(TO_TUPLE_FUNCTION,

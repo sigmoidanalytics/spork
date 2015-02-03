@@ -58,7 +58,7 @@ public class GlobalRearrangeConverter implements
 		int parallelism = SparkUtil.getParallelism(predecessors,
 				physicalOperator);
 
-		String reducers = System.getenv("SPARK_REDUCERS");
+		String reducers = System.getenv("SPARK_PARALLELISM");
 		if (reducers != null) {
 			parallelism = Integer.parseInt(reducers);
 		}
