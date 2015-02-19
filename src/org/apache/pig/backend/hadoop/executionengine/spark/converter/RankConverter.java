@@ -9,8 +9,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.PORank;
 import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
@@ -26,8 +24,6 @@ import scala.Tuple2;
 
 public class RankConverter implements POConverter<Tuple, Tuple, PORank> {
 
-	private static final Log LOG = LogFactory.getLog(RankConverter.class);
-	
 	@Override
 	public RDD<Tuple> convert(List<RDD<Tuple>> predecessors, PORank poRank)
 			throws IOException {

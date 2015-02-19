@@ -22,6 +22,8 @@ import org.apache.spark.rdd.PairRDDFunctions;
 import org.apache.spark.rdd.RDD;
 
 import scala.Tuple2;
+import scala.collection.Iterator;
+import scala.runtime.AbstractFunction1;
 
 import com.google.common.collect.Lists;
 
@@ -30,71 +32,78 @@ import com.google.common.collect.Lists;
  */
 @SuppressWarnings({ "serial" })
 public class StoreConverter implements
-        POConverter<Tuple, Tuple2<Text, Tuple>, POStore> {
+		POConverter<Tuple, Tuple2<Text, Tuple>, POStore> {
 
-    private static final FromTupleFunction FROM_TUPLE_FUNCTION = new FromTupleFunction();
+	private static final FromTupleFunction FROM_TUPLE_FUNCTION = new FromTupleFunction();
 
-    private PigContext pigContext;
+	private PigContext pigContext;
 
-    public StoreConverter(PigContext pigContext) {
-        this.pigContext = pigContext;
-    }
+	public StoreConverter(PigContext pigContext) {
+		this.pigContext = pigContext;
+	}
 
-    @Override
-    public RDD<Tuple2<Text, Tuple>> convert(List<RDD<Tuple>> predecessors,
-            POStore physicalOperator) throws IOException {
-        SparkUtil.assertPredecessorSize(predecessors, physicalOperator, 1);
-        RDD<Tuple> rdd = predecessors.get(0);
-        // convert back to KV pairs
-        JavaRDD<Tuple2<Text, Tuple>> rddPairs = rdd.toJavaRDD().map(FROM_TUPLE_FUNCTION);
+	@Override
+	public RDD<Tuple2<Text, Tuple>> convert(List<RDD<Tuple>> predecessors,
+			POStore physicalOperator) throws IOException {
+		SparkUtil.assertPredecessorSize(predecessors, physicalOperator, 1);
+		RDD<Tuple> rdd = predecessors.get(0);
+		// convert back to KV pairs
+		JavaRDD<Tuple2<Text, Tuple>> rddPairs = rdd.mapPartitions(
+				new FromTupleFunction(), true,
+				SparkUtil.<Text, Tuple> getTuple2Manifest()).toJavaRDD();
 
-        PairRDDFunctions<Text, Tuple> pairRDDFunctions = new PairRDDFunctions<Text, Tuple>(
-                rddPairs.rdd(), SparkUtil.getManifest(Text.class),
-                SparkUtil.getManifest(Tuple.class), null);
+		PairRDDFunctions<Text, Tuple> pairRDDFunctions = new PairRDDFunctions<Text, Tuple>(
+				rddPairs.rdd(), SparkUtil.getManifest(Text.class),
+				SparkUtil.getManifest(Tuple.class), null);
 
-        JobConf storeJobConf = SparkUtil.newJobConf(pigContext);
-        POStore poStore = configureStorer(storeJobConf, physicalOperator);
+		JobConf storeJobConf = SparkUtil.newJobConf(pigContext);
+		POStore poStore = configureStorer(storeJobConf, physicalOperator);
 
-        StoreFuncInterface storeFunc = poStore.getStoreFunc();
-        if(storeFunc instanceof StoreSparkFunc)
-        {
-        	StoreSparkFunc storeSparkFunc = (StoreSparkFunc)storeFunc;
-        	storeSparkFunc.putRDD(rdd, poStore.getSFile().getFileName(), storeJobConf);
-        }
-        else
-        {
-        pairRDDFunctions.saveAsNewAPIHadoopFile(poStore.getSFile()
-                .getFileName(), Text.class, Tuple.class, PigOutputFormat.class,
-                storeJobConf);
-        }
-        return rddPairs.rdd();
-    }
+		StoreFuncInterface storeFunc = poStore.getStoreFunc();
+		if (storeFunc instanceof StoreSparkFunc) {
+			StoreSparkFunc storeSparkFunc = (StoreSparkFunc) storeFunc;
+			storeSparkFunc.putRDD(rdd, poStore.getSFile().getFileName(),
+					storeJobConf);
+		} else {
+			pairRDDFunctions.saveAsNewAPIHadoopFile(poStore.getSFile()
+					.getFileName(), Text.class, Tuple.class,
+					PigOutputFormat.class, storeJobConf);
+		}
+		return rddPairs.rdd();
+	}
 
-    private static POStore configureStorer(JobConf jobConf,
-            PhysicalOperator physicalOperator) throws IOException {
-        ArrayList<POStore> storeLocations = Lists.newArrayList();
-        POStore poStore = (POStore) physicalOperator;
-        storeLocations.add(poStore);
-        StoreFuncInterface sFunc = poStore.getStoreFunc();
-        sFunc.setStoreLocation(poStore.getSFile().getFileName(),
-                new org.apache.hadoop.mapreduce.Job(jobConf));
-        poStore.setInputs(null);
-        poStore.setParentPlan(null);
+	private static POStore configureStorer(JobConf jobConf,
+			PhysicalOperator physicalOperator) throws IOException {
+		ArrayList<POStore> storeLocations = Lists.newArrayList();
+		POStore poStore = (POStore) physicalOperator;
+		storeLocations.add(poStore);
+		StoreFuncInterface sFunc = poStore.getStoreFunc();
+		sFunc.setStoreLocation(poStore.getSFile().getFileName(),
+				new org.apache.hadoop.mapreduce.Job(jobConf));
+		poStore.setInputs(null);
+		poStore.setParentPlan(null);
 
-        jobConf.set(JobControlCompiler.PIG_MAP_STORES,
-                ObjectSerializer.serialize(Lists.newArrayList()));
-        jobConf.set(JobControlCompiler.PIG_REDUCE_STORES,
-                ObjectSerializer.serialize(storeLocations));
-        return poStore;
-    }
+		jobConf.set(JobControlCompiler.PIG_MAP_STORES,
+				ObjectSerializer.serialize(Lists.newArrayList()));
+		jobConf.set(JobControlCompiler.PIG_REDUCE_STORES,
+				ObjectSerializer.serialize(storeLocations));
+		return poStore;
+	}
 
-    private static class FromTupleFunction implements
-            Function<Tuple, Tuple2<Text, Tuple>> {
+	private static class FromTupleFunction extends
+			AbstractFunction1<Iterator<Tuple>, Iterator<Tuple2<Text, Tuple>>> {
 
-        private static Text EMPTY_TEXT = new Text();
+		private static Text EMPTY_TEXT = new Text();
 
-        public Tuple2<Text, Tuple> call(Tuple v1) {
-            return new Tuple2<Text, Tuple>(EMPTY_TEXT, v1);
-        }
-    }
+		@Override
+		public Iterator<Tuple2<Text, Tuple>> apply(Iterator<Tuple> input) {
+			AbstractFunction1<Tuple, Tuple2<Text, Tuple>> abstractFunction1 = new AbstractFunction1<Tuple, Tuple2<Text, Tuple>>() {
+				public Tuple2<Text, Tuple> apply(Tuple v1) {
+					return new Tuple2<Text, Tuple>(EMPTY_TEXT, v1);
+				}
+			};
+			return input.map(abstractFunction1);
+		}
+
+	}
 }

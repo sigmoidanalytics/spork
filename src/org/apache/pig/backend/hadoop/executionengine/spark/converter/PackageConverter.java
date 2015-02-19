@@ -41,12 +41,14 @@ public class PackageConverter implements POConverter<Tuple, Tuple, POPackage> {
 		RDD<Tuple> rdd = predecessors.get(0);
 		// package will generate the group from the result of the local
 		// rearrange
-		return rdd.map(new PackageFunction(physicalOperator, this.confBytes),
-				SparkUtil.getManifest(Tuple.class));
+		return rdd.mapPartitions(new PackageFunction(physicalOperator,
+				this.confBytes), true, SparkUtil.getManifest(Tuple.class));
 	}
 
-	private static class PackageFunction extends
-			AbstractFunction1<Tuple, Tuple> implements Serializable {
+	private static class PackageFunction
+			extends
+			AbstractFunction1<scala.collection.Iterator<Tuple>, scala.collection.Iterator<Tuple>>
+			implements Serializable {
 
 		private final POPackage physicalOperator;
 		private byte[] confBytes;
@@ -66,9 +68,28 @@ public class PackageConverter implements POConverter<Tuple, Tuple, POPackage> {
 		}
 
 		@Override
-		public Tuple apply(final Tuple t) {
+		public scala.collection.Iterator<Tuple> apply(
+				final scala.collection.Iterator<Tuple> input) {
 			initializeJobConf();
 
+			AbstractFunction1<Tuple, Tuple> abstractFunction1 = new AbstractFunction1<Tuple, Tuple>() {
+
+				@Override
+				public Tuple apply(Tuple t) {
+					return packageOperations(t);
+				}
+
+			};
+
+			return input.map(abstractFunction1);
+
+		}
+
+		/**
+		 * @param t
+		 * @return
+		 */
+		private Tuple packageOperations(final Tuple t) {
 			// (key, Seq<Tuple>:{(index, key, value without key)})
 			if (LOG.isDebugEnabled())
 				LOG.debug("PackageFunction in " + t);

@@ -28,9 +28,11 @@ import com.google.common.collect.Lists;
 
 import scala.Function1;
 import scala.Tuple2;
+import scala.collection.Iterator;
 import scala.runtime.AbstractFunction1;
 
 import org.apache.spark.rdd.RDD;
+import org.apache.spark.storage.StorageLevel;
 import org.apache.spark.SparkContext;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -57,7 +59,6 @@ public class LoadConverter implements POConverter<Tuple, Tuple, POLoad> {
 		this.sparkContext = sparkContext;
 	}
 
-	@SuppressWarnings("unchecked")
 	@Override
 	public RDD<Tuple> convert(List<RDD<Tuple>> predecessorRdds, POLoad poLoad)
 			throws IOException {
@@ -82,7 +83,10 @@ public class LoadConverter implements POConverter<Tuple, Tuple, POLoad> {
 		if (repart != null && repart.equalsIgnoreCase("true")) {
 			repartition = true;
 		}
-		log.info("Parallelism for Spark repartition on: " + repartition);
+		log.info("Spark repartition: " + repartition);
+
+		String storageLevel = System.getenv("SPARK_STORAGE_LEVEL");
+		log.info("StorageLevel for Spark: " + storageLevel);
 
 		LoadFunc loadFunc = poLoad.getLoadFunc();
 		RDD<Tuple> loadedRDD;
@@ -98,12 +102,17 @@ public class LoadConverter implements POConverter<Tuple, Tuple, POLoad> {
 					Tuple.class, loadJobConf);
 
 			registerUdfFiles();
-			return hadoopRDD.map(TO_TUPLE_FUNCTION,
+			return hadoopRDD.mapPartitions(TO_TUPLE_FUNCTION, true,
 					SparkUtil.getManifest(Tuple.class));
 		}
 
 		if (repartition)
 			return loadedRDD.repartition(parallelism, null);
+
+		if (storageLevel != null) {
+
+			loadedRDD.persist(StorageLevel.fromString(storageLevel));
+		}
 		return loadedRDD;
 	}
 
@@ -124,13 +133,20 @@ public class LoadConverter implements POConverter<Tuple, Tuple, POLoad> {
 	}
 
 	private static class ToTupleFunction extends
-			AbstractFunction1<Tuple2<Text, Tuple>, Tuple> implements
-			Function1<Tuple2<Text, Tuple>, Tuple>, Serializable {
+			AbstractFunction1<Iterator<Tuple2<Text, Tuple>>, Iterator<Tuple>> implements Serializable {
 
 		@Override
-		public Tuple apply(Tuple2<Text, Tuple> v1) {
-			return v1._2();
+		public Iterator<Tuple> apply(Iterator<Tuple2<Text, Tuple>> input) {
+			
+			return input.map(new AbstractFunction1<Tuple2<Text,Tuple>, Tuple>() {
+				@Override
+				public Tuple apply(Tuple2<Text, Tuple> v1) {
+					return v1._2();
+				}
+			});
 		}
+
+		
 	}
 
 	/**
