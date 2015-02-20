@@ -1,6 +1,7 @@
 package org.apache.pig.backend.hadoop.executionengine.spark.converter;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -91,7 +92,7 @@ public class StoreConverter implements
 	}
 
 	private static class FromTupleFunction extends
-			AbstractFunction1<Iterator<Tuple>, Iterator<Tuple2<Text, Tuple>>> {
+			AbstractFunction1<Iterator<Tuple>, Iterator<Tuple2<Text, Tuple>>> implements Serializable {
 
 		private static Text EMPTY_TEXT = new Text();
 

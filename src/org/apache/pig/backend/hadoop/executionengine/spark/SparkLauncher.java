@@ -94,7 +94,7 @@ public class SparkLauncher extends Launcher {
 	public PigStats launchPig(PhysicalPlan physicalPlan, String grpName,
 			PigContext pigContext) throws Exception {
 		LOG.info("!!!!!!!!!!  Launching Spark (woot) !!!!!!!!!!!!");
-		LOG.info(physicalPlan);
+
 		JobConf c = SparkUtil.newJobConf(pigContext);
 		c.set(PigConstants.LOCAL_CODE_DIR, System.getProperty("java.io.tmpdir"));
 
@@ -103,13 +103,18 @@ public class SparkLauncher extends Launcher {
 		// ObjectSerializer.serialize(c);
 		byte[] confBytes = KryoSerializer.serializeJobConf(c);
 
+		LOG.info(physicalPlan);
 		// Code pulled from MapReduceLauncher
 		MRCompiler mrCompiler = new MRCompiler(physicalPlan, pigContext);
 		mrCompiler.compile();
 		MROperPlan plan = mrCompiler.getMRPlan();
+		
 		POPackageAnnotator pkgAnnotator = new POPackageAnnotator(plan);
 		pkgAnnotator.visit();
 
+		LOG.info(plan);
+		LOG.info(physicalPlan);
+		
 		if (System.getenv("BROADCAST_PORT") == null
 				&& System.getenv("BROADCAST_MASTER_IP") == null) {
 			LOG.warn("Missing BROADCAST_POST/BROADCAST_HOST in the environment.");
