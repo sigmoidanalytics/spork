@@ -59,6 +59,13 @@ public class POGlobalRearrange extends PhysicalOperator {
 		this.customPartitioner = customPartitioner;
 	}
 
+	public POGlobalRearrange(POGlobalRearrange copy)
+	{
+		super(copy);
+		this.customPartitioner = copy.customPartitioner;
+		this.cross = copy.cross;
+	}
+	
     public POGlobalRearrange(OperatorKey k) {
         this(k, -1, null);
     }

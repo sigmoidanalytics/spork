@@ -39,6 +39,9 @@ public class PackageConverter implements POConverter<Tuple, Tuple, POPackage> {
 			POPackage physicalOperator) throws IOException {
 		SparkUtil.assertPredecessorSize(predecessors, physicalOperator, 1);
 		RDD<Tuple> rdd = predecessors.get(0);
+		
+        LOG.info("Package Accumulative:"+ physicalOperator.isAccumulative());
+
 		// package will generate the group from the result of the local
 		// rearrange
 		return rdd.mapPartitions(new PackageFunction(physicalOperator,

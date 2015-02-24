@@ -13,10 +13,13 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapred.JobConf;
+import org.apache.pig.PigConfiguration;
 import org.apache.pig.PigConstants;
 import org.apache.pig.PigException;
 import org.apache.pig.backend.BackendException;
 import org.apache.pig.backend.hadoop.executionengine.Launcher;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.AccumulatorOptimizer;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.CombinerOptimizer;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRCompiler;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.MROperPlan;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.POPackageAnnotator;
@@ -32,6 +35,7 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOpe
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLoad;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLocalRearrange;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPackage;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPreCombinerLocalRearrange;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.PORank;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSkewedJoin;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSort;
@@ -48,18 +52,22 @@ import org.apache.pig.backend.hadoop.executionengine.spark.converter.GlobalRearr
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.LimitConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.LoadConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.LocalRearrangeConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.OptimizedGlobalRearrangeConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.POConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.PackageConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.PreCombinerLocalRearrangeConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.RankConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.SkewedJoinConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.SortConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.SplitConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.StoreConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.UnionConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.plans.POOptimizedGlobalRearrange;
 import org.apache.pig.data.SchemaTupleBackend;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.plan.OperatorKey;
+import org.apache.pig.impl.plan.CompilationMessageCollector.MessageType;
 import org.apache.pig.impl.util.ObjectSerializer;
 import org.apache.pig.tools.pigstats.PigStats;
 import org.apache.pig.tools.pigstats.SparkStats;
@@ -111,6 +119,31 @@ public class SparkLauncher extends Launcher {
 		
 		POPackageAnnotator pkgAnnotator = new POPackageAnnotator(plan);
 		pkgAnnotator.visit();
+		
+		LOG.info(plan);
+
+		//THIS OPTIMIZATION ASSUMES COMBINER FUNCTION TO BE ASSOCIATIVE
+        String prop = pigContext.getProperties().getProperty(PigConfiguration.PIG_EXEC_NO_COMBINER);
+        if (!pigContext.inIllustrator && !("true".equals(prop)))  {
+            SparkCombinerOptimizerUtil.addCombiner(physicalPlan);
+        }
+        
+//        String prop = pigContext.getProperties().getProperty(PigConfiguration.PIG_EXEC_NO_COMBINER);
+//        if (!pigContext.inIllustrator && !("true".equals(prop)))  {
+//            boolean doMapAgg =
+//                    Boolean.valueOf(pigContext.getProperties().getProperty(PigConfiguration.PIG_EXEC_MAP_PARTAGG,"false"));
+//            CombinerOptimizer co = new CombinerOptimizer(plan, doMapAgg);
+//            co.visit();
+//            //display the warning message(s) from the CombinerOptimizer
+//            co.getMessageCollector().logMessages(MessageType.Warning, true, LOG);
+//        }
+		
+//		boolean isAccum = Boolean.valueOf(pigContext.getProperties().getProperty(
+//				"opt.accumulator", "true"));
+//		if (isAccum) {
+//			AccumulatorOptimizer accum = new AccumulatorOptimizer(plan);
+//			accum.visit();
+//		}
 
 		LOG.info(plan);
 		LOG.info(physicalPlan);
@@ -138,7 +171,9 @@ public class SparkLauncher extends Launcher {
 		convertMap.put(POFilter.class, new FilterConverter());
 		convertMap.put(POPackage.class, new PackageConverter(confBytes));
 		// convertMap.put(POCache.class, cacheConverter);
+		convertMap.put(POPreCombinerLocalRearrange.class, new PreCombinerLocalRearrangeConverter());
 		convertMap.put(POLocalRearrange.class, new LocalRearrangeConverter());
+		convertMap.put(POOptimizedGlobalRearrange.class, new OptimizedGlobalRearrangeConverter(confBytes));
 		convertMap.put(POGlobalRearrange.class, new GlobalRearrangeConverter());
 		convertMap.put(POLimit.class, new LimitConverter());
 		convertMap.put(PODistinct.class, new DistinctConverter());
