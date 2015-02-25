@@ -27,7 +27,7 @@ public class PreCombinerLocalRearrangeConverter implements
 		// call local rearrange to get key and value
 		RDD<Tuple> mapPartitions = rdd.mapPartitions(new PreCombinerLocalRearrange(physicalOperator),
 				true, SparkUtil.getManifest(Tuple.class));
-//		mapPartitions.saveAsTextFile("DebugPreCombiner-" + System.currentTimeMillis());
+		//mapPartitions.saveAsTextFile("DebugPreCombiner-" + System.currentTimeMillis());
 		return mapPartitions;
 
 	}

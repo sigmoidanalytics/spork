@@ -116,38 +116,28 @@ public class SparkLauncher extends Launcher {
 		MRCompiler mrCompiler = new MRCompiler(physicalPlan, pigContext);
 		mrCompiler.compile();
 		MROperPlan plan = mrCompiler.getMRPlan();
+
+		
+
+		LOG.info(plan);
+
+		String combOp = System.getenv("SPARK_COMBINE_OPTIMIZATION");
+		if (combOp != null && combOp.equalsIgnoreCase("true")) {
+			// THIS OPTIMIZATION ASSUMES COMBINER FUNCTION TO BE ASSOCIATIVE
+			String prop = pigContext.getProperties().getProperty(
+					PigConfiguration.PIG_EXEC_NO_COMBINER);
+			if (!pigContext.inIllustrator && !("true".equals(prop))) {
+				SparkCombinerOptimizerUtil.addCombiner(physicalPlan);
+			}
+		}
 		
 		POPackageAnnotator pkgAnnotator = new POPackageAnnotator(plan);
 		pkgAnnotator.visit();
-		
-		LOG.info(plan);
 
-		//THIS OPTIMIZATION ASSUMES COMBINER FUNCTION TO BE ASSOCIATIVE
-        String prop = pigContext.getProperties().getProperty(PigConfiguration.PIG_EXEC_NO_COMBINER);
-        if (!pigContext.inIllustrator && !("true".equals(prop)))  {
-            SparkCombinerOptimizerUtil.addCombiner(physicalPlan);
-        }
-        
-//        String prop = pigContext.getProperties().getProperty(PigConfiguration.PIG_EXEC_NO_COMBINER);
-//        if (!pigContext.inIllustrator && !("true".equals(prop)))  {
-//            boolean doMapAgg =
-//                    Boolean.valueOf(pigContext.getProperties().getProperty(PigConfiguration.PIG_EXEC_MAP_PARTAGG,"false"));
-//            CombinerOptimizer co = new CombinerOptimizer(plan, doMapAgg);
-//            co.visit();
-//            //display the warning message(s) from the CombinerOptimizer
-//            co.getMessageCollector().logMessages(MessageType.Warning, true, LOG);
-//        }
-		
-//		boolean isAccum = Boolean.valueOf(pigContext.getProperties().getProperty(
-//				"opt.accumulator", "true"));
-//		if (isAccum) {
-//			AccumulatorOptimizer accum = new AccumulatorOptimizer(plan);
-//			accum.visit();
-//		}
 
-		LOG.info(plan);
+		//LOG.info(plan);
 		LOG.info(physicalPlan);
-		
+
 		if (System.getenv("BROADCAST_PORT") == null
 				&& System.getenv("BROADCAST_MASTER_IP") == null) {
 			LOG.warn("Missing BROADCAST_POST/BROADCAST_HOST in the environment.");
@@ -171,9 +161,11 @@ public class SparkLauncher extends Launcher {
 		convertMap.put(POFilter.class, new FilterConverter());
 		convertMap.put(POPackage.class, new PackageConverter(confBytes));
 		// convertMap.put(POCache.class, cacheConverter);
-		convertMap.put(POPreCombinerLocalRearrange.class, new PreCombinerLocalRearrangeConverter());
+		convertMap.put(POPreCombinerLocalRearrange.class,
+				new PreCombinerLocalRearrangeConverter());
 		convertMap.put(POLocalRearrange.class, new LocalRearrangeConverter());
-		convertMap.put(POOptimizedGlobalRearrange.class, new OptimizedGlobalRearrangeConverter(confBytes));
+		convertMap.put(POOptimizedGlobalRearrange.class,
+				new OptimizedGlobalRearrangeConverter(confBytes));
 		convertMap.put(POGlobalRearrange.class, new GlobalRearrangeConverter());
 		convertMap.put(POLimit.class, new LimitConverter());
 		convertMap.put(PODistinct.class, new DistinctConverter());
@@ -276,7 +268,7 @@ public class SparkLauncher extends Launcher {
 			sparkConf.set("spark.task.cpus", "" + cores);
 			LOG.info("spark.task.cpus" + ":" + cores);
 			sparkConf.set("--executor-cores", "" + cores);
-			
+
 			sparkContext = new SparkContext(sparkConf);
 
 			sparkContext.addSparkListener(new StatsReportListener());

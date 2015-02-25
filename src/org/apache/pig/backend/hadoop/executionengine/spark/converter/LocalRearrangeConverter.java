@@ -24,8 +24,10 @@ public class LocalRearrangeConverter implements
 		SparkUtil.assertPredecessorSize(predecessors, physicalOperator, 1);
 		RDD<Tuple> rdd = predecessors.get(0);
 		// call local rearrange to get key and value
-		return rdd.mapPartitions(new LocalRearrangeFunction(physicalOperator),
+		RDD<Tuple> mapPartitions = rdd.mapPartitions(new LocalRearrangeFunction(physicalOperator),
 				true, SparkUtil.getManifest(Tuple.class));
+		//mapPartitions.saveAsTextFile("DebugPLocalRearrange-" + System.currentTimeMillis());
+		return mapPartitions;
 
 	}
 

@@ -72,6 +72,16 @@ public class ForEachConverter implements POConverter<Tuple, Tuple, POForEach> {
                     PigContext pc = (PigContext) ObjectSerializer.deserialize(jobConf.get("pig.pigContext"));
                     SchemaTupleBackend.initialize(jobConf, pc);
 
+                    PhysicalOperator[] planLeafOps= poForEach.getPlanLeafOps();
+                    if (planLeafOps != null) {
+                        for (PhysicalOperator op : planLeafOps) {
+                            if (op.getClass() == POUserFunc.class) {
+                                POUserFunc udf = (POUserFunc) op;
+                                  udf.setFuncInputSchema();
+                            }
+                        }
+                    }
+                    
                 } catch (IOException ioe) {
                     String msg = "Problem while configuring UDFContext from ForEachConverter.";
                     throw new RuntimeException(msg, ioe);
@@ -81,15 +91,7 @@ public class ForEachConverter implements POConverter<Tuple, Tuple, POForEach> {
 
         public Iterable<Tuple> call(final Iterator<Tuple> input) {
             initializeJobConf();
-            PhysicalOperator[] planLeafOps= poForEach.getPlanLeafOps();
-            if (planLeafOps != null) {
-                for (PhysicalOperator op : planLeafOps) {
-                    if (op.getClass() == POUserFunc.class) {
-                        POUserFunc udf = (POUserFunc) op;
-                          udf.setFuncInputSchema();
-                    }
-                }
-            }
+           
 
 
             return new Iterable<Tuple>() {
