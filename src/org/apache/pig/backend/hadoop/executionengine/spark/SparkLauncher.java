@@ -7,8 +7,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
-import com.google.common.collect.Lists;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -18,8 +16,6 @@ import org.apache.pig.PigConstants;
 import org.apache.pig.PigException;
 import org.apache.pig.backend.BackendException;
 import org.apache.pig.backend.hadoop.executionengine.Launcher;
-import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.AccumulatorOptimizer;
-import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.CombinerOptimizer;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRCompiler;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.MROperPlan;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.POPackageAnnotator;
@@ -52,7 +48,7 @@ import org.apache.pig.backend.hadoop.executionengine.spark.converter.GlobalRearr
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.LimitConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.LoadConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.LocalRearrangeConverter;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.OptimizedGlobalRearrangeConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.OptimizedGlobalRearrangeConverter2;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.POConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.PackageConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.PreCombinerLocalRearrangeConverter;
@@ -67,16 +63,15 @@ import org.apache.pig.data.SchemaTupleBackend;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.plan.OperatorKey;
-import org.apache.pig.impl.plan.CompilationMessageCollector.MessageType;
-import org.apache.pig.impl.util.ObjectSerializer;
 import org.apache.pig.tools.pigstats.PigStats;
 import org.apache.pig.tools.pigstats.SparkStats;
+import org.apache.spark.SparkConf;
+import org.apache.spark.SparkContext;
 import org.apache.spark.rdd.RDD;
 import org.apache.spark.scheduler.JobLogger;
 import org.apache.spark.scheduler.StatsReportListener;
-import org.apache.spark.SparkConf;
-import org.apache.spark.SparkContext;
-import org.apache.spark.api.java.JavaSparkContext;
+
+import com.google.common.collect.Lists;
 
 /**
  * Main class that launches pig for Spark
@@ -165,7 +160,7 @@ public class SparkLauncher extends Launcher {
 				new PreCombinerLocalRearrangeConverter());
 		convertMap.put(POLocalRearrange.class, new LocalRearrangeConverter());
 		convertMap.put(POOptimizedGlobalRearrange.class,
-				new OptimizedGlobalRearrangeConverter(confBytes));
+				new OptimizedGlobalRearrangeConverter2(confBytes));
 		convertMap.put(POGlobalRearrange.class, new GlobalRearrangeConverter());
 		convertMap.put(POLimit.class, new LimitConverter());
 		convertMap.put(PODistinct.class, new DistinctConverter());
