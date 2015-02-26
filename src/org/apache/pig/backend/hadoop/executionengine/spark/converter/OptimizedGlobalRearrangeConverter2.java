@@ -68,9 +68,9 @@ public class OptimizedGlobalRearrangeConverter2 implements
 
 		if (predecessors.size() == 1) {
 			// GROUP
-			predecessors.get(0).saveAsTextFile(
-					"DebugOptimizedGlobalRearrangeConverter0-"
-							+ System.currentTimeMillis());
+//			predecessors.get(0).saveAsTextFile(
+//					"DebugOptimizedGlobalRearrangeConverter0-"
+//							+ System.currentTimeMillis());
 			RDD<Tuple2<Object, Tuple>> mapPartitions = predecessors.get(0)
 					.mapPartitions(
 							new CombinerFunction(
@@ -80,14 +80,14 @@ public class OptimizedGlobalRearrangeConverter2 implements
 			PairRDDFunctions<Object, Tuple> pairRDDFunctions = new PairRDDFunctions<Object, Tuple>(
 					mapPartitions, SparkUtil.getManifest(Object.class),
 					SparkUtil.getManifest(Tuple.class), null);
-			// mapPartitions.saveAsTextFile("DebugOptimizedGlobalRearrangeConverter1-"
-			// + System.currentTimeMillis());
+//			 mapPartitions.saveAsTextFile("DebugOptimizedGlobalRearrangeConverter1-"
+//			 + System.currentTimeMillis());
 			RDD<Tuple2<Object, Tuple>> combineByKey = pairRDDFunctions
 					.combineByKey(new Tuple2ToIterable(),
 							new AddTuple2ToIterable(),
 							new AddIterableToIterable(), parallelism);
-			// combineByKey.saveAsTextFile("DebugOptimizedGlobalRearrangeConverter2-"
-			// + System.currentTimeMillis());
+//			 combineByKey.saveAsTextFile("DebugOptimizedGlobalRearrangeConverter2-"
+//			 + System.currentTimeMillis());
 			RDD<Tuple> mapPartitions2 = combineByKey.mapPartitions(
 					new ReduceFunction(physicalOperator.getFinalForEach(),
 							confBytes), false, SparkUtil
@@ -109,7 +109,7 @@ public class OptimizedGlobalRearrangeConverter2 implements
 		int size = t.size();
 		for (int i = 1; i < size; i++) {
 			Tuple index = (Tuple) t.get(i);
-			DataBag b = bf.newDistinctBag();
+			DataBag b = bf.newDefaultBag();
 			b.add(index);
 			t.set(i, b);
 		}
@@ -193,6 +193,7 @@ public class OptimizedGlobalRearrangeConverter2 implements
 			initializeJobConf();
 
 //			Runtime runtime = Runtime.getRuntime();
+//			int testnum = 0;
 			MutableList<Tuple2<Object, Tuple>> results = new MutableList<Tuple2<Object, Tuple>>();
 			try {
 				HashMap<Object, Tuple> hashMap = new HashMap<Object, Tuple>();
@@ -219,7 +220,9 @@ public class OptimizedGlobalRearrangeConverter2 implements
 						}
 					}
 
-//					if (runtime.totalMemory() > runtime.maxMemory() * 0.8) {
+//					testnum++;
+//					if (testnum>99) {
+//						testnum = 0;
 //						combineCollectedTuples(results, hashMap);
 //					}
 				}
