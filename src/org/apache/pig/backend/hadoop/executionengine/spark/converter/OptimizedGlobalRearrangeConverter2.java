@@ -5,6 +5,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map.Entry;
 import java.util.Set;
 
 import org.apache.commons.logging.Log;
@@ -59,14 +60,17 @@ public class OptimizedGlobalRearrangeConverter2 implements
 		int parallelism = SparkUtil.getParallelism(predecessors,
 				physicalOperator);
 
-		String reducers = System.getenv("SPARK_PARALLELISM");
-		if (reducers != null) {
-			parallelism = Integer.parseInt(reducers);
+		String parallelStr = System.getenv("SPARK_PARALLELISM");
+		if (parallelStr != null) {
+			parallelism = Integer.parseInt(parallelStr);
 		}
 		LOG.info("Parallelism for Spark groupBy: " + parallelism);
 
 		if (predecessors.size() == 1) {
 			// GROUP
+			predecessors.get(0).saveAsTextFile(
+					"DebugOptimizedGlobalRearrangeConverter0-"
+							+ System.currentTimeMillis());
 			RDD<Tuple2<Object, Tuple>> mapPartitions = predecessors.get(0)
 					.mapPartitions(
 							new CombinerFunction(
@@ -76,37 +80,69 @@ public class OptimizedGlobalRearrangeConverter2 implements
 			PairRDDFunctions<Object, Tuple> pairRDDFunctions = new PairRDDFunctions<Object, Tuple>(
 					mapPartitions, SparkUtil.getManifest(Object.class),
 					SparkUtil.getManifest(Tuple.class), null);
-			RDD<Tuple2<Object, Iterable<Tuple>>> combineByKey = pairRDDFunctions
+			// mapPartitions.saveAsTextFile("DebugOptimizedGlobalRearrangeConverter1-"
+			// + System.currentTimeMillis());
+			RDD<Tuple2<Object, Tuple>> combineByKey = pairRDDFunctions
 					.combineByKey(new Tuple2ToIterable(),
 							new AddTuple2ToIterable(),
 							new AddIterableToIterable(), parallelism);
-
+			// combineByKey.saveAsTextFile("DebugOptimizedGlobalRearrangeConverter2-"
+			// + System.currentTimeMillis());
 			RDD<Tuple> mapPartitions2 = combineByKey.mapPartitions(
 					new ReduceFunction(physicalOperator.getFinalForEach(),
 							confBytes), false, SparkUtil
 							.getManifest(Tuple.class));
-			// JavaRDD<Tuple> jrdd = predecessors.get(0).toJavaRDD();
-			// RDD<Tuple2<Object, Tuple>> map =
-			// predecessors.get(0).mapPartitions(
-			// new TupleToTuple2Partitions(), false,
-			// SparkUtil.<Object, Tuple> getTuple2Manifest());
-			// PairRDDFunctions<Object, Tuple> pairRDDFunctions = new
-			// PairRDDFunctions<Object, Tuple>(
-			// map, SparkUtil.getManifest(Object.class),
-			// SparkUtil.getManifest(Tuple.class), null);
-			// RDD<Tuple2<Object, Tuple>> mapValues = pairRDDFunctions
-			// .reduceByKey(new ReduceFunction(physicalOperator
-			// .getIntermediateForEach(), confBytes));
-			// RDD<Tuple> map2 = mapValues.mapPartitions(new
-			// GroupTupleFunction2(
-			// physicalOperator.getFinalForEach(), confBytes), false,
-			// SparkUtil.getManifest(Tuple.class));
 
 			return mapPartitions2;
 
 		} else {
 			throw new RuntimeException(
 					"Rearrange Optimization is only for 1 predecessor");
+		}
+	}
+
+	/**
+	 * @param t
+	 * @throws ExecException
+	 */
+	private static void tupleToCollectTuple(Tuple t) throws ExecException {
+		int size = t.size();
+		for (int i = 1; i < size; i++) {
+			Tuple index = (Tuple) t.get(i);
+			DataBag b = bf.newDistinctBag();
+			b.add(index);
+			t.set(i, b);
+		}
+	}
+
+	/**
+	 * @param collectTuple
+	 * @param t
+	 * @return
+	 * @throws ExecException
+	 */
+	private static void addTupleToCollectTuple(Tuple collectTuple, Tuple t)
+			throws ExecException {
+		int size = t.size();
+		for (int i = 1; i < size; i++) {
+			Tuple index = (Tuple) t.get(i);
+			DataBag b = (DataBag) collectTuple.get(i);
+			b.add(index);
+		}
+	}
+
+	/**
+	 * @param returnTuple
+	 * @param t
+	 * @throws ExecException
+	 */
+	private static void addColectTupleToCollectTuple(Tuple returnTuple, Tuple t)
+			throws ExecException {
+		int size = returnTuple.size();
+		for (int i = 1; i < size; i++) {
+			DataBag b2 = (DataBag) t.get(i);
+			DataBag b = (DataBag) returnTuple.get(i);
+			b.addAll(b2);
 		}
 	}
 
@@ -155,41 +191,92 @@ public class OptimizedGlobalRearrangeConverter2 implements
 		@Override
 		public Iterator<Tuple2<Object, Tuple>> apply(Iterator<Tuple> iterator) {
 			initializeJobConf();
+
+//			Runtime runtime = Runtime.getRuntime();
 			MutableList<Tuple2<Object, Tuple>> results = new MutableList<Tuple2<Object, Tuple>>();
 			try {
-				HashMap<Object, ArrayList<Tuple>> hashMap = new HashMap<Object, ArrayList<Tuple>>();
+				HashMap<Object, Tuple> hashMap = new HashMap<Object, Tuple>();
 				while (iterator.hasNext()) {
 					Tuple v1 = iterator.next();
 					Object key = v1.get(1);
-					ArrayList<Tuple> arrayList = hashMap.get(key);
-					if (arrayList == null) {
-						arrayList = new ArrayList<Tuple>();
-						hashMap.put(key, arrayList);
-					}
-					arrayList.add((Tuple) v1.get(2));
-				}
-
-				Set<Object> keySet = hashMap.keySet();
-				for (Object key : keySet) {
-					ArrayList<Tuple> arrayList = hashMap.get(key);
-					Tuple tuple = arrayList.get(0);
-					int size = tuple.size() + 1;
-					Tuple newTuple = tf.newTuple(size);
-					newTuple.set(0, key);
-					for (int i = 1; i < size; i++) {
-						DataBag newDefaultBag = bf.newDefaultBag();
-						newTuple.set(i, newDefaultBag);
-						for (Tuple t : arrayList) {
+					Tuple collectTuple = hashMap.get(key);
+					if (collectTuple == null) {
+						Tuple t = (Tuple) v1.get(2);
+						int size = t.size() + 1;
+						Tuple newTuple = tf.newTuple(size);
+						newTuple.set(0, key);
+						for (int i = 1; i < size; i++) {
+							DataBag newDefaultBag = bf.newDefaultBag();
+							newTuple.set(i, newDefaultBag);
 							newDefaultBag.add((Tuple) t.get(i - 1));
 						}
+						hashMap.put(key, newTuple);
+					} else {
+						Tuple t = (Tuple) v1.get(2);
+						for (int i = 1; i < collectTuple.size(); i++) {
+							((DataBag) collectTuple.get(i)).add((Tuple) t
+									.get(i - 1));
+						}
 					}
-					intermediateFunc.setInputs(null);
-					intermediateFunc.attachInput(newTuple);
 
-					Tuple result = (Tuple) intermediateFunc.getNextTuple().result;
-					results.$plus$eq(new Tuple2<Object, Tuple>(key, result));
+//					if (runtime.totalMemory() > runtime.maxMemory() * 0.8) {
+//						combineCollectedTuples(results, hashMap);
+//					}
 				}
+
+				combineCollectedTuples(results, hashMap);
+
 				return results.iterator();
+			} catch (ExecException e) {
+				throw new RuntimeException(e);
+			}
+		}
+
+		/**
+		 * @param results
+		 * @param hashMap
+		 * @throws ExecException
+		 */
+		private void combineCollectedTuples(
+				MutableList<Tuple2<Object, Tuple>> results,
+				HashMap<Object, Tuple> hashMap) throws ExecException {
+			Set<Entry<Object, Tuple>> entrySet = hashMap.entrySet();
+			for (Entry<Object, Tuple> entry : entrySet) {
+
+				Tuple tuple = entry.getValue();
+				intermediateFunc.setInputs(null);
+				intermediateFunc.attachInput(tuple);
+
+				Tuple result = (Tuple) intermediateFunc.getNextTuple().result;
+				results.$plus$eq(new Tuple2<Object, Tuple>(entry.getKey(),
+						result));
+			
+			}
+			hashMap.clear();
+		}
+
+	}
+
+	private static class Tuple2ToIterable extends
+			AbstractFunction1<Tuple, Tuple> implements Serializable {
+		@Override
+		public Tuple apply(Tuple t) {
+			try {
+				tupleToCollectTuple(t);
+				return t;
+			} catch (ExecException e) {
+				throw new RuntimeException(e);
+			}
+		}
+	}
+
+	private static class AddTuple2ToIterable extends
+			AbstractFunction2<Tuple, Tuple, Tuple> implements Serializable {
+		@Override
+		public Tuple apply(Tuple it, Tuple t) {
+			try {
+				addTupleToCollectTuple(it, t);
+				return it;
 			} catch (ExecException e) {
 				throw new RuntimeException(e);
 			}
@@ -197,46 +284,21 @@ public class OptimizedGlobalRearrangeConverter2 implements
 
 	}
 
-	private static class Tuple2ToIterable extends
-			AbstractFunction1<Tuple, Iterable<Tuple>> implements Serializable {
-
+	private static class AddIterableToIterable extends
+			AbstractFunction2<Tuple, Tuple, Tuple> implements Serializable {
 		@Override
-		public Iterable<Tuple> apply(Tuple t) {
-			ArrayList<Tuple> arrayList = new ArrayList<Tuple>();
-			arrayList.add(t);
-			return arrayList;
-
+		public Tuple apply(Tuple it, Tuple it2) {
+			try {
+				addColectTupleToCollectTuple(it, it2);
+				return it;
+			} catch (ExecException e) {
+				throw new RuntimeException(e);
+			}
 		}
-
-	}
-
-	private static class AddTuple2ToIterable extends
-			AbstractFunction2<Iterable<Tuple>, Tuple, Iterable<Tuple>>
-			implements Serializable {
-
-		@Override
-		public Iterable<Tuple> apply(Iterable<Tuple> it, Tuple t) {
-			((ArrayList<Tuple>) it).add(t);
-			return it;
-		}
-
-	}
-
-	private static class AddIterableToIterable
-			extends
-			AbstractFunction2<Iterable<Tuple>, Iterable<Tuple>, Iterable<Tuple>>
-			implements Serializable {
-
-		@Override
-		public Iterable<Tuple> apply(Iterable<Tuple> it, Iterable<Tuple> it2) {
-			((ArrayList<Tuple>) it).addAll((ArrayList<Tuple>) it2);
-			return it;
-		}
-
 	}
 
 	private static class ReduceFunction extends
-			AbstractFunction1<Iterator<Tuple2<Object, Iterable<Tuple>>>, Iterator<Tuple>>
+			AbstractFunction1<Iterator<Tuple2<Object, Tuple>>, Iterator<Tuple>>
 			implements Serializable {
 
 		POForEach finalFunc;
@@ -277,29 +339,17 @@ public class OptimizedGlobalRearrangeConverter2 implements
 		}
 
 		@Override
-		public Iterator<Tuple> apply(Iterator<Tuple2<Object, Iterable<Tuple>>> iterator) {
+		public Iterator<Tuple> apply(Iterator<Tuple2<Object, Tuple>> iterator) {
 			initializeJobConf();
 			return iterator
-					.map(new AbstractFunction1<Tuple2<Object, Iterable<Tuple>>, Tuple>() {
+					.map(new AbstractFunction1<Tuple2<Object, Tuple>, Tuple>() {
 
 						@Override
-						public Tuple apply(Tuple2<Object, Iterable<Tuple>> pair) {
+						public Tuple apply(Tuple2<Object, Tuple> pair) {
 							try {
-								ArrayList<Tuple> tuplesForKey = (ArrayList<Tuple>)pair._2;
-								Tuple tuple = tuplesForKey.get(0);
-								int size = tuple.size();
-								Tuple newTuple = tf.newTuple(size);
-								newTuple.set(0, pair._1);
-								for (int i = 1; i < size; i++) {
-									DataBag newDefaultBag = bf.newDefaultBag();
-									newTuple.set(i, newDefaultBag);
-									for (Tuple t : tuplesForKey) {
-										newDefaultBag.add((Tuple) t.get(i));
-									}
-								}
+								Tuple tuple = pair._2;
 								finalFunc.setInputs(null);
-								finalFunc.attachInput(newTuple);
-
+								finalFunc.attachInput(tuple);
 								Tuple result = (Tuple) finalFunc.getNextTuple().result;
 								return result;
 							} catch (ExecException e) {

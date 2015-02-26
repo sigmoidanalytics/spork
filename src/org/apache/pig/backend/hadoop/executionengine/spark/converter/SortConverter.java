@@ -28,6 +28,15 @@ public class SortConverter implements POConverter<Tuple, Tuple, POSort> {
 	public RDD<Tuple> convert(List<RDD<Tuple>> predecessors, POSort sortOperator)
 			throws IOException {
 		SparkUtil.assertPredecessorSize(predecessors, sortOperator, 1);
+
+		int parallelism = SparkUtil.getParallelism(predecessors, sortOperator);
+
+		String parallelStr = System.getenv("SPARK_PARALLELISM");
+		if (parallelStr != null) {
+			parallelism = Integer.parseInt(parallelStr);
+		}
+		LOG.info("Parallelism for Spark groupBy: " + parallelism);
+
 		RDD<Tuple> rdd = predecessors.get(0);
 		RDD<Tuple2<Tuple, Object>> rddPair = rdd.mapPartitions(
 				new ToKeyValueFunction(), true,
@@ -38,7 +47,7 @@ public class SortConverter implements POConverter<Tuple, Tuple, POSort> {
 				SparkUtil.getManifest(Object.class));
 
 		JavaPairRDD<Tuple, Object> sorted = r.sortByKey(
-				sortOperator.new SortComparator(), true);
+				sortOperator.new SortComparator(), true, parallelism);
 		JavaRDD<Tuple> mapped = sorted.mapPartitions(TO_VALUE_FUNCTION);
 
 		return mapped.rdd();

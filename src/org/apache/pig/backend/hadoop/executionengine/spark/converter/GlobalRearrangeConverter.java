@@ -11,6 +11,8 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POGlobalRearrange;
 import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
+import org.apache.pig.data.BagFactory;
+import org.apache.pig.data.DataBag;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.data.TupleFactory;
 import org.apache.spark.HashPartitioner;
@@ -35,6 +37,7 @@ public class GlobalRearrangeConverter implements
 			.getLog(GlobalRearrangeConverter.class);
 
 	private static final TupleFactory tf = TupleFactory.getInstance();
+	private static final BagFactory bf = BagFactory.getInstance();
 
 	// TUPLE FUNTION
 	private static final TupleToTuple2 MAKE_TUPLE2_FUNCTION = new TupleToTuple2();
@@ -67,12 +70,12 @@ public class GlobalRearrangeConverter implements
 		if (predecessors.size() == 1) {
 			// GROUP
 			// JavaRDD<Tuple> jrdd = predecessors.get(0).toJavaRDD();
-			RDD<Tuple2<Object, Object>> map = predecessors.get(0)
-					.map(MAKE_TUPLE2_FUNCTION, SparkUtil.getTuple2Manifest());
-			PairRDDFunctions<Object, Object> pairRDDFunctions = new PairRDDFunctions<Object, Object>(
+			RDD<Tuple2<Object, Tuple>> map = predecessors.get(0)
+					.map(MAKE_TUPLE2_FUNCTION, SparkUtil.<Object, Tuple>getTuple2Manifest());
+			PairRDDFunctions<Object, Tuple> pairRDDFunctions = new PairRDDFunctions<Object, Tuple>(
 					map, SparkUtil.getManifest(Object.class),
-					SparkUtil.getManifest(Object.class), null);
-			RDD<Tuple2<Object, Iterable<Tuple>>> combineByKey = pairRDDFunctions
+					SparkUtil.getManifest(Tuple.class), null);
+			RDD<Tuple2<Object, DataBag>> combineByKey = pairRDDFunctions
 					.combineByKey(TUPLE2_ITERABLE_FUNCTION,
 							ADD_TUPLE2_ITERABLE_FUNCTION,
 							ADD_ITERABLE_ITERABLE_FUNCTION, parallelism);
@@ -110,14 +113,14 @@ public class GlobalRearrangeConverter implements
 	}
 
 	private static class TupleToTuple2 extends
-			AbstractFunction1<Tuple, Tuple2<Object, Object>> implements
+			AbstractFunction1<Tuple, Tuple2<Object, Tuple>> implements
 			Serializable {
 
 		@Override
-		public Tuple2<Object, Object> apply(Tuple t) {
+		public Tuple2<Object, Tuple> apply(Tuple t) {
 			try {
 				Object key = t.get(1);
-				return new Tuple2<Object, Object>(key, t);
+				return new Tuple2<Object, Tuple>(key, t);
 			} catch (ExecException e) {
 				throw new RuntimeException(e);
 			}
@@ -126,50 +129,49 @@ public class GlobalRearrangeConverter implements
 	}
 
 	private static class Tuple2ToIterable extends
-			AbstractFunction1<Object, Iterable<Tuple>> implements Serializable {
+			AbstractFunction1<Tuple, DataBag> implements Serializable {
 
 		@Override
-		public Iterable<Tuple> apply(Object t2) {
-			Tuple t = ((Tuple) t2);
-			ArrayList<Tuple> arrayList = new ArrayList<Tuple>();
-			arrayList.add(t);
-			return arrayList;
+		public DataBag apply(Tuple t2) {
+			DataBag newDefaultBag = bf.newDefaultBag();
+			newDefaultBag.add(t2);
+			return newDefaultBag;
 
 		}
 
 	}
 
 	private static class AddTuple2ToIterable extends
-			AbstractFunction2<Iterable<Tuple>, Object, Iterable<Tuple>>
+			AbstractFunction2<DataBag, Tuple, DataBag>
 			implements Serializable {
 
 		@Override
-		public Iterable<Tuple> apply(Iterable<Tuple> it, Object t2) {
-			Tuple t = ((Tuple) t2);
-			((ArrayList<Tuple>) it).add(t);
-			return it;
+		public DataBag apply(DataBag b, Tuple t) {
+			b.add(t);
+			return b;
 		}
 
 	}
 
 	private static class AddIterableToIterable
 			extends
-			AbstractFunction2<Iterable<Tuple>, Iterable<Tuple>, Iterable<Tuple>>
+			AbstractFunction2<DataBag, DataBag, DataBag>
 			implements Serializable {
 
 		@Override
-		public Iterable<Tuple> apply(Iterable<Tuple> it, Iterable<Tuple> it2) {
-			((ArrayList<Tuple>) it).addAll((ArrayList<Tuple>) it2);
+		public DataBag apply(DataBag it, DataBag it2) {
+			it.addAll(it2);
+			it2.clear();
 			return it;
 		}
 
 	}
 
 	private static class GroupTupleFunction2 extends
-			AbstractFunction1<Tuple2<Object, Iterable<Tuple>>, Tuple> implements
+			AbstractFunction1<Tuple2<Object, DataBag>, Tuple> implements
 			Serializable {
 
-		public Tuple apply(Tuple2<Object, Iterable<Tuple>> v1) {
+		public Tuple apply(Tuple2<Object, DataBag> v1) {
 			try {
 				// LOG.debug("GroupTupleFunction in " + v1);
 				Tuple tuple = tf.newTuple(2);
