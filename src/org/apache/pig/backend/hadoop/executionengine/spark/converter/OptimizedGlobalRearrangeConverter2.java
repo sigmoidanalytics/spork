@@ -194,7 +194,9 @@ public class OptimizedGlobalRearrangeConverter2 implements
 		public Iterator<Tuple2<Object, Tuple>> apply(Iterator<Tuple> iterator) {
 			initializeJobConf();
 
-			// Runtime runtime = Runtime.getRuntime();
+			Runtime runtime = Runtime.getRuntime();
+			long maxMemory = runtime.maxMemory();
+
 			// int testnum = 0;
 			DataBag results = bf.newDefaultBag();
 			try {
@@ -227,8 +229,8 @@ public class OptimizedGlobalRearrangeConverter2 implements
 						}
 					}
 
-					// if (runtime.totalMemory()>(runtime.maxMemory()*0.8)) {
-					if (bagSize * tupleLenght * hashMap.size() > 1024 * 100) {
+					if (runtime.totalMemory()>(maxMemory*0.8)) {
+					//if (bagSize * tupleLenght * hashMap.size() > 1024 * 100) {
 						combineCollectedTuples(results, hashMap);
 					}
 				}
