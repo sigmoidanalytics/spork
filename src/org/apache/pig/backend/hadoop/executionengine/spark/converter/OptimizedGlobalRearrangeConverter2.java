@@ -22,6 +22,7 @@ import org.apache.pig.backend.hadoop.executionengine.spark.plans.POOptimizedGlob
 import org.apache.pig.backend.hadoop.executionengine.util.MapRedUtil;
 import org.apache.pig.data.BagFactory;
 import org.apache.pig.data.DataBag;
+import org.apache.pig.data.DefaultDataBag;
 import org.apache.pig.data.SchemaTupleBackend;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.data.TupleFactory;
@@ -32,6 +33,7 @@ import org.apache.spark.rdd.RDD;
 
 import scala.Tuple2;
 import scala.collection.Iterator;
+import scala.collection.JavaConversions;
 import scala.collection.mutable.MutableList;
 //import scala.reflect.ClassManifest;
 import scala.runtime.AbstractFunction1;
@@ -68,9 +70,9 @@ public class OptimizedGlobalRearrangeConverter2 implements
 
 		if (predecessors.size() == 1) {
 			// GROUP
-//			predecessors.get(0).saveAsTextFile(
-//					"DebugOptimizedGlobalRearrangeConverter0-"
-//							+ System.currentTimeMillis());
+			// predecessors.get(0).saveAsTextFile(
+			// "DebugOptimizedGlobalRearrangeConverter0-"
+			// + System.currentTimeMillis());
 			RDD<Tuple2<Object, Tuple>> mapPartitions = predecessors.get(0)
 					.mapPartitions(
 							new CombinerFunction(
@@ -80,14 +82,14 @@ public class OptimizedGlobalRearrangeConverter2 implements
 			PairRDDFunctions<Object, Tuple> pairRDDFunctions = new PairRDDFunctions<Object, Tuple>(
 					mapPartitions, SparkUtil.getManifest(Object.class),
 					SparkUtil.getManifest(Tuple.class), null);
-//			 mapPartitions.saveAsTextFile("DebugOptimizedGlobalRearrangeConverter1-"
-//			 + System.currentTimeMillis());
+			// mapPartitions.saveAsTextFile("DebugOptimizedGlobalRearrangeConverter1-"
+			// + System.currentTimeMillis());
 			RDD<Tuple2<Object, Tuple>> combineByKey = pairRDDFunctions
 					.combineByKey(new Tuple2ToIterable(),
 							new AddTuple2ToIterable(),
 							new AddIterableToIterable(), parallelism);
-//			 combineByKey.saveAsTextFile("DebugOptimizedGlobalRearrangeConverter2-"
-//			 + System.currentTimeMillis());
+			// combineByKey.saveAsTextFile("DebugOptimizedGlobalRearrangeConverter2-"
+			// + System.currentTimeMillis());
 			RDD<Tuple> mapPartitions2 = combineByKey.mapPartitions(
 					new ReduceFunction(physicalOperator.getFinalForEach(),
 							confBytes), false, SparkUtil
@@ -192,18 +194,22 @@ public class OptimizedGlobalRearrangeConverter2 implements
 		public Iterator<Tuple2<Object, Tuple>> apply(Iterator<Tuple> iterator) {
 			initializeJobConf();
 
-//			Runtime runtime = Runtime.getRuntime();
-//			int testnum = 0;
-			MutableList<Tuple2<Object, Tuple>> results = new MutableList<Tuple2<Object, Tuple>>();
+			// Runtime runtime = Runtime.getRuntime();
+			// int testnum = 0;
+			DataBag results = bf.newDefaultBag();
 			try {
 				HashMap<Object, Tuple> hashMap = new HashMap<Object, Tuple>();
 				while (iterator.hasNext()) {
 					Tuple v1 = iterator.next();
 					Object key = v1.get(1);
 					Tuple collectTuple = hashMap.get(key);
+
+					int tupleLenght = 0;
+					long bagSize = 0;
 					if (collectTuple == null) {
 						Tuple t = (Tuple) v1.get(2);
 						int size = t.size() + 1;
+						tupleLenght = size;
 						Tuple newTuple = tf.newTuple(size);
 						newTuple.set(0, key);
 						for (int i = 1; i < size; i++) {
@@ -215,21 +221,32 @@ public class OptimizedGlobalRearrangeConverter2 implements
 					} else {
 						Tuple t = (Tuple) v1.get(2);
 						for (int i = 1; i < collectTuple.size(); i++) {
-							((DataBag) collectTuple.get(i)).add((Tuple) t
-									.get(i - 1));
+							DataBag dataBag = (DataBag) collectTuple.get(i);
+							bagSize = dataBag.getMemorySize();
+							dataBag.add((Tuple) t.get(i - 1));
 						}
 					}
 
-//					testnum++;
-//					if (testnum>99) {
-//						testnum = 0;
-//						combineCollectedTuples(results, hashMap);
-//					}
+					// if (runtime.totalMemory()>(runtime.maxMemory()*0.8)) {
+					if (bagSize * tupleLenght * hashMap.size() > 1024 * 100) {
+						combineCollectedTuples(results, hashMap);
+					}
 				}
 
 				combineCollectedTuples(results, hashMap);
 
-				return results.iterator();
+				return JavaConversions.asScalaIterator(results.iterator()).map(
+						new AbstractFunction1<Tuple, Tuple2<Object, Tuple>>() {
+							@Override
+							public Tuple2<Object, Tuple> apply(Tuple t) {
+								try {
+									return new Tuple2<Object, Tuple>(t.get(0),
+											t);
+								} catch (ExecException e) {
+									throw new RuntimeException(e);
+								}
+							}
+						});
 			} catch (ExecException e) {
 				throw new RuntimeException(e);
 			}
@@ -240,8 +257,7 @@ public class OptimizedGlobalRearrangeConverter2 implements
 		 * @param hashMap
 		 * @throws ExecException
 		 */
-		private void combineCollectedTuples(
-				MutableList<Tuple2<Object, Tuple>> results,
+		private void combineCollectedTuples(DataBag results,
 				HashMap<Object, Tuple> hashMap) throws ExecException {
 			Set<Entry<Object, Tuple>> entrySet = hashMap.entrySet();
 			for (Entry<Object, Tuple> entry : entrySet) {
@@ -251,9 +267,8 @@ public class OptimizedGlobalRearrangeConverter2 implements
 				intermediateFunc.attachInput(tuple);
 
 				Tuple result = (Tuple) intermediateFunc.getNextTuple().result;
-				results.$plus$eq(new Tuple2<Object, Tuple>(entry.getKey(),
-						result));
-			
+				results.add(result);
+
 			}
 			hashMap.clear();
 		}
