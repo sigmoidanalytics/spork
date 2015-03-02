@@ -28,6 +28,8 @@ import org.apache.pig.data.Tuple;
 import org.apache.pig.data.TupleFactory;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.util.ObjectSerializer;
+import org.apache.pig.impl.util.Spillable;
+import org.apache.pig.impl.util.SpillableMemoryManager;
 import org.apache.spark.rdd.PairRDDFunctions;
 import org.apache.spark.rdd.RDD;
 
@@ -94,6 +96,8 @@ public class OptimizedGlobalRearrangeConverter2 implements
 					new ReduceFunction(physicalOperator.getFinalForEach(),
 							confBytes), false, SparkUtil
 							.getManifest(Tuple.class));
+			// mapPartitions2.saveAsTextFile("DebugOptimizedGlobalRearrangeConverter3-"
+			// + System.currentTimeMillis());
 
 			return mapPartitions2;
 
@@ -150,7 +154,11 @@ public class OptimizedGlobalRearrangeConverter2 implements
 
 	private static class CombinerFunction extends
 			AbstractFunction1<Iterator<Tuple>, Iterator<Tuple2<Object, Tuple>>>
-			implements Serializable {
+			implements Serializable
+	// , Spillable //FOR FUTURE THIS MAY NEED TO BE IMPLEMENTED
+	{
+
+		private static final int SPILL_REGISTER_THRESHOLD = 100 * 1024;
 
 		POForEach intermediateFunc;
 		private byte[] confBytes;
@@ -197,21 +205,20 @@ public class OptimizedGlobalRearrangeConverter2 implements
 			Runtime runtime = Runtime.getRuntime();
 			long maxMemory = runtime.maxMemory();
 
-			// int testnum = 0;
+			int loopNum = 0;
 			DataBag results = bf.newDefaultBag();
 			try {
 				HashMap<Object, Tuple> hashMap = new HashMap<Object, Tuple>();
 				while (iterator.hasNext()) {
 					Tuple v1 = iterator.next();
 					Object key = v1.get(1);
+
 					Tuple collectTuple = hashMap.get(key);
 
-					int tupleLenght = 0;
-					long bagSize = 0;
+					// long lastTupleSize = 0;
 					if (collectTuple == null) {
 						Tuple t = (Tuple) v1.get(2);
 						int size = t.size() + 1;
-						tupleLenght = size;
 						Tuple newTuple = tf.newTuple(size);
 						newTuple.set(0, key);
 						for (int i = 1; i < size; i++) {
@@ -224,13 +231,23 @@ public class OptimizedGlobalRearrangeConverter2 implements
 						Tuple t = (Tuple) v1.get(2);
 						for (int i = 1; i < collectTuple.size(); i++) {
 							DataBag dataBag = (DataBag) collectTuple.get(i);
-							bagSize = dataBag.getMemorySize();
 							dataBag.add((Tuple) t.get(i - 1));
 						}
+						// lastTupleSize = t.getMemorySize();
 					}
 
-					if (runtime.totalMemory()>(maxMemory*0.8)) {
-					//if (bagSize * tupleLenght * hashMap.size() > 1024 * 100) {
+					// if(lastTupleSize * hashMap.size() >
+					// SPILL_REGISTER_THRESHOLD)
+					// {
+					// SpillableMemoryManager.getInstance().registerSpillable(this);
+					// }
+					// THIS IS GOOD ENOUGH MEMORY CHECK FOR NOW
+					loopNum++;
+					if (loopNum > 10000
+							&& runtime.freeMemory() < (maxMemory * 0.05)) {
+						// if (bagSize * tupleLenght * hashMap.size() > 1024 *
+						// 100) {
+						loopNum = 0;
 						combineCollectedTuples(results, hashMap);
 					}
 				}
@@ -275,6 +292,21 @@ public class OptimizedGlobalRearrangeConverter2 implements
 			hashMap.clear();
 		}
 
+		// @Override
+		// public long spill() {
+		// // TODO Auto-generated method stub
+		// return 0;
+		// }
+		//
+		// @Override
+		// public long getMemorySize() {
+		// // TODO Auto-generated method stub
+		// return 0;
+		// }
+
+		// private long roundToEight(long i) {
+		// return 8 * ((i+7)/8); // integer division rounds the result down
+		// }
 	}
 
 	private static class Tuple2ToIterable extends
