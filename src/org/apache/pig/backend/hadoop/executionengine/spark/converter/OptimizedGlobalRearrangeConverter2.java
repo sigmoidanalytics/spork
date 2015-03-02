@@ -254,7 +254,6 @@ public class OptimizedGlobalRearrangeConverter2 implements
 				combineCollectedTuples();
 
 				synchronized (hashMap) {
-
 					return JavaConversions
 							.asScalaIterator(results.iterator())
 							.map(new AbstractFunction1<Tuple, Tuple2<Object, Tuple>>() {
@@ -292,6 +291,8 @@ public class OptimizedGlobalRearrangeConverter2 implements
 		private void combineCollectedTuples() throws ExecException {
 
 			synchronized (hashMap) {
+				aggSampleTupleSize = 0;
+				sampled = 0;
 				Set<Entry<Object, Tuple>> entrySet = hashMap.entrySet();
 				for (Entry<Object, Tuple> entry : entrySet) {
 
@@ -317,8 +318,7 @@ public class OptimizedGlobalRearrangeConverter2 implements
 				} catch (ExecException e) {
 					throw new RuntimeException(e);
 				}
-				aggSampleTupleSize = 0;
-				sampled = 0;
+
 				return size;
 			}
 		}
