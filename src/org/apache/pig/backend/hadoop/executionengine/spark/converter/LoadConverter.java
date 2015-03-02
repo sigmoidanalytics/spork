@@ -85,8 +85,7 @@ public class LoadConverter implements POConverter<Tuple, Tuple, POLoad> {
 		}
 		log.info("Spark repartition: " + repartition);
 
-		String storageLevel = System.getenv("SPARK_STORAGE_LEVEL");
-		log.info("StorageLevel for Spark: " + storageLevel);
+		
 
 		LoadFunc loadFunc = poLoad.getLoadFunc();
 		RDD<Tuple> loadedRDD;
@@ -109,10 +108,6 @@ public class LoadConverter implements POConverter<Tuple, Tuple, POLoad> {
 		if (repartition)
 			return loadedRDD.repartition(parallelism, null);
 
-		if (storageLevel != null) {
-
-			loadedRDD.persist(StorageLevel.fromString(storageLevel));
-		}
 		return loadedRDD;
 	}
 
