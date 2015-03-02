@@ -112,8 +112,6 @@ public class SparkLauncher extends Launcher {
 		mrCompiler.compile();
 		MROperPlan plan = mrCompiler.getMRPlan();
 
-		
-
 		LOG.info(plan);
 
 		String combOp = System.getenv("SPARK_COMBINE_OPTIMIZATION");
@@ -125,12 +123,11 @@ public class SparkLauncher extends Launcher {
 				SparkCombinerOptimizerUtil.addCombiner(physicalPlan);
 			}
 		}
-		
+
 		POPackageAnnotator pkgAnnotator = new POPackageAnnotator(plan);
 		pkgAnnotator.visit();
 
-
-		//LOG.info(plan);
+		// LOG.info(plan);
 		LOG.info(physicalPlan);
 
 		if (System.getenv("BROADCAST_PORT") == null
@@ -288,9 +285,20 @@ public class SparkLauncher extends Launcher {
 			throws IOException {
 
 		RDD<Tuple> nextRDD = null;
+
+		// This maybe cached since it has lots of successors
+		if (physicalOperator instanceof POSplit) {
+			SplitConverter splitConventer = (SplitConverter) convertMap
+					.get(physicalOperator.getClass());
+			if (splitConventer.contains((POSplit) physicalOperator)) {
+				return;
+			}
+		}
+
 		List<PhysicalOperator> predecessors = plan
 				.getPredecessors(physicalOperator);
 		List<RDD<Tuple>> predecessorRdds = Lists.newArrayList();
+
 		if (predecessors != null) {
 			for (PhysicalOperator predecessor : predecessors) {
 				physicalToRDD(plan, predecessor, rdds, convertMap);
