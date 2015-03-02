@@ -253,18 +253,22 @@ public class OptimizedGlobalRearrangeConverter2 implements
 
 				combineCollectedTuples();
 
-				return JavaConversions.asScalaIterator(results.iterator()).map(
-						new AbstractFunction1<Tuple, Tuple2<Object, Tuple>>() {
-							@Override
-							public Tuple2<Object, Tuple> apply(Tuple t) {
-								try {
-									return new Tuple2<Object, Tuple>(t.get(0),
-											t);
-								} catch (ExecException e) {
-									throw new RuntimeException(e);
+				synchronized (hashMap) {
+
+					return JavaConversions
+							.asScalaIterator(results.iterator())
+							.map(new AbstractFunction1<Tuple, Tuple2<Object, Tuple>>() {
+								@Override
+								public Tuple2<Object, Tuple> apply(Tuple t) {
+									try {
+										return new Tuple2<Object, Tuple>(t
+												.get(0), t);
+									} catch (ExecException e) {
+										throw new RuntimeException(e);
+									}
 								}
-							}
-						});
+							});
+				}
 			} catch (ExecException e) {
 				throw new RuntimeException(e);
 			}
@@ -325,7 +329,8 @@ public class OptimizedGlobalRearrangeConverter2 implements
 				return 0;
 			else {
 				synchronized (hashMap) {
-					//32 is entry size loadfactor is 0.75 and capacity over head is 4
+					// 32 is entry size loadfactor is 0.75 and capacity over
+					// head is 4
 					// so 32+4 + (100/75)*4
 					return (hashMap.size() * roundToEight(aggSampleTupleSize
 							/ sampled + 42));
