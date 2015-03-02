@@ -32,6 +32,7 @@ import org.apache.pig.impl.util.Spillable;
 import org.apache.pig.impl.util.SpillableMemoryManager;
 import org.apache.spark.rdd.PairRDDFunctions;
 import org.apache.spark.rdd.RDD;
+import org.python.modules.synchronize;
 
 import scala.Tuple2;
 import scala.collection.Iterator;
@@ -154,11 +155,16 @@ public class OptimizedGlobalRearrangeConverter2 implements
 
 	private static class CombinerFunction extends
 			AbstractFunction1<Iterator<Tuple>, Iterator<Tuple2<Object, Tuple>>>
-			implements Serializable
-	// , Spillable //FOR FUTURE THIS MAY NEED TO BE IMPLEMENTED
-	{
+			implements Serializable, Spillable {
 
 		private static final int SPILL_REGISTER_THRESHOLD = 100 * 1024;
+
+		private boolean spillRegistered;
+
+		HashMap<Object, Tuple> hashMap;
+		long aggSampleTupleSize;
+		int sampled;
+		DataBag results;
 
 		POForEach intermediateFunc;
 		private byte[] confBytes;
@@ -167,6 +173,11 @@ public class OptimizedGlobalRearrangeConverter2 implements
 		public CombinerFunction(POForEach intermediateFunc, byte[] confBytes) {
 			this.intermediateFunc = intermediateFunc;
 			this.confBytes = confBytes;
+			this.hashMap = new HashMap<Object, Tuple>();
+			spillRegistered = false;
+			aggSampleTupleSize = 0;
+			sampled = 0;
+			results = bf.newDefaultBag();
 		}
 
 		void initializeJobConf() {
@@ -202,57 +213,45 @@ public class OptimizedGlobalRearrangeConverter2 implements
 		public Iterator<Tuple2<Object, Tuple>> apply(Iterator<Tuple> iterator) {
 			initializeJobConf();
 
-			Runtime runtime = Runtime.getRuntime();
-			long maxMemory = runtime.maxMemory();
-
-			int loopNum = 0;
-			DataBag results = bf.newDefaultBag();
 			try {
-				HashMap<Object, Tuple> hashMap = new HashMap<Object, Tuple>();
+
 				while (iterator.hasNext()) {
 					Tuple v1 = iterator.next();
 					Object key = v1.get(1);
+					Tuple t = (Tuple) v1.get(2);
 
-					Tuple collectTuple = hashMap.get(key);
+					synchronized (hashMap) {
+						Tuple collectTuple = hashMap.get(key);
+						if (collectTuple == null) {
+							int size = t.size() + 1;
+							Tuple newTuple = tf.newTuple(size);
+							newTuple.set(0, key);
+							for (int i = 1; i < size; i++) {
+								DataBag newDefaultBag = bf.newDefaultBag();
+								newTuple.set(i, newDefaultBag);
+								newDefaultBag.add((Tuple) t.get(i - 1));
+							}
 
-					// long lastTupleSize = 0;
-					if (collectTuple == null) {
-						Tuple t = (Tuple) v1.get(2);
-						int size = t.size() + 1;
-						Tuple newTuple = tf.newTuple(size);
-						newTuple.set(0, key);
-						for (int i = 1; i < size; i++) {
-							DataBag newDefaultBag = bf.newDefaultBag();
-							newTuple.set(i, newDefaultBag);
-							newDefaultBag.add((Tuple) t.get(i - 1));
+							hashMap.put(key, newTuple);
+
+							// Last Tuple Size
+							aggSampleTupleSize += newTuple.getMemorySize();
+							sampled++;
+						} else {
+							aggSampleTupleSize -= t.getMemorySize();
+							for (int i = 1; i < collectTuple.size(); i++) {
+								DataBag dataBag = (DataBag) collectTuple.get(i);
+								dataBag.add((Tuple) t.get(i - 1));
+							}
+							// Last Tuple Size
+							aggSampleTupleSize += collectTuple.getMemorySize();
 						}
-						hashMap.put(key, newTuple);
-					} else {
-						Tuple t = (Tuple) v1.get(2);
-						for (int i = 1; i < collectTuple.size(); i++) {
-							DataBag dataBag = (DataBag) collectTuple.get(i);
-							dataBag.add((Tuple) t.get(i - 1));
-						}
-						// lastTupleSize = t.getMemorySize();
 					}
 
-					// if(lastTupleSize * hashMap.size() >
-					// SPILL_REGISTER_THRESHOLD)
-					// {
-					// SpillableMemoryManager.getInstance().registerSpillable(this);
-					// }
-					// THIS IS GOOD ENOUGH MEMORY CHECK FOR NOW
-					loopNum++;
-					if (loopNum > 10000
-							&& runtime.freeMemory() < (maxMemory * 0.05)) {
-						// if (bagSize * tupleLenght * hashMap.size() > 1024 *
-						// 100) {
-						loopNum = 0;
-						combineCollectedTuples(results, hashMap);
-					}
+					markSpillableIfNecessary();
 				}
 
-				combineCollectedTuples(results, hashMap);
+				combineCollectedTuples();
 
 				return JavaConversions.asScalaIterator(results.iterator()).map(
 						new AbstractFunction1<Tuple, Tuple2<Object, Tuple>>() {
@@ -272,41 +271,71 @@ public class OptimizedGlobalRearrangeConverter2 implements
 		}
 
 		/**
+		 * 
+		 */
+		private void markSpillableIfNecessary() {
+			if (!spillRegistered && getMemorySize() > SPILL_REGISTER_THRESHOLD) {
+				SpillableMemoryManager.getInstance().registerSpillable(this);
+				spillRegistered = true;
+			}
+		}
+
+		/**
 		 * @param results
 		 * @param hashMap
 		 * @throws ExecException
 		 */
-		private void combineCollectedTuples(DataBag results,
-				HashMap<Object, Tuple> hashMap) throws ExecException {
-			Set<Entry<Object, Tuple>> entrySet = hashMap.entrySet();
-			for (Entry<Object, Tuple> entry : entrySet) {
+		private void combineCollectedTuples() throws ExecException {
 
-				Tuple tuple = entry.getValue();
-				intermediateFunc.setInputs(null);
-				intermediateFunc.attachInput(tuple);
+			synchronized (hashMap) {
+				Set<Entry<Object, Tuple>> entrySet = hashMap.entrySet();
+				for (Entry<Object, Tuple> entry : entrySet) {
 
-				Tuple result = (Tuple) intermediateFunc.getNextTuple().result;
-				results.add(result);
+					Tuple tuple = entry.getValue();
+					intermediateFunc.setInputs(null);
+					intermediateFunc.attachInput(tuple);
 
+					Tuple result = (Tuple) intermediateFunc.getNextTuple().result;
+					results.add(result);
+
+				}
+				hashMap.clear();
 			}
-			hashMap.clear();
 		}
 
-		// @Override
-		// public long spill() {
-		// // TODO Auto-generated method stub
-		// return 0;
-		// }
-		//
-		// @Override
-		// public long getMemorySize() {
-		// // TODO Auto-generated method stub
-		// return 0;
-		// }
+		@Override
+		public long spill() {
+			synchronized (hashMap) {
+				int size = hashMap.size();
+				try {
+					LOG.info("Spilling Combiner Size:" + size);
+					combineCollectedTuples();
+				} catch (ExecException e) {
+					throw new RuntimeException(e);
+				}
+				aggSampleTupleSize = 0;
+				sampled = 0;
+				return size;
+			}
+		}
 
-		// private long roundToEight(long i) {
-		// return 8 * ((i+7)/8); // integer division rounds the result down
-		// }
+		@Override
+		public long getMemorySize() {
+			if (sampled == 0)
+				return 0;
+			else {
+				synchronized (hashMap) {
+					//32 is entry size loadfactor is 0.75 and capacity over head is 4
+					// so 32+4 + (100/75)*4
+					return (hashMap.size() * roundToEight(aggSampleTupleSize
+							/ sampled + 42));
+				}
+			}
+		}
+
+		private long roundToEight(long i) {
+			return 8 * ((i + 7) / 8); // integer division rounds the result down
+		}
 	}
 
 	private static class Tuple2ToIterable extends
