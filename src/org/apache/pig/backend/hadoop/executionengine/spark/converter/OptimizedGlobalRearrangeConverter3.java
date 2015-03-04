@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.Set;
 
+import javax.management.RuntimeErrorException;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.ql.parse.HiveParser_IdentifiersParser.booleanValue_return;
@@ -37,8 +39,10 @@ import org.apache.spark.rdd.ShuffledRDD;
 import scala.Function1;
 import scala.Some;
 import scala.Tuple2;
+import scala.collection.GenTraversableOnce;
 import scala.collection.Iterator;
 import scala.collection.JavaConversions;
+import scala.collection.mutable.MutableList;
 import scala.math.Ordering;
 import scala.runtime.AbstractFunction0;
 //import scala.reflect.ClassManifest;
@@ -74,17 +78,25 @@ public class OptimizedGlobalRearrangeConverter3 implements
 		}
 		LOG.info("Parallelism for Spark groupBy: " + parallelism);
 
+		boolean debug = false;
+		String debugStr = System.getenv("SPORK_DEBUG");
+		debug = "true".equalsIgnoreCase(debugStr);
+
 		if (predecessors.size() == 1) {
 			// GROUP
-			// predecessors.get(0).saveAsTextFile(
-			// "DebugOptimizedGlobalRearrangeConverter0-"
-			// + System.currentTimeMillis());
+			if (debug) {
+				predecessors.get(0).saveAsTextFile(
+						"DebugOptimizedGlobalRearrangeConverter0-"
+								+ System.currentTimeMillis());
+			}
 			RDD<Tuple> rdd = predecessors.get(0);
 			RDD<Tuple2<Object, Tuple>> pairRdd = rdd.mapPartitions(
 					new TupleToTuple2(), false,
 					SparkUtil.<Object, Tuple> getTuple2Manifest());
-			// pairRdd.saveAsTextFile("DebugOptimizedGlobalRearrangeConverter0-"
-			// + System.currentTimeMillis());
+			if (debug) {
+				pairRdd.saveAsTextFile("DebugOptimizedGlobalRearrangeConverter1-"
+						+ System.currentTimeMillis());
+			}
 			RDD<Tuple2<Object, Tuple>> repartitionAndSortWithinPartitions = new OrderedRDDFunctions<Object, Tuple, Tuple2<Object, Tuple>>(
 					pairRdd, new NaturalOrdering(),
 					SparkUtil.getManifest(Object.class),
@@ -92,19 +104,22 @@ public class OptimizedGlobalRearrangeConverter3 implements
 					SparkUtil.<Object, Tuple> getTuple2Manifest())
 					.repartitionAndSortWithinPartitions(new HashPartitioner(
 							parallelism));
-			// repartitionAndSortWithinPartitions
-			// .saveAsTextFile("DebugOptimizedGlobalRearrangeConverter1-"
-			// + System.currentTimeMillis());
+			if (debug) {
+				repartitionAndSortWithinPartitions
+						.saveAsTextFile("DebugOptimizedGlobalRearrangeConverter2-"
+								+ System.currentTimeMillis());
+			}
 			RDD<Tuple2<Object, Tuple>> mapPartitions = repartitionAndSortWithinPartitions
 					.mapPartitions(
 							new CombinerFunction(physicalOperator
 									.getIntermediateForEach(), confBytes),
 							false, SparkUtil
 									.<Object, Tuple> getTuple2Manifest());
-			// mapPartitions
-			// .saveAsTextFile("DebugOptimizedGlobalRearrangeConverter2-"
-			// + System.currentTimeMillis());
-
+			if (debug) {
+				mapPartitions
+						.saveAsTextFile("DebugOptimizedGlobalRearrangeConverter3-"
+								+ System.currentTimeMillis());
+			}
 			PairRDDFunctions<Object, Tuple> pairRDDFunctions = new PairRDDFunctions<Object, Tuple>(
 					mapPartitions, SparkUtil.getManifest(Object.class),
 					SparkUtil.getManifest(Tuple.class), null);
@@ -113,13 +128,20 @@ public class OptimizedGlobalRearrangeConverter3 implements
 					.combineByKey(new Tuple2ToIterable(),
 							new AddTuple2ToIterable(),
 							new AddIterableToIterable(), parallelism);
-			// combineByKey
-			// .saveAsTextFile("DebugOptimizedGlobalRearrangeConverter3-"
-			// + System.currentTimeMillis());
+			if (debug) {
+				combineByKey
+						.saveAsTextFile("DebugOptimizedGlobalRearrangeConverter4-"
+								+ System.currentTimeMillis());
+			}
 			RDD<Tuple> mapPartitions2 = combineByKey.mapPartitions(
 					new ReduceFunction(physicalOperator.getFinalForEach(),
 							confBytes), false, SparkUtil
 							.getManifest(Tuple.class));
+			if (debug) {
+				mapPartitions2
+						.saveAsTextFile("DebugOptimizedGlobalRearrangeConverter5-"
+								+ System.currentTimeMillis());
+			}
 
 			return mapPartitions2;
 
@@ -179,80 +201,86 @@ public class OptimizedGlobalRearrangeConverter3 implements
 
 		@Override
 		public Iterator<Tuple2<Object, Tuple>> apply(
-				Iterator<Tuple2<Object, Tuple>> iterator) {
+				final Iterator<Tuple2<Object, Tuple>> iterator) {
 			initializeJobConf();
 
-			DataBag results = bf.newDefaultBag();
-			try {
-				Tuple collectTuple = null;
-				Object lastKey = null;
-				while (iterator.hasNext()) {
-					Tuple v1 = iterator.next()._2();
-					Object key = v1.get(1);
+			return iterator
+					.flatMap(new AbstractFunction1<Tuple2<Object, Tuple>, GenTraversableOnce<Tuple2<Object, Tuple>>>() {
+						Tuple collectTuple = null;
+						Object lastKey = null;
 
-					if (!key.equals(lastKey)) {
-						combineCollectedTuples(results, collectTuple);
-						collectTuple = null;
-						lastKey = key;
-					}
+						@Override
+						public GenTraversableOnce<Tuple2<Object, Tuple>> apply(
+								Tuple2<Object, Tuple> t2) {
+							try {
+								Tuple v1 = t2._2();
+								Object key = v1.get(1);
 
-					if (collectTuple == null) {
-						Tuple t = (Tuple) v1.get(2);
-						int size = t.size() + 1;
-						Tuple newTuple = tf.newTuple(size);
-						newTuple.set(0, key);
-						for (int i = 1; i < size; i++) {
-							DataBag newDefaultBag = bf.newDefaultBag();
-							newTuple.set(i, newDefaultBag);
-							newDefaultBag.add((Tuple) t.get(i - 1));
-						}
-						collectTuple = newTuple;
-					} else {
-						Tuple t = (Tuple) v1.get(2);
-						for (int i = 1; i < collectTuple.size(); i++) {
-							DataBag dataBag = (DataBag) collectTuple.get(i);
-							dataBag.add((Tuple) t.get(i - 1));
-						}
-					}
-				}
-
-				combineCollectedTuples(results, collectTuple);
-
-				return JavaConversions.asScalaIterator(results.iterator()).map(
-						new AbstractFunction1<Tuple, Tuple2<Object, Tuple>>() {
-							@Override
-							public Tuple2<Object, Tuple> apply(Tuple t) {
-								try {
-									return new Tuple2<Object, Tuple>(t.get(0),
-											t);
-								} catch (ExecException e) {
-									LOG.info(e);
-									e.printStackTrace();
-									throw new RuntimeException(e);
+								MutableList<Tuple2<Object, Tuple>> mutableList = new MutableList<Tuple2<Object, Tuple>>();
+								if (!key.equals(lastKey)) {
+									Tuple combineCollectedTuples = combineCollectedTuples(collectTuple);
+									if (combineCollectedTuples != null) {
+										mutableList
+												.$plus$eq(new Tuple2<Object, Tuple>(
+														combineCollectedTuples
+																.get(0),
+														combineCollectedTuples));
+									}
+									collectTuple = null;
+									lastKey = key;
 								}
+
+								if (collectTuple == null) {
+									Tuple t = (Tuple) v1.get(2);
+									int size = t.size() + 1;
+									Tuple newTuple = tf.newTuple(size);
+									newTuple.set(0, key);
+									for (int i = 1; i < size; i++) {
+										DataBag newDefaultBag = bf
+												.newDefaultBag();
+										newTuple.set(i, newDefaultBag);
+										newDefaultBag.add((Tuple) t.get(i - 1));
+									}
+									collectTuple = newTuple;
+								} else {
+									Tuple t = (Tuple) v1.get(2);
+									for (int i = 1; i < collectTuple.size(); i++) {
+										DataBag dataBag = (DataBag) collectTuple
+												.get(i);
+										dataBag.add((Tuple) t.get(i - 1));
+									}
+								}
+								if (!iterator.hasNext()) {
+									Tuple combineCollectedTuples = combineCollectedTuples(collectTuple);
+									if (combineCollectedTuples != null) {
+										mutableList
+												.$plus$eq(new Tuple2<Object, Tuple>(
+														combineCollectedTuples
+																.get(0),
+														combineCollectedTuples));
+									}
+								}
+
+								return mutableList;
+							} catch (ExecException e) {
+								throw new RuntimeException(e);
 							}
-						});
-			} catch (ExecException e) {
-				LOG.info(e);
-				e.printStackTrace();
-				throw new RuntimeException(e);
-			}
-		}
+						}
 
-		/**
-		 * @param results
-		 * @param hashMap
-		 * @throws ExecException
-		 */
-		private void combineCollectedTuples(DataBag results,
-				Tuple collectedtuple) throws ExecException {
-			if (collectedtuple != null) {
-				intermediateFunc.setInputs(null);
-				intermediateFunc.attachInput(collectedtuple);
+						private Tuple combineCollectedTuples(
+								Tuple collectedtuple) throws ExecException {
 
-				Tuple result = (Tuple) intermediateFunc.getNextTuple().result;
-				results.add(result);
-			}
+							if (collectedtuple != null) {
+								intermediateFunc.setInputs(null);
+								intermediateFunc.attachInput(collectedtuple);
+
+								return (Tuple) intermediateFunc.getNextTuple().result;
+							} else {
+								return null;
+							}
+
+						}
+					});
 		}
 	}
 
