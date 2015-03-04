@@ -98,9 +98,9 @@ public class SparkCombinerOptimizerUtil extends CombinerOptimizerUtil {
 					return;
 				}
 
-				for (PhysicalPlan iplan : feInners) {
-					LOG.info(iplan);
-				}
+//				for (PhysicalPlan iplan : feInners) {
+//					LOG.info(iplan);
+//				}
 
 				try {
 					// replace PODistinct->Project[*] with distinct udf (which
@@ -197,20 +197,20 @@ public class SparkCombinerOptimizerUtil extends CombinerOptimizerUtil {
 						bags[i] = true;
 					}
 
-					LOG.info(mfe);
-					for (PhysicalPlan iplan : mfe.getInputPlans()) {
-						LOG.info(iplan);
-					}
-
-					LOG.info(cfe);
-					for (PhysicalPlan iplan : cfe.getInputPlans()) {
-						LOG.info(iplan);
-					}
-
-					LOG.info(foreach);
-					for (PhysicalPlan iplan : foreach.getInputPlans()) {
-						LOG.info(iplan);
-					}
+//					LOG.info(mfe);
+//					for (PhysicalPlan iplan : mfe.getInputPlans()) {
+//						LOG.info(iplan);
+//					}
+//
+//					LOG.info(cfe);
+//					for (PhysicalPlan iplan : cfe.getInputPlans()) {
+//						LOG.info(iplan);
+//					}
+//
+//					LOG.info(foreach);
+//					for (PhysicalPlan iplan : foreach.getInputPlans()) {
+//						LOG.info(iplan);
+//					}
 
 					POOptimizedGlobalRearrange poOptimizedGlobalRearrange = new POOptimizedGlobalRearrange(
 							globalRearrange, mfe, cfe, foreach);

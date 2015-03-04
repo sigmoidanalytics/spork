@@ -49,6 +49,7 @@ import org.apache.pig.backend.hadoop.executionengine.spark.converter.LimitConver
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.LoadConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.LocalRearrangeConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.OptimizedGlobalRearrangeConverter2;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.OptimizedGlobalRearrangeConverter3;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.POConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.PackageConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.PreCombinerLocalRearrangeConverter;
@@ -157,7 +158,7 @@ public class SparkLauncher extends Launcher {
 				new PreCombinerLocalRearrangeConverter());
 		convertMap.put(POLocalRearrange.class, new LocalRearrangeConverter());
 		convertMap.put(POOptimizedGlobalRearrange.class,
-				new OptimizedGlobalRearrangeConverter2(confBytes));
+				new OptimizedGlobalRearrangeConverter3(confBytes));
 		convertMap.put(POGlobalRearrange.class, new GlobalRearrangeConverter());
 		convertMap.put(POLimit.class, new LimitConverter());
 		convertMap.put(PODistinct.class, new DistinctConverter());
@@ -286,13 +287,9 @@ public class SparkLauncher extends Launcher {
 
 		RDD<Tuple> nextRDD = null;
 
-		// This maybe cached since it has lots of successors
-		if (physicalOperator instanceof POSplit) {
-			SplitConverter splitConventer = (SplitConverter) convertMap
-					.get(physicalOperator.getClass());
-			if (splitConventer.contains((POSplit) physicalOperator)) {
-				return;
-			}
+		// This maybe converted since it has lots of successors
+		if (rdds.get(physicalOperator.getOperatorKey()) != null) {
+			return;
 		}
 
 		List<PhysicalOperator> predecessors = plan
@@ -315,6 +312,10 @@ public class SparkLauncher extends Launcher {
 		LOG.info("Converting operator "
 				+ physicalOperator.getClass().getSimpleName() + " "
 				+ physicalOperator);
+		// List<PhysicalOperator> successors = plan
+		// .getSuccessors(physicalOperator);
+		// LOG.info("Operator Successors " + successors.size() + " :" +
+		// successors);
 		nextRDD = converter.convert(predecessorRdds, physicalOperator);
 
 		if (POStore.class.equals(physicalOperator.getClass())) {

@@ -14,19 +14,19 @@ import org.apache.spark.storage.StorageLevel;
 
 public class SplitConverter implements POConverter<Tuple, Tuple, POSplit> {
 
-	private HashMap<POSplit, RDD<Tuple>> cachedRDDs;
+	//private HashMap<POSplit, RDD<Tuple>> cachedRDDs;
 	private StorageLevel storageLevel;
 	private static Log log = LogFactory.getLog(SplitConverter.class);
 
 	public SplitConverter() {
-		cachedRDDs = new HashMap<POSplit, RDD<Tuple>>();
+		//cachedRDDs = new HashMap<POSplit, RDD<Tuple>>();
 
 		String storageLevelStr = System.getenv("SPARK_STORAGE_LEVEL");
 		log.info("StorageLevel for Spark: " + storageLevel);
 		if (storageLevelStr != null) {
 			storageLevel = StorageLevel.fromString(storageLevelStr);
 		} else {
-			storageLevel = StorageLevel.MEMORY_ONLY();
+			storageLevel = StorageLevel.NONE();
 		}
 	}
 
@@ -35,25 +35,30 @@ public class SplitConverter implements POConverter<Tuple, Tuple, POSplit> {
 			throws IOException {
 		SparkUtil.assertPredecessorSize(predecessors, poSplit, 1);
 
-		if (!cachedRDDs.containsKey(poSplit)) {
+		//if (!cachedRDDs.containsKey(poSplit)) {
 			RDD<Tuple> rdd = predecessors.get(0);
-			RDD<Tuple> persist = rdd.persist(storageLevel);
-			cachedRDDs.put(poSplit, persist);
-		}
-
-		return cachedRDDs.get(poSplit);
+			RDD<Tuple> persist;
+			if (storageLevel.equals(StorageLevel.NONE())) {
+				persist = rdd;
+			} else {
+				persist = rdd.persist(storageLevel);
+			}
+			//cachedRDDs.put(poSplit, persist);
+		//}
+			return persist;
+		//return cachedRDDs.get(poSplit);
 	}
 
-	public boolean contains(POSplit op) {
-		return cachedRDDs.containsKey(op);
-	}
-
-	public RDD<Tuple> get(POSplit op) {
-		return cachedRDDs.get(op);
-	}
-
-	public void remove(POSplit op) {
-		cachedRDDs.remove(op);
-	}
+//	public boolean contains(POSplit op) {
+//		return cachedRDDs.containsKey(op);
+//	}
+//
+//	public RDD<Tuple> get(POSplit op) {
+//		return cachedRDDs.get(op);
+//	}
+//
+//	public void remove(POSplit op) {
+//		cachedRDDs.remove(op);
+//	}
 
 }
