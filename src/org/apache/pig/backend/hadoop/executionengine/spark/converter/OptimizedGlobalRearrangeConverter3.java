@@ -2,16 +2,10 @@ package org.apache.pig.backend.hadoop.executionengine.spark.converter;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map.Entry;
-import java.util.Set;
-
-import javax.management.RuntimeErrorException;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.hive.ql.parse.HiveParser_IdentifiersParser.booleanValue_return;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigMapReduce;
@@ -19,7 +13,6 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOpera
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.expressionOperators.POUserFunc;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POForEach;
 import org.apache.pig.backend.hadoop.executionengine.spark.KryoSerializer;
-import org.apache.pig.backend.hadoop.executionengine.spark.MemoryWarningSystem;
 import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.backend.hadoop.executionengine.spark.plans.POOptimizedGlobalRearrange;
 import org.apache.pig.backend.hadoop.executionengine.util.MapRedUtil;
@@ -30,21 +23,18 @@ import org.apache.pig.data.Tuple;
 import org.apache.pig.data.TupleFactory;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.util.ObjectSerializer;
-import org.apache.spark.HashPartitioner;
+import org.apache.spark.Partitioner;
 import org.apache.spark.rdd.OrderedRDDFunctions;
 import org.apache.spark.rdd.PairRDDFunctions;
 import org.apache.spark.rdd.RDD;
-import org.apache.spark.rdd.ShuffledRDD;
 
 import scala.Function1;
 import scala.Some;
 import scala.Tuple2;
 import scala.collection.GenTraversableOnce;
 import scala.collection.Iterator;
-import scala.collection.JavaConversions;
 import scala.collection.mutable.MutableList;
 import scala.math.Ordering;
-import scala.runtime.AbstractFunction0;
 //import scala.reflect.ClassManifest;
 import scala.runtime.AbstractFunction1;
 import scala.runtime.AbstractFunction2;
@@ -90,20 +80,25 @@ public class OptimizedGlobalRearrangeConverter3 implements
 								+ System.currentTimeMillis());
 			}
 			RDD<Tuple> rdd = predecessors.get(0);
-			RDD<Tuple2<Object, Tuple>> pairRdd = rdd.mapPartitions(
-					new TupleToTuple2(), false,
-					SparkUtil.<Object, Tuple> getTuple2Manifest());
+			final RDD<Tuple2<Tuple2<Integer, Object>, Tuple>> pairRdd = rdd
+					.mapPartitionsWithIndex(
+							new TupleToTuple2WithIndex(),
+							false,
+							SparkUtil
+									.<Tuple2<Integer, Object>, Tuple> getTuple2Manifest());
 			if (debug) {
 				pairRdd.saveAsTextFile("DebugOptimizedGlobalRearrangeConverter1-"
 						+ System.currentTimeMillis());
 			}
-			RDD<Tuple2<Object, Tuple>> repartitionAndSortWithinPartitions = new OrderedRDDFunctions<Object, Tuple, Tuple2<Object, Tuple>>(
-					pairRdd, new NaturalOrdering(),
-					SparkUtil.getManifest(Object.class),
+			RDD<Tuple2<Tuple2<Integer, Object>, Tuple>> repartitionAndSortWithinPartitions = new OrderedRDDFunctions<Tuple2<Integer, Object>, Tuple, Tuple2<Tuple2<Integer, Object>, Tuple>>(
+					pairRdd,
+					new NaturalOrdering(),
+					SparkUtil.<Integer, Object> getTuple2Manifest(),
 					SparkUtil.getManifest(Tuple.class),
-					SparkUtil.<Object, Tuple> getTuple2Manifest())
-					.repartitionAndSortWithinPartitions(new HashPartitioner(
-							parallelism));
+					SparkUtil
+							.<Tuple2<Integer, Object>, Tuple> getTuple2Manifest())
+					.repartitionAndSortWithinPartitions(new SamePartitionsPartitioner(
+							pairRdd.partitions().length));
 			if (debug) {
 				repartitionAndSortWithinPartitions
 						.saveAsTextFile("DebugOptimizedGlobalRearrangeConverter2-"
@@ -153,13 +148,13 @@ public class OptimizedGlobalRearrangeConverter3 implements
 
 	private static class CombinerFunction
 			extends
-			AbstractFunction1<Iterator<Tuple2<Object, Tuple>>, Iterator<Tuple2<Object, Tuple>>>
+			AbstractFunction1<Iterator<Tuple2<Tuple2<Integer, Object>, Tuple>>, Iterator<Tuple2<Object, Tuple>>>
 			implements Serializable
 	// , Spillable //FOR FUTURE THIS MAY NEED TO BE IMPLEMENTED
 	{
 
 		private static final int SPILL_REGISTER_THRESHOLD = 100 * 1024;
-		private static final int ELEMENT_THRESHOLD = 100 * 1000;
+		private static final int ELEMENT_THRESHOLD = 10 * 1000;
 
 		POForEach intermediateFunc;
 		private byte[] confBytes;
@@ -201,23 +196,29 @@ public class OptimizedGlobalRearrangeConverter3 implements
 
 		@Override
 		public Iterator<Tuple2<Object, Tuple>> apply(
-				final Iterator<Tuple2<Object, Tuple>> iterator) {
+				final Iterator<Tuple2<Tuple2<Integer, Object>, Tuple>> iterator) {
 			initializeJobConf();
 
+			LOG.info("COMBINER START");
+
 			return iterator
-					.flatMap(new AbstractFunction1<Tuple2<Object, Tuple>, GenTraversableOnce<Tuple2<Object, Tuple>>>() {
+					.flatMap(new AbstractFunction1<Tuple2<Tuple2<Integer, Object>, Tuple>, GenTraversableOnce<Tuple2<Object, Tuple>>>() {
 						Tuple collectTuple = null;
 						Object lastKey = null;
 
+						// int elementCounter = 0;
+
 						@Override
 						public GenTraversableOnce<Tuple2<Object, Tuple>> apply(
-								Tuple2<Object, Tuple> t2) {
+								Tuple2<Tuple2<Integer, Object>, Tuple> t2) {
 							try {
+								// elementCounter++;
 								Tuple v1 = t2._2();
 								Object key = v1.get(1);
 
 								MutableList<Tuple2<Object, Tuple>> mutableList = new MutableList<Tuple2<Object, Tuple>>();
 								if (!key.equals(lastKey)) {
+									// || elementCounter > ELEMENT_THRESHOLD) {
 									Tuple combineCollectedTuples = combineCollectedTuples(collectTuple);
 									if (combineCollectedTuples != null) {
 										mutableList
@@ -228,6 +229,7 @@ public class OptimizedGlobalRearrangeConverter3 implements
 									}
 									collectTuple = null;
 									lastKey = key;
+									// elementCounter = 0;
 								}
 
 								if (collectTuple == null) {
@@ -263,6 +265,7 @@ public class OptimizedGlobalRearrangeConverter3 implements
 
 								return mutableList;
 							} catch (ExecException e) {
+								LOG.info("COMBINER ERROR" + e);
 								throw new RuntimeException(e);
 							}
 						}
@@ -284,20 +287,24 @@ public class OptimizedGlobalRearrangeConverter3 implements
 		}
 	}
 
-	private static class TupleToTuple2 extends
-			AbstractFunction1<Iterator<Tuple>, Iterator<Tuple2<Object, Tuple>>>
+	private static class TupleToTuple2WithIndex
+			extends
+			AbstractFunction2<Object, Iterator<Tuple>, Iterator<Tuple2<Tuple2<Integer, Object>, Tuple>>>
 			implements Serializable {
 
 		@Override
-		public Iterator<Tuple2<Object, Tuple>> apply(Iterator<Tuple> it) {
+		public Iterator<Tuple2<Tuple2<Integer, Object>, Tuple>> apply(
+				final Object index, Iterator<Tuple> it) {
 			return it
-					.map(new AbstractFunction1<Tuple, Tuple2<Object, Tuple>>() {
+					.map(new AbstractFunction1<Tuple, Tuple2<Tuple2<Integer, Object>, Tuple>>() {
 
 						@Override
-						public Tuple2<Object, Tuple> apply(Tuple t) {
+						public Tuple2<Tuple2<Integer, Object>, Tuple> apply(
+								Tuple t) {
 							try {
-								Object key = t.get(1);
-								return new Tuple2<Object, Tuple>(key, t);
+								return new Tuple2<Tuple2<Integer, Object>, Tuple>(
+										new Tuple2<Integer, Object>(
+												(Integer) index, t.get(1)), t);
 							} catch (ExecException e) {
 								throw new RuntimeException(e);
 							}
@@ -437,74 +444,107 @@ public class OptimizedGlobalRearrangeConverter3 implements
 
 	}
 
-	private static class NaturalOrdering implements Ordering<Object> {
+	private static class NaturalOrdering implements
+			Ordering<Tuple2<Integer, Object>>, Serializable {
 
 		@Override
-		public int compare(Object arg0, Object arg1) {
-			if (arg0 instanceof Comparable && arg1 instanceof Comparable) {
-				return ((Comparable) arg0).compareTo((Comparable) arg1);
+		public int compare(Tuple2<Integer, Object> arg0,
+				Tuple2<Integer, Object> arg1) {
+			if (arg0._2() instanceof Comparable
+					&& arg1._2() instanceof Comparable) {
+				return ((Comparable) arg0._2()).compareTo((Comparable) arg1
+						._2());
 			} else {
-				return arg0.hashCode() - arg1.hashCode();
+				return arg0._2().hashCode() - arg1._2().hashCode();
 			}
 		}
 
 		@Override
-		public boolean equiv(Object arg0, Object arg1) {
+		public boolean equiv(Tuple2<Integer, Object> arg0,
+				Tuple2<Integer, Object> arg1) {
 			return compare(arg0, arg1) == 0;
 		}
 
 		@Override
-		public boolean gt(Object arg0, Object arg1) {
+		public boolean gt(Tuple2<Integer, Object> arg0,
+				Tuple2<Integer, Object> arg1) {
 			return compare(arg0, arg1) > 0;
 		}
 
 		@Override
-		public boolean gteq(Object arg0, Object arg1) {
+		public boolean gteq(Tuple2<Integer, Object> arg0,
+				Tuple2<Integer, Object> arg1) {
 			return compare(arg0, arg1) >= 0;
 		}
 
 		@Override
-		public boolean lt(Object arg0, Object arg1) {
+		public boolean lt(Tuple2<Integer, Object> arg0,
+				Tuple2<Integer, Object> arg1) {
 			return compare(arg0, arg1) < 0;
 		}
 
 		@Override
-		public boolean lteq(Object arg0, Object arg1) {
+		public boolean lteq(Tuple2<Integer, Object> arg0,
+				Tuple2<Integer, Object> arg1) {
 			return compare(arg0, arg1) <= 0;
 		}
 
 		@Override
-		public Object max(Object arg0, Object arg1) {
+		public Tuple2<Integer, Object> max(Tuple2<Integer, Object> arg0,
+				Tuple2<Integer, Object> arg1) {
 			return (compare(arg0, arg1) > 0) ? arg0 : arg1;
 		}
 
 		@Override
-		public Object min(Object arg0, Object arg1) {
+		public Tuple2<Integer, Object> min(Tuple2<Integer, Object> arg0,
+				Tuple2<Integer, Object> arg1) {
 			return (compare(arg0, arg1) < 0) ? arg0 : arg1;
 		}
 
 		@Override
-		public scala.math.Ordering.Ops mkOrderingOps(Object arg0) {
+		public scala.math.Ordering.Ops mkOrderingOps(
+				Tuple2<Integer, Object> arg0) {
 			return new Ordering.Ops(new NaturalOrdering(), arg0);
 		}
 
 		@Override
-		public <U> Ordering<U> on(Function1<U, Object> arg0) {
+		public <U> Ordering<U> on(Function1<U, Tuple2<Integer, Object>> arg0) {
 			// TODO Auto-generated method stub
 			return null;
 		}
 
 		@Override
-		public Ordering<Object> reverse() {
+		public Ordering<Tuple2<Integer, Object>> reverse() {
 			// TODO Auto-generated method stub
 			return null;
 		}
 
 		@Override
-		public Some<Object> tryCompare(Object arg0, Object arg1) {
+		public Some<Object> tryCompare(Tuple2<Integer, Object> arg0,
+				Tuple2<Integer, Object> arg1) {
 			// TODO Auto-generated method stub
 			return null;
 		}
 
+	}
+
+	private static class SamePartitionsPartitioner extends Partitioner
+			implements Serializable {
+
+		int numPartitions;
+
+		public SamePartitionsPartitioner(int numPartitions) {
+			this.numPartitions = numPartitions;
+		}
+
+		@Override
+		public int numPartitions() {
+			return numPartitions;
+		}
+
+		@Override
+		public int getPartition(Object key) {
+			return ((Tuple2<Integer, Object>) key)._1;
+		}
 	}
 }

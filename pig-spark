@@ -88,5 +88,6 @@ export SPARK_PARALLELISM=4;
 export SPARK_REPARTITION_LOAD=true
 export SPARK_STORAGE_LEVEL="MEMORY_AND_DISK"
 export SPARK_COMBINE_OPTIMIZATION=true
+export SPORK_DEBUG=true
 
 ${PIG_HOME}/bin/pig -x spark "$@"
