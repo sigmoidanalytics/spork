@@ -1,24 +1,8 @@
 package org.apache.pig.backend.hadoop.executionengine.spark.plans;
 
-import java.util.List;
-
-import org.apache.commons.logging.Log;
-import org.apache.pig.backend.executionengine.ExecException;
-import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
-import org.apache.pig.backend.hadoop.executionengine.physicalLayer.Result;
-import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhyPlanVisitor;
-import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POForEach;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POGlobalRearrange;
 import org.apache.pig.data.DataType;
-import org.apache.pig.data.Tuple;
-import org.apache.pig.impl.plan.Operator;
-import org.apache.pig.impl.plan.OperatorKey;
-import org.apache.pig.impl.plan.PlanException;
-import org.apache.pig.impl.plan.ProjectionMap;
-import org.apache.pig.impl.plan.VisitorException;
-import org.apache.pig.parser.SourceLocation;
-import org.apache.pig.pen.Illustrator;
 
 public class POOptimizedGlobalRearrange extends POGlobalRearrange {
 

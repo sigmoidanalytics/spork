@@ -48,8 +48,7 @@ import org.apache.pig.backend.hadoop.executionengine.spark.converter.GlobalRearr
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.LimitConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.LoadConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.LocalRearrangeConverter;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.OptimizedGlobalRearrangeConverter2;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.OptimizedGlobalRearrangeConverter3;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.OptimizedGlobalRearrangeConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.POConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.PackageConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.PreCombinerLocalRearrangeConverter;
@@ -158,7 +157,7 @@ public class SparkLauncher extends Launcher {
 				new PreCombinerLocalRearrangeConverter());
 		convertMap.put(POLocalRearrange.class, new LocalRearrangeConverter());
 		convertMap.put(POOptimizedGlobalRearrange.class,
-				new OptimizedGlobalRearrangeConverter3(confBytes));
+				new OptimizedGlobalRearrangeConverter(confBytes));
 		convertMap.put(POGlobalRearrange.class, new GlobalRearrangeConverter());
 		convertMap.put(POLimit.class, new LimitConverter());
 		convertMap.put(PODistinct.class, new DistinctConverter());
