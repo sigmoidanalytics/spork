@@ -388,9 +388,18 @@ if [ -n "$HADOOP_BIN" ]; then
     for f in $PIG_HOME/lib/h${HADOOP_VERSION}/*.jar; do
         CLASSPATH=${CLASSPATH}:$f;
     done
+    
+     for f in $PIG_HOME/lib/*.jar; do
+        CLASSPATH=${CLASSPATH}:$f;
+    done
+
+	for f in $PIG_HOME/build/ivy/lib/Pig/*.jar; do
+        CLASSPATH=${CLASSPATH}:$f;
+    done
 
     export HADOOP_CLASSPATH=$CLASSPATH:$HADOOP_CLASSPATH
     export HADOOP_CLIENT_OPTS="$JAVA_HEAP_MAX $PIG_OPTS $HADOOP_CLIENT_OPTS"
+    export SPARK_CLASSPATH=$HADOOP_CLASSPATH
     if [ "$debug" == "true" ]; then
         echo "dry run:"
         echo "HADOOP_CLASSPATH: $HADOOP_CLASSPATH"
@@ -399,7 +408,20 @@ if [ -n "$HADOOP_BIN" ]; then
         echo "$HADOOP_BIN" jar "$PIG_JAR" "${remaining[@]}"
         echo
     else
-        exec "$HADOOP_BIN" jar "$PIG_JAR" "${remaining[@]}"
+        #exec "$HADOOP_BIN" jar "$PIG_JAR" "${remaining[@]}"
+        if [ -z "$SPARK_EXECUTOR_CORES" ]; then
+        	export SPARK_EXECUTOR_CORES=1
+        fi
+        if [ -z "$SPARK_EXECUTOR_MEMORY" ]; then
+        	export SPARK_EXECUTOR_MEMORY=2000m
+        fi
+        if [ -z "$SPARK_MEM" ]; then
+        	export SPARK_MEM=2000m
+        fi
+        if [ -z "$SPARK_EXECUTOR_INSTANCES" ]; then
+        	export SPARK_EXECUTOR_INSTANCES=1
+        fi
+        $SPARK_HOME/bin/spark-submit --num-executors $SPARK_EXECUTOR_INSTANCES --driver-memory $SPARK_MEM --executor-memory $SPARK_EXECUTOR_MEMORY --executor-cores $SPARK_EXECUTOR_CORES --class  org.apache.pig.Main "$PIG_JAR"  "${remaining[@]}"
     fi
 else
     # use hadoop-core.jar to run local mode

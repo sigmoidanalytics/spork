@@ -24,62 +24,66 @@ import java.util.List;
 
 public class SparkUtil {
 
-    public static <T> ClassTag<T> getManifest(Class<T> clazz) {
-        return ClassTag$.MODULE$.apply(clazz);
-    }
+	public static <T> ClassTag<T> getManifest(Class<T> clazz) {
+		return ClassTag$.MODULE$.apply(clazz);
+	}
 
-    @SuppressWarnings("unchecked")
-    public static <K, V> ClassTag<Tuple2<K, V>> getTuple2Manifest() {
-        return (ClassTag<Tuple2<K, V>>) (Object) getManifest(Tuple2.class);
-    }
+	@SuppressWarnings("unchecked")
+	public static <K, V> ClassTag<Tuple2<K, V>> getTuple2Manifest() {
+		return (ClassTag<Tuple2<K, V>>) (Object) getManifest(Tuple2.class);
+	}
 
-    @SuppressWarnings("unchecked")
-    public static <K, V> ClassTag<Product2<K, V>> getProduct2Manifest() {
-        return (ClassTag<Product2<K, V>>) (Object) getManifest(Product2.class);
-    }
+	@SuppressWarnings("unchecked")
+	public static <K, V> ClassTag<Product2<K, V>> getProduct2Manifest() {
+		return (ClassTag<Product2<K, V>>) (Object) getManifest(Product2.class);
+	}
 
-    public static JobConf newJobConf(PigContext pigContext) throws IOException {
-        JobConf jobConf = new JobConf(
-                ConfigurationUtil.toConfiguration(pigContext.getProperties()));
-        jobConf.set("pig.pigContext", ObjectSerializer.serialize(pigContext));
-        UDFContext.getUDFContext().serialize(jobConf);
-        jobConf.set("udf.import.list",
-                ObjectSerializer.serialize(PigContext.getPackageImportList()));
-        return jobConf;
-    }
+	public static JobConf newJobConf(PigContext pigContext) throws IOException {
+		JobConf jobConf = new JobConf(
+				ConfigurationUtil.toConfiguration(pigContext.getProperties()));
+		jobConf.set("pig.pigContext", ObjectSerializer.serialize(pigContext));
+		UDFContext.getUDFContext().serialize(jobConf);
+		jobConf.set("udf.import.list",
+				ObjectSerializer.serialize(PigContext.getPackageImportList()));
+		return jobConf;
+	}
 
-    public static <T> Seq<T> toScalaSeq(List<T> list) {
-        return JavaConversions.asScalaBuffer(list);
-    }
+	public static <T> Seq<T> toScalaSeq(List<T> list) {
+		return JavaConversions.asScalaBuffer(list);
+	}
 
-    public static void assertPredecessorSize(List<RDD<Tuple>> predecessors,
-            PhysicalOperator physicalOperator, int size) {
-        if (predecessors.size() != size) {
-            throw new RuntimeException("Should have " + size
-                    + " predecessors for " + physicalOperator.getClass()
-                    + ". Got : " + predecessors.size());
-        }
-    }
+	public static void assertPredecessorSize(List<RDD<Tuple>> predecessors,
+			PhysicalOperator physicalOperator, int size) {
+		if (predecessors.size() != size) {
+			throw new RuntimeException("Should have " + size
+					+ " predecessors for " + physicalOperator.getClass()
+					+ ". Got : " + predecessors.size());
+		}
+	}
 
-    public static void assertPredecessorSizeGreaterThan(
-            List<RDD<Tuple>> predecessors, PhysicalOperator physicalOperator,
-            int size) {
-        if (predecessors.size() <= size) {
-            throw new RuntimeException("Should have greater than" + size
-                    + " predecessors for " + physicalOperator.getClass()
-                    + ". Got : " + predecessors.size());
-        }
-    }
+	public static void assertPredecessorSizeGreaterThan(
+			List<RDD<Tuple>> predecessors, PhysicalOperator physicalOperator,
+			int size) {
+		if (predecessors.size() <= size) {
+			throw new RuntimeException("Should have greater than" + size
+					+ " predecessors for " + physicalOperator.getClass()
+					+ ". Got : " + predecessors.size());
+		}
+	}
 
-    public static int getParallelism(List<RDD<Tuple>> predecessors,
-            PhysicalOperator physicalOperator) {
-        int parallelism = physicalOperator.getRequestedParallelism();
-        if (parallelism <= 0) {
-            // Parallelism wasn't set in Pig, so set it to whatever Spark thinks
-            // is reasonable.
-            parallelism = predecessors.get(0).context().defaultParallelism();
-        }
-        return parallelism;
-    }
+	public static int getParallelism(List<RDD<Tuple>> predecessors,
+			PhysicalOperator physicalOperator) {
+		int parallelism = physicalOperator.getRequestedParallelism();
+		if (parallelism <= 0) {
+			// Parallelism wasn't set in Pig, so set it to whatever Spark thinks
+			// is reasonable.
+			if (predecessors.size() > 0)
+				parallelism = predecessors.get(0).context()
+						.defaultParallelism();
+			else
+				parallelism = 1;
+		}
+		return parallelism;
+	}
 
 }

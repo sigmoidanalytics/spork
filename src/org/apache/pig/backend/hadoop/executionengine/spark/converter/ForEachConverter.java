@@ -5,7 +5,8 @@ import java.io.Serializable;
 import java.util.Iterator;
 import java.util.List;
 
-
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.pig.FuncSpec;
 import org.apache.pig.backend.executionengine.ExecException;
@@ -30,6 +31,9 @@ import org.apache.spark.rdd.RDD;
 @SuppressWarnings({"serial" })
 public class ForEachConverter implements POConverter<Tuple, Tuple, POForEach> {
     private byte[] confBytes;
+    
+	private static final Log LOG = LogFactory.getLog(ForEachConverter.class);
+
 
     public ForEachConverter(byte[] confBytes) {
         this.confBytes = confBytes;
@@ -40,6 +44,9 @@ public class ForEachConverter implements POConverter<Tuple, Tuple, POForEach> {
             POForEach physicalOperator) {
         SparkUtil.assertPredecessorSize(predecessors, physicalOperator, 1);
         RDD<Tuple> rdd = predecessors.get(0);
+        
+        LOG.info("ForEach Accumulative:"+ physicalOperator.isAccumulative());
+        
         ForEachFunction forEachFunction = new ForEachFunction(physicalOperator, this.confBytes);
         return rdd.toJavaRDD().mapPartitions(forEachFunction, true).rdd();
     }
@@ -65,6 +72,16 @@ public class ForEachConverter implements POConverter<Tuple, Tuple, POForEach> {
                     PigContext pc = (PigContext) ObjectSerializer.deserialize(jobConf.get("pig.pigContext"));
                     SchemaTupleBackend.initialize(jobConf, pc);
 
+                    PhysicalOperator[] planLeafOps= poForEach.getPlanLeafOps();
+                    if (planLeafOps != null) {
+                        for (PhysicalOperator op : planLeafOps) {
+                            if (op.getClass() == POUserFunc.class) {
+                                POUserFunc udf = (POUserFunc) op;
+                                  udf.setFuncInputSchema();
+                            }
+                        }
+                    }
+                    
                 } catch (IOException ioe) {
                     String msg = "Problem while configuring UDFContext from ForEachConverter.";
                     throw new RuntimeException(msg, ioe);
@@ -74,15 +91,7 @@ public class ForEachConverter implements POConverter<Tuple, Tuple, POForEach> {
 
         public Iterable<Tuple> call(final Iterator<Tuple> input) {
             initializeJobConf();
-            PhysicalOperator[] planLeafOps= poForEach.getPlanLeafOps();
-            if (planLeafOps != null) {
-                for (PhysicalOperator op : planLeafOps) {
-                    if (op.getClass() == POUserFunc.class) {
-                        POUserFunc udf = (POUserFunc) op;
-                          udf.setFuncInputSchema();
-                    }
-                }
-            }
+           
 
 
             return new Iterable<Tuple>() {

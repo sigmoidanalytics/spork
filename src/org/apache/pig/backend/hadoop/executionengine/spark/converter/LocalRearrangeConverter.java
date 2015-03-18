@@ -4,76 +4,101 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.List;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.pig.backend.executionengine.ExecException;
-import org.apache.pig.backend.hadoop.executionengine.physicalLayer.POStatus;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.Result;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLocalRearrange;
 import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.data.Tuple;
-
-import scala.runtime.AbstractFunction1;
 import org.apache.spark.rdd.RDD;
+
+import scala.collection.Iterator;
+import scala.collection.JavaConversions;
+import scala.runtime.AbstractFunction1;
 
 @SuppressWarnings({ "serial" })
 public class LocalRearrangeConverter implements
-        POConverter<Tuple, Tuple, POLocalRearrange> {
-    private static final Log LOG = LogFactory
-            .getLog(GlobalRearrangeConverter.class);
+		POConverter<Tuple, Tuple, POLocalRearrange> {
+	@Override
+	public RDD<Tuple> convert(List<RDD<Tuple>> predecessors,
+			POLocalRearrange physicalOperator) throws IOException {
+		SparkUtil.assertPredecessorSize(predecessors, physicalOperator, 1);
+		RDD<Tuple> rdd = predecessors.get(0);
+		// call local rearrange to get key and value
+		RDD<Tuple> mapPartitions = rdd.mapPartitions(new LocalRearrangeFunction(physicalOperator),
+				true, SparkUtil.getManifest(Tuple.class));
+		//mapPartitions.saveAsTextFile("DebugPLocalRearrange-" + System.currentTimeMillis());
+		return mapPartitions;
 
-    @Override
-    public RDD<Tuple> convert(List<RDD<Tuple>> predecessors,
-            POLocalRearrange physicalOperator) throws IOException {
-        SparkUtil.assertPredecessorSize(predecessors, physicalOperator, 1);
-        RDD<Tuple> rdd = predecessors.get(0);
-        // call local rearrange to get key and value
-        return rdd.map(new LocalRearrangeFunction(physicalOperator),
-                SparkUtil.getManifest(Tuple.class));
+	}
 
-    }
+	private static class LocalRearrangeFunction extends
+			AbstractFunction1<Iterator<Tuple>, Iterator<Tuple>> implements
+			Serializable {
 
-    private static class LocalRearrangeFunction extends
-            AbstractFunction1<Tuple, Tuple> implements Serializable {
+		private POLocalRearrange physicalOperator;
 
-        private final POLocalRearrange physicalOperator;
+		private LocalRearrangeFunction(POLocalRearrange physicalOperator) {
+			this.physicalOperator = physicalOperator;
+		}
 
-        public LocalRearrangeFunction(POLocalRearrange physicalOperator) {
-            this.physicalOperator = physicalOperator;
-        }
+		public Iterator<Tuple> apply(Iterator<Tuple> i) {
+			final java.util.Iterator<Tuple> input = JavaConversions
+					.asJavaIterator(i);
+			Iterator<Tuple> output = JavaConversions
+					.asScalaIterator(new POOutputConsumerIterator(input) {
+						protected void attach(Tuple tuple) {
+							physicalOperator.setInputs(null);
+							physicalOperator.attachInput(tuple);
+						}
 
-        @Override
-        public Tuple apply(Tuple t) {
-            Result result;
-            try {
-                physicalOperator.setInputs(null);
-                physicalOperator.attachInput(t);
-                result = physicalOperator.getNextTuple();
-
-                if (result == null) {
-                    throw new RuntimeException(
-                            "Null response found for LocalRearange on tuple: "
-                                    + t);
-                }
-
-                switch (result.returnStatus) {
-                case POStatus.STATUS_OK:
-                    // (index, key, value without keys)
-                    Tuple resultTuple = (Tuple) result.result;
-                    if (LOG.isDebugEnabled())
-                        LOG.debug("LocalRearrangeFunction out " + resultTuple);
-                    return resultTuple;
-                default:
-                    throw new RuntimeException(
-                            "Unexpected response code from operator "
-                                    + physicalOperator + " : " + result);
-                }
-            } catch (ExecException e) {
-                throw new RuntimeException(
-                        "Couldn't do LocalRearange on tuple: " + t, e);
-            }
-        }
-
-    }
+						protected Result getNextResult() throws ExecException {
+							return physicalOperator.getNextTuple();
+						}
+					});
+			return output;
+		}
+	}
+	// private static class LocalRearrangeFunction extends
+	// AbstractFunction1<Tuple, Tuple> implements Serializable {
+	//
+	// private final POLocalRearrange physicalOperator;
+	//
+	// public LocalRearrangeFunction(POLocalRearrange physicalOperator) {
+	// this.physicalOperator = physicalOperator;
+	// }
+	//
+	// @Override
+	// public Tuple apply(Tuple t) {
+	// Result result;
+	// try {
+	// physicalOperator.setInputs(null);
+	// physicalOperator.attachInput(t);
+	// result = physicalOperator.getNextTuple();
+	//
+	// if (result == null) {
+	// throw new RuntimeException(
+	// "Null response found for LocalRearange on tuple: "
+	// + t);
+	// }
+	//
+	// switch (result.returnStatus) {
+	// case POStatus.STATUS_OK:
+	// // (index, key, value without keys)
+	// Tuple resultTuple = (Tuple) result.result;
+	// // if (LOG.isDebugEnabled())
+	// // LOG.debug("LocalRearrangeFunction out " + resultTuple);
+	// return resultTuple;
+	// default:
+	// throw new RuntimeException(
+	// "Unexpected response code from operator "
+	// + physicalOperator + " : " + result);
+	// }
+	// } catch (ExecException e) {
+	// throw new RuntimeException(
+	// "Couldn't do LocalRearange on tuple: " + t, e);
+	// }
+	// }
+	//
+	// }
 
 }
